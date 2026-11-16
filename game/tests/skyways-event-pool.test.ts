@@ -8,7 +8,7 @@
 //  - a visited station keeps the version recorded in its memory (an old convention stays a convention), an unvisited one takes version 7;
 //  - a new event takes the convention's venue carve unchanged (same cells / roles on a seed whose version-6 draw was the convention) under
 //    its own room names, keeps its washrooms, stays on its host's bridge storey, validates, and leaves the rest of the map ordinary;
-//  - its crowd (gen/skyways/events/eventCrowd.ts): ordinary floor enemies appended last on the public event floor, deterministic.
+//  - its crowd (gen/skyways/events/eventCrowd.ts): ordinary floor enemies after the hordes (before the annex) on the public event floor, deterministic.
 import {describe, expect, it} from 'vitest';
 import {LEVELS} from '../src/levels/registry';
 import type {StationLayout} from '../src/gen/stationTypes';
@@ -16,7 +16,7 @@ import {skywaysAddonFor, skywaysAddonOf, skywaysFrame, skywaysIssues} from '../s
 import {SKYWAYS_ADDONS, SKYWAYS_ADDON_POOL_V7, SKYWAYS_EVENT_ADDONS, isSkywaysEventAddon, skywaysVenueShaped} from '../src/gen/skyways/skywaysTypes';
 import {SKYWAYS_EVENTS_MIN_VERSION, SKYWAYS_LAYOUT_LANE, SKYWAYS_LAYOUT_VERSION, skywaysLayoutVersionFor} from '../src/gen/skyways/layoutVersion';
 import {EVENT_ROOM_NAMES} from '../src/gen/skyways/events/eventVenue';
-import {EVENT_CROWD_RULES, eventCrowdAreas} from '../src/gen/skyways/events/eventCrowd';
+import {EVENT_CROWD_RULES, eventCrowdAreas, eventCrowdOf} from '../src/gen/skyways/events/eventCrowd';
 import {SKYWAYS_SPAWN_PROFILE, spawnContextOf} from '../src/ai/spawnTables';
 import {createMemory, enemiesToSpawn} from '../src/run/memory';
 
@@ -121,17 +121,23 @@ describe('Skyways event pool: the new events', () => {
     }
   }, 300000);
 
-  it('the event crowd: ordinary floor enemies appended last on the public event floor, fair, deterministic, kills remembered', () => {
+  it('the event crowd: ordinary floor enemies after the hordes, before the annex, on the public event floor, fair, deterministic, kills remembered', () => {
     for (const id of SKYWAYS_EVENT_ADDONS) for (const seed of EVENT_SEEDS[id]) {
       const l = gen(seed, 7), [lo, hi] = EVENT_CROWD_RULES.count[id];
-      const hosts = new Set(eventCrowdAreas(l));
-      // the crowd = the last spawns of the level, every one in a hosting area of the event's storey
-      let n = 0;
-      for (let i = l.zombies.length - 1; i >= 0 && hosts.has(l.zombies[i].area) && (l.zombies[i].level ?? 0) === l.skyways!.addon.level && spawnContextOf(l, SKYWAYS_SPAWN_PROFILE, i) === 'floor'; i--) n++;
+      const hosts = new Set(eventCrowdAreas(l)), crowd = eventCrowdOf(l);
+      // the crowd = one run of 'floor' spawns right after the last horde member (only annex 'service' spawns after it), every one in a
+      // hosting area of the event's storey
+      expect(crowd, `seed ${seed} ${id}`).not.toBeNull();
+      const {first, n} = crowd!, ctx = l.zombies.map((_z, i) => spawnContextOf(l, SKYWAYS_SPAWN_PROFILE, i));
       expect(n, `seed ${seed} ${id}`).toBeGreaterThanOrEqual(Math.min(lo, 2));
-      expect(n, `seed ${seed} ${id}`).toBeLessThanOrEqual(hi + 3); // (+ ambient floor spawns that happen to stand there last)
+      expect(n, `seed ${seed} ${id}`).toBeLessThanOrEqual(hi);
+      expect(ctx.lastIndexOf('horde'), `seed ${seed} ${id}: after the hordes`).toBeLessThan(first);
+      expect(ctx.slice(first + n).every(c => c === 'service'), `seed ${seed} ${id}: only annex spawns follow`).toBe(true);
       const g = l.levels[l.skyways!.addon.level].grid;
-      for (const z of l.zombies.slice(-n)) {
+      for (const [k, z] of l.zombies.slice(first, first + n).entries()) {
+        expect(ctx[first + k]).toBe('floor');
+        expect(hosts.has(z.area!), `seed ${seed}: in a hosting area`).toBe(true);
+        expect(z.level ?? 0).toBe(l.skyways!.addon.level);
         const [cx, cy] = g.cellOf(z.x, z.z);
         expect(g.walkable(cx, cy), `seed ${seed}`).toBe(true);
         expect(z.look, `seed ${seed}`).not.toBe('cosplay');
@@ -141,8 +147,8 @@ describe('Skyways event pool: the new events', () => {
       const again = LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol', layoutVersion: 7} as never) as StationLayout;
       expect(JSON.stringify(again.zombies)).toBe(JSON.stringify(l.zombies));
       const mem = createMemory({level: 'skyways', section: 'main'});
-      mem.killed = [l.zombies.length - 1];
-      expect(enemiesToSpawn(l.zombies.length, mem)).not.toContain(l.zombies.length - 1);
+      mem.killed = [first + n - 1];
+      expect(enemiesToSpawn(l.zombies.length, mem)).not.toContain(first + n - 1);
     }
   }, 300000);
 

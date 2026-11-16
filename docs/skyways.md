@@ -252,8 +252,9 @@ per map, the rest of the map stays ordinary.
   circulation kit (`venueDress.ts eventVenueContext`, `group`, `markRoutes`). Its prop kinds live in `events/*Kinds.ts`, spread into the
   destination registry (both audits), and are drawn by `world/skywaysEventDraw.ts`.
 - Saves: a station entered at versions 1–6 keeps its version and its old event; only stations not yet entered can get a new event.
-- Each new event also puts a small infected crowd on its floor (`events/eventCrowd.ts`, its own fork, appended after every other spawn
-  pass, tagged 'floor'): 3–5 at the expo, 2–4 at the mini-golf, 4–6 at the shelter, kept clear of the doors and passages.
+- Each new event also puts a small infected crowd on its floor (`events/eventCrowd.ts`, its own fork, right after the hordes and before
+  the annex's spawns; see `docs/enemy-spawns.md` "Version 7"): 3–5 at the expo, 2–4 at the mini-golf, 4–6 at the shelter, kept clear of
+  the doors and passages.
 - **`tech-expo`: a technology expo** (`expoDress.ts`, `expoKinds.ts`, `world/skywaysExpoDraw.ts`):
   - a KEYNOTE in the main hall: the stage with an LED wall, a lectern, screens and up to 126 audience chairs;
   - up to 12 exhibitor BOOTHS on the exhibitors' floor (booth walls with the exhibitor's fascia, demo counters and tables, plinths and

@@ -8,8 +8,10 @@
 //    context's spacing) from every enemy on the storey, and a 0.5 m disc never splits the storey (spawnTables sealsPassage);
 //  - ordinary enemies of the skyway floor (tagged the 'floor' context: the generator's ONE assignEnemyArchetypes rolls their family
 //    and wardrobe like any other floor spawn), the event's own count: an evacuation centre that fell from the inside holds the most;
-//  - APPENDED after every other spawn of the level, on its own rng fork, drawn from only when a new event exists: every existing spawn
-//    index, family roll, look and kill memory is unchanged, and a convention / prize-car layout is byte-identical without it.
+//  - APPENDED right after the hordes, BEFORE the annex's 'service' spawns (the hordes' rule), on its own rng fork, drawn from only when a
+//    new event exists: every ambient / horde spawn index, family roll, look and kill memory is unchanged, a convention / prize-car layout
+//    is byte-identical without it, and the crowd's own indices — so its family rolls (ai/creatureSpawn.ts: a hash of seed and INDEX) —
+//    are the same whether the level has an annex or not (tests/bts-area.test.ts core-view invariance).
 // The AI is the ordinary zombie's (no leash, despawn or teleport). Killed ones stay dead through the ordinary per-index kill memory.
 
 import type {Rng} from '../../../core/rng';
@@ -43,8 +45,11 @@ export interface EventCrowdReport {
   first: number;
 }
 
-/** The crowd's size per layout (it is always the level's last spawns: retagEventCrowd). */
-const CROWD = new WeakMap<object, number>();
+/** The crowd's spawn range per layout: layout.zombies[first .. first + n). */
+const CROWD = new WeakMap<object, {first: number; n: number}>();
+
+/** A layout's event crowd as a range of layout.zombies (null: none; QA / tests). */
+export const eventCrowdOf = (layout: object): {first: number; n: number} | null => CROWD.get(layout) ?? null;
 
 /** A layout's event-crowd hosting areas (empty: no new event). */
 export function eventCrowdAreas(layout: Pick<StationLayout, 'skyways' | 'areas'>): number[] {
@@ -54,8 +59,8 @@ export function eventCrowdAreas(layout: Pick<StationLayout, 'skyways' | 'areas'>
 }
 
 /**
- * The new event's crowd, after every other spawn of the level (call it right before assignEnemyArchetypes). `keep` = the storeys' keep
- * points (world metres; the run mouths). Draws from `rng` only when the layout holds a new event.
+ * The new event's crowd, right after the hordes and before the track extensions attach (their annex 'service' spawns come after it).
+ * `keep` = the storeys' keep points (world metres; the run mouths). Draws from `rng` only when the layout holds a new event.
  */
 export function placeEventCrowdSpawns(layout: StationLayout, rng: Rng, keep: readonly {level: number; x: number; z: number}[], profile: SpawnProfile): EventCrowdReport | null {
   const addon = layout.skyways?.addon;
@@ -106,15 +111,6 @@ export function placeEventCrowdSpawns(layout: StationLayout, rng: Rng, keep: rea
       if (tryPlace(cands[k])) { placed++; progress = true; }
     }
   }
-  if (placed) { markSpawnContext(layout, first, 'floor'); CROWD.set(layout, placed); }
+  if (placed) { markSpawnContext(layout, first, 'floor'); CROWD.set(layout, {first, n: placed}); }
   return {level: lv, areas: hosts, candidates: cands.map(c => c.length), count, placed, first: placed ? first : -1};
-}
-
-/**
- * Re-tags the crowd after records before it were removed (gen/trackExt dropExtensions drops the annex 'service' spawns: the context side
- * table is per index). It is always the level's last spawns.
- */
-export function retagEventCrowd(layout: StationLayout): void {
-  const n = CROWD.get(layout) ?? 0;
-  if (n > 0 && layout.zombies.length >= n) markSpawnContext(layout, layout.zombies.length - n, 'floor');
 }
