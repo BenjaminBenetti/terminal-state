@@ -2906,10 +2906,13 @@ export class Game {
     return lib;
   }
 
-  spawnEnemy(s: ZombieSpawn, i: number): EnemyActor {
+  spawnEnemy(s: ZombieSpawn, i: number, ownRand?: () => number): EnemyActor {
     // (task studio-reactor-glowing-zombies-20261115-013245-01: an irradiated addition draws its scale / idle phase from its OWN stream, so
     // this.rand — the stream every later spawn and pickup of the section draws from — is exactly what it was without the additions)
-    const irr = isIrradiated(s), rand = irr ? mulberry32(hashString(`irradiated-actor:${i}`, this.currentSeed >>> 0)) : this.rand;
+    // (task studio-surface-run-opus-rebuild-20261116-020827-01, lane LIFE: `ownRand` = a runtime spawner's OWN stream — Surface Run's
+    // outdoor replenisher, world/surface/replenish.ts — so this.rand never moves; such an actor has no layout index: the caller never
+    // puts it into enemyIndex, so it is never in the kill memory)
+    const irr = isIrradiated(s), rand = ownRand ?? (irr ? mulberry32(hashString(`irradiated-actor:${i}`, this.currentSeed >>> 0)) : this.rand);
     const {actor: z, fallback} = this.buildEnemyActor(s, i, this.currentSeed, rand);
     if (fallback) this.enemyFallbacks++;
     this.damage.installZombie(z); // Lane D: own wound-patched material clones (body + every wearable)
@@ -3884,9 +3887,17 @@ export class Game {
   /** Lane PLAY: enemies still alive (update's clear rule and the HUD count; was a filtered array, twice a frame). */
   private aliveEnemies(): number {
     let n = 0;
-    for (const z of this.zombies) if (z.brain.alive) n++;
+    for (const z of this.zombies) if (z.brain.alive && !this.uncountedEnemies.has(z)) n++; // (Surface Run: never a replenished outdoor zombie)
     return n;
   }
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LIFE): living actors the section's alive / clear / HUD / end-screen
+   * counts never include — Surface Run's REPLENISHED outdoor zombies (world/surface/replenishRuntime.ts adds each one it spawns and
+   * removes it when it retires the actor). They have no layout index either, so they are never in the kill memory (saveSectionMemory).
+   */
+  readonly uncountedEnemies = new WeakSet<EnemyActor>();
+  /** (task studio-surface-run-opus-rebuild-20261116-020827-01, lane LIFE) the layout index of a live-world actor (undefined: a runtime one). */
+  layoutIndexOf(z: EnemyActor): number | undefined { return this.enemyIndex.get(z); }
 
   /**
    * Task studio-alpha-campaign-foundation-20261102-230708-01: THE campaign win (the Reactor's ending; world/reactor/restart.ts calls
@@ -4640,7 +4651,7 @@ export class Game {
   private showEnd(kind: 'dead' | 'won'): void {
     const s = this.stats, k = this.run.current;
     const acc = s.shots ? Math.round(s.hits / s.shots * 100) : 0;
-    const total = this.layout.zombies.length, down = total - this.zombies.filter(z => z.brain.alive).length;
+    const total = this.layout.zombies.length, down = total - this.aliveEnemies(); // (Surface Run: replenished outdoor zombies are not in either figure)
     // Iteration 16 (RUN): the section / level, its code, this section's kills and the run totals (time, kills, shots, damage)
     const text = `${levelDisplayName(k.level, this.run.seeds[k.level])} · ${sectionLabel(k)} · ${this.layout.name} · code ${seedToCode(this.run.seeds[k.level])}\n`
       + `Run time ${Math.floor(s.time / 60)}:${String(Math.floor(s.time % 60)).padStart(2, '0')} · Infected down here ${down}/${total} · this run ${s.kills}\n`
