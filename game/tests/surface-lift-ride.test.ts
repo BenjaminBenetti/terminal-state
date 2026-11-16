@@ -111,10 +111,15 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       if (game.surfaceCrossCounts.done === done0) {
         game.setState('paused');
         pausedAt = samples.length;
+        const q0 = R.qa(), steps0 = game.journeyCompileStats?.steps;
         await h.waitFrames(40);
+        // (the pause menu keeps its frozen frame fresh at a low rate: those frames are the paused ride, not its progress)
         expect(R.door, 'paused: the doors shut').toBe(0);
-        expect(samples.length, 'paused: no frame drawn').toBe(pausedAt);
-        await game.enterPlay();
+        expect(samples.slice(pausedAt).every(s => s.state === 'paused' && s.door === 0), 'paused: only the frozen ride drawn').toBe(true);
+        expect(R.qa().travel, 'paused: the car holds').toBe(q0.travel);
+        expect(R.phase).toBe(q0.phase);
+        expect(game.journeyCompileStats?.steps, 'paused: the compile\'s scheduled steps hold').toBe(steps0);
+        game.setState('playing'); // (Resume; enterPlay's pointer-lock request never settles headless)
       }
       expect(await until(() => game.surfaceCrossCounts.done === done0 + 1 && R.phase === 'idle')).toBe(true);
       mark('[E] up');

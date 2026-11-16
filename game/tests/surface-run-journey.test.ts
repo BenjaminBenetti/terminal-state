@@ -20,6 +20,11 @@
 //  6. A station entered BEFORE the feature (its memory has visits but no 'surface.run' record: the stored save edited that way) decodes
 //     and generates at version 0: no access, the plain generated world.
 // A capture taken in the district saves the station's own section with a 'start' arrival and validates.
+// Task studio-surface-run-field-followup-20261116-211729-01 (lane ACCESS): the journey runs TWICE — in a VERSION-1 world (a station first
+// built now records version 1: the legacy crossing behind the loading screen, its stairwell and street door) and in a VERSION-2 world
+// (the cargo lift at a closed street exit, the lift in the command tent: the RIDE is the crossing both ways — no loading state, no
+// hidden-canvas warm-up; the dolly rides along). tests/surface-lift-ride.test.ts checks the ride's own rules (doors shut until the
+// destination compiled, frames drawn meanwhile, pause, the tent's doorway, recovery).
 import {afterAll, describe, expect, it, vi} from 'vitest';
 import * as THREE from 'three';
 import {installHeadless} from './helpers/headlessGame';
@@ -36,6 +41,16 @@ import {trainToWorld} from '../src/gen/playerTrain';
 import type {Grid} from '../src/gen/grid';
 
 afterAll(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+/** The version-1 world case: an unvisited station records version 1 (Game.sectionGenInputs reads surfaceVersionFor). */
+const FORCE = vi.hoisted(() => ({v1: false}));
+vi.mock('../src/gen/surface/surfaceRun', async importOriginal => {
+  const m = await importOriginal<typeof import('../src/gen/surface/surfaceRun')>();
+  return {...m, surfaceVersionFor: (mem: Parameters<typeof m.surfaceVersionFor>[0]) => {
+    const v = m.surfaceVersionFor(mem);
+    return FORCE.v1 && v === m.SURFACE_VERSION && !mem?.lanes[m.SURFACE_LANE] ? 1 : v;
+  }};
+});
 
 /** The first network seed whose first Subway node rolls a Surface Run (a dev start at 'subway' picks that node). */
 function pickNetwork(): {seed: number; station: string; levelSeed: number} {
@@ -104,7 +119,7 @@ function standNear(g: Grid, x: number, z: number, r = 0.4): {x: number; z: numbe
 }
 
 describe('Surface Run: station -> district -> station -> save -> Continue -> district (real Game, validating device)', () => {
-  it('crosses both ways behind the loading screen; both worlds and the train exact; the district persists through a save', async () => {
+  const journey = async (v1: boolean): Promise<void> => {
     const T0 = performance.now(), marks: string[] = [];
     const mark = (s: string) => marks.push(`${s} ${((performance.now() - T0) / 1000).toFixed(1)} s`);
     const quiet = () => {};
@@ -162,16 +177,16 @@ describe('Surface Run: station -> district -> station -> save -> Continue -> dis
       mark('new game');
       expect(game.run.current).toEqual(hostKey);
       expect(G.trainRuntime.playerInside(), 'a new game starts in the parked train').toBe(true);
-      expect(game.run.laneStore(SURFACE_LANE, hostKey)).toEqual({v: SURFACE_VERSION});
+      expect(game.run.laneStore(SURFACE_LANE, hostKey)).toEqual({v: v1 ? 1 : SURFACE_VERSION});
       const acc = game.layout.surfaceAccess!;
-      expect(acc.kind).toBe('subway-stair');
+      expect(acc.kind).toBe(v1 ? 'subway-stair' : 'lift');
       const grille = game.layout.props.find(p => p.kind === 'exitStair' && p.area === acc.hall)!;
       expect(grille).toMatchObject({cargoGone: true, h: 0, blocksSight: false});
       const inst = G.damage.props.index.inst.get(grille) ?? [];
       expect(inst.length, 'the hall\'s grille block is drawn by shared instances').toBeGreaterThan(0);
       const m = new THREE.Matrix4();
       for (const e of inst) { e.mesh.getMatrixAt(e.index, m); expect([m.elements[0], m.elements[5], m.elements[10]], 'its instances are hidden').toEqual([0, 0, 0]); }
-      expect(qa.surface.state().scene.accessDoorMeshes, 'the street door is drawn').toBeGreaterThan(0);
+      if (v1) expect(qa.surface.state().scene.accessDoorMeshes, 'the street door is drawn').toBeGreaterThan(0);
       // refused from a menu (the [E] itself needs the door: below)
       game.setState('paused');
       expect(await game.crossSurface()).toMatchObject({ok: false, reason: 'not-playing'});
@@ -208,15 +223,16 @@ describe('Surface Run: station -> district -> station -> save -> Continue -> dis
       expect(qa.surface.go()).toBe(true);
       await h.waitFrames(2);
       expect(surfaceAccessOf(game)!.aimed).toBe(true);
-      expect(qa.surface.access().prompt).toBe('<b>[E]</b> Go up to the street');
+      expect(qa.surface.access().prompt).toBe(v1 ? '<b>[E]</b> Go up to the street' : '<b>[E]</b> Ride up to the street');
       await press();
       expect(await until(() => game.surfaceCrossCounts.done === done0 + 1 && game.state === 'playing')).toBe(true);
       mark('[E] up');
-      expect(states.slice(s0), 'the loading screen, then play').toEqual(['loading', 'playing']);
-      expect(game.lifecycleCounts.loading - c0.loading).toBe(1);
+      expect(states.slice(s0), v1 ? 'the loading screen, then play' : 'the ride: play throughout').toEqual(v1 ? ['loading', 'playing'] : []);
+      expect(game.lifecycleCounts.loading - c0.loading).toBe(v1 ? 1 : 0);
       expect(game.lifecycleCounts.leave - c0.leave).toBe(1);
       expect(game.lifecycleCounts.build - c0.build).toBe(1);
-      expect(game.lifecycleCounts.warmup - c0.warmup).toBeGreaterThanOrEqual(1);
+      if (v1) expect(game.lifecycleCounts.warmup - c0.warmup).toBeGreaterThanOrEqual(1);
+      else expect(game.lifecycleCounts.warmup - c0.warmup, 'the ride compiles in drawn frames: no hidden-canvas warm-up').toBe(0);
       expect(game.run.current).toEqual(surfKey);
       const S = game.layout.surface!;
       expect(S).toBeTruthy();
@@ -331,7 +347,7 @@ describe('Surface Run: station -> district -> station -> save -> Continue -> dis
       const done1 = game.surfaceCrossCounts.done;
       const preGrab = {grab: E.grab?.unit.uid ?? null, way: surfaceAccessOf(game)!.aimed, refusal: game.surfaceCrossRefusal()?.text ?? null, counts: JSON.stringify((E as unknown as {counts: unknown}).counts)};
       expect(surfaceAccessOf(game)!.aimed).toBe(true);
-      expect(qa.surface.access().prompt).toBe(`<b>[E]</b> Back down to ${game.run.node(pick.station)!.name}`);
+      expect(qa.surface.access().prompt).toBe(`<b>[E]</b> ${v1 ? 'Back down' : 'Ride down'} to ${game.run.node(pick.station)!.name}`);
       await press();
       const downOk = await until(() => game.surfaceCrossCounts.done === done1 + 1 && game.state === 'playing', 3000);
       expect(downOk, JSON.stringify({counts: game.surfaceCrossCounts, state: game.state, at: game.run.current, transit: (E as unknown as {inTransit: unknown}).inTransit, grab: E.grab?.unit.uid ?? null, errors: errors.slice(0, 3), frameErrors: frameErrors.slice(0, 2)})).toBe(true);
@@ -358,6 +374,8 @@ describe('Surface Run: station -> district -> station -> save -> Continue -> dis
       const dl = E.unit(dolly!.uid)!;
       expect(E.grab?.unit, 'still grabbed after 20 frames').toBe(dl);
       { // it rolls on its dolly in the station: the player walks on along the arrival facing, the dolly comes along in front
+        // (version 2: the arrival is in the lift car, the facing the one the player rode with: turned toward the car's gate first)
+        if (!v1) { const l = game.layout.surfaceAccess!.lift!, o = l.doorSide === 'N' ? [0, -1] : l.doorSide === 'S' ? [0, 1] : l.doorSide === 'W' ? [-1, 0] : [1, 0]; game.player.yaw = Math.atan2(-o[0], -o[1]); await h.waitFrames(20); }
         const P = game.player, fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), b0 = {x: dl.body.x, z: dl.body.z}, p0 = {x: P.x, z: P.z};
         for (let i = 0; i < 50; i++) { if (game.levels.main.circleClear(P.x + fx * 0.6, P.z + fz * 0.6, 0.3)) { P.x += fx * 0.02; P.z += fz * 0.02; } await h.waitFrames(1); }
         await h.waitFrames(20);
@@ -468,7 +486,7 @@ describe('Surface Run: station -> district -> station -> save -> Continue -> dis
       expect(game.run.current).toEqual(hostKey);
       expect(G.trainRuntime.playerInside(), 'Retry resumes in the train').toBe(true);
       expect(game.layout.surfaceAccess, 'the station keeps its access').toEqual(host0.access);
-      expect(game.run.laneStore(SURFACE_LANE, hostKey)).toEqual({v: SURFACE_VERSION});
+      expect(game.run.laneStore(SURFACE_LANE, hostKey)).toEqual({v: v1 ? 1 : SURFACE_VERSION});
       expect(game.run.peekMemory(surfKey), 'the district as it was when the station was entered (never visited)').toBeUndefined();
       expect(trainSave(), 'the train as it was when the station was entered').toEqual(train0);
 
@@ -504,5 +522,12 @@ describe('Surface Run: station -> district -> station -> save -> Continue -> dis
       h.stop();
       process.stdout.write(`surface-run-journey: ${marks.join(' | ')}\n`);
     }
+  };
+  it('version 1: crosses both ways behind the loading screen; both worlds and the train exact; the district persists through a save', async () => {
+    FORCE.v1 = true;
+    try { await journey(true); } finally { FORCE.v1 = false; }
   }, 900_000); // (about 5 min on one local worker: headroom for a slower CI shard)
+  it('version 2: crosses both ways by the cargo lift ride; both worlds and the train exact; the district persists through a save', async () => {
+    await journey(false);
+  }, 900_000);
 });
