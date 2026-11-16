@@ -19,6 +19,7 @@ import type {WorldMaterials} from '../../src/world/materials';
 import {installGas, type GasHost, type GasSystem} from '../../src/world/gas/system';
 import {installSurfaceAir, type SurfaceAirRuntime} from '../../src/world/surface/air';
 import {VolumetricAtmosphere} from '../../src/render/volumetric';
+import {TRUCK_SPEC} from '../../src/world/surface/truckSpec';
 
 export const SA_W = 120, SA_H = 84;
 export const SA_Y = {street: 0, upper: 3.5, ceil0: 3.2, ceil1: 6.6, sky: 40} as const;
@@ -114,9 +115,10 @@ export function surfaceAirGame(L: StationLayout, mats: WorldMaterials, o: {activ
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x050607, 0.03);
   const camera = new THREE.PerspectiveCamera();
-  // (follow-up 1) the vehicle controller's seat / enclosure / body / spec interior (the truck's measured cab box, its own frame)
-  const car = {driving: false, enclosed: true as boolean | undefined, body: null as {x: number; y: number; z: number; yaw: number} | null,
-    spec: {interior: {x0: -0.99, x1: 1.09, y0: 0.848, y1: 2.485, z0: -3.61, z1: -2.19}}};
+  // (follow-up 1) the vehicle controller's seat / enclosure / body / spec (the REAL truck spec: its measured cab interior and seated eye,
+  // world/surface/truckAnchors.generated.ts, in the vehicle's own frame)
+  const car = {driving: false, enclosed: true as boolean | undefined,
+    body: null as {x: number; y: number; z: number; yaw: number; pitch?: number} | null, spec: TRUCK_SPEC};
   const h = {
     scene, camera, mats, layout: L, levels, world: {culler: {register: vi.fn()}},
     player: {x: at.x, z: at.z, y: 0, eye: 1.6, yaw: 0, radius: 0.3, alive: true, takeDamage: vi.fn()},

@@ -144,8 +144,11 @@ export function outdoorColumn(m: SurfaceOutdoorMap, x: number, z: number): boole
 // ---------------------------------------------------------------------------------------------
 // Follow-up 1: the sealed vehicle cab
 
-/** A sealed cab's interior (world): centre, heading (the vehicle frame's yaw: world = centre + R(yaw)·local), half extents. */
-export interface CabVolume { x: number; y: number; z: number; yaw: number; hx: number; hy: number; hz: number }
+/**
+ * A sealed cab's interior (world): centre, heading and pitch (the vehicle frame: world = centre + R_yaw(R_pitch(local)) — pitch about the
+ * vehicle's lateral axis, as the seat's eye rides a stair flight: world/skywaysCar.ts), half extents.
+ */
+export interface CabVolume { x: number; y: number; z: number; yaw: number; pitch: number; hx: number; hy: number; hz: number }
 
 /**
  * What the vehicle controller offers (world/skywaysCar.ts, structural): the seat taken, the optional `enclosed` (the truck), the body's
@@ -154,7 +157,7 @@ export interface CabVolume { x: number; y: number; z: number; yaw: number; hx: n
 export interface CabVehicle {
   readonly driving: boolean;
   readonly enclosed?: boolean;
-  readonly body: {readonly x: number; readonly y: number; readonly z: number; readonly yaw: number} | null;
+  readonly body: {readonly x: number; readonly y: number; readonly z: number; readonly yaw: number; readonly pitch?: number} | null;
   readonly spec: {readonly interior?: {readonly x0: number; readonly x1: number; readonly y0: number; readonly y1: number; readonly z0: number; readonly z1: number}};
 }
 
@@ -162,15 +165,24 @@ export interface CabVehicle {
 export function cabVolumeOf(car: CabVehicle | null | undefined): CabVolume | null {
   const I = car?.spec?.interior, b = car?.body;
   if (!car || !car.driving || car.enclosed !== true || !b || !I) return null;
-  const lx = (I.x0 + I.x1) / 2, lz = (I.z0 + I.z1) / 2, c = Math.cos(b.yaw), s = Math.sin(b.yaw);
-  return {x: b.x + lx * c + lz * s, y: b.y + (I.y0 + I.y1) / 2, z: b.z - lx * s + lz * c, yaw: b.yaw,
+  const pitch = Number.isFinite(b.pitch) ? b.pitch! : 0, sp = Math.sin(pitch), cp = Math.cos(pitch);
+  const mx = (I.x0 + I.x1) / 2, my = (I.y0 + I.y1) / 2, mz = (I.z0 + I.z1) / 2;
+  // the seat's own convention (world/skywaysCar.ts seat pose): pitched (y, z) = (y cos p − z sin p, y sin p + z cos p), then the yaw
+  const py = my * cp - mz * sp, pz = my * sp + mz * cp, c = Math.cos(b.yaw), s = Math.sin(b.yaw);
+  return {x: b.x + mx * c + pz * s, y: b.y + py, z: b.z - mx * s + pz * c, yaw: b.yaw, pitch,
     hx: Math.abs(I.x1 - I.x0) / 2, hy: Math.abs(I.y1 - I.y0) / 2, hz: Math.abs(I.z1 - I.z0) / 2};
+}
+
+/** A world direction / offset -> the cab's own frame (the yaw undone, then the pitch). */
+function cabRotate(v: CabVolume, x: number, y: number, z: number): [number, number, number] {
+  const c = Math.cos(v.yaw), s = Math.sin(v.yaw), cp = Math.cos(v.pitch), sp = Math.sin(v.pitch);
+  const lx = x * c - z * s, lz = x * s + z * c;
+  return [lx, y * cp + lz * sp, -y * sp + lz * cp];
 }
 
 /** World point -> the cab's own frame (relative to its centre). */
 function cabLocal(v: CabVolume, x: number, y: number, z: number): [number, number, number] {
-  const c = Math.cos(v.yaw), s = Math.sin(v.yaw), dx = x - v.x, dz = z - v.z;
-  return [dx * c - dz * s, y - v.y, dx * s + dz * c];
+  return cabRotate(v, x - v.x, y - v.y, z - v.z);
 }
 
 /** Is world (x, y, z) inside the cab volume? */
@@ -186,9 +198,7 @@ export function inCab(v: CabVolume | null, x: number, y: number, z: number): boo
  */
 export function cabRaySpan(v: CabVolume | null, o: {x: number; y: number; z: number}, d: {x: number; y: number; z: number}): [number, number] | null {
   if (!v) return null;
-  const c = Math.cos(v.yaw), s = Math.sin(v.yaw);
-  const [lx, ly, lz] = cabLocal(v, o.x, o.y, o.z);
-  const dl = [d.x * c - d.z * s, d.y, d.x * s + d.z * c], lo = [lx, ly, lz], h = [v.hx, v.hy, v.hz];
+  const lo = cabLocal(v, o.x, o.y, o.z), dl = cabRotate(v, d.x, d.y, d.z), h = [v.hx, v.hy, v.hz];
   let tIn = 0, tOut = Infinity;
   for (let k = 0; k < 3; k++) {
     const inv = (dl[k] >= 0 ? 1 : -1) / Math.max(Math.abs(dl[k]), 1e-6);

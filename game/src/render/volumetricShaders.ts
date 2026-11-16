@@ -139,7 +139,7 @@ export function createFogUniforms() {
     // between y0 and y1 over its surface deck (reactor-variant programs only; render/atmosphere.ts AtmosphereParams.skyCap)
     skyCap: uniform(new THREE.Vector4(0, 1, 0, 0)),
     // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR, follow-up 1): the SEALED VEHICLE CAB the eye sits in (world/surface/
-    // airMask.ts CabVolume) — centre + heading [x, y, z, yaw], half extents + on [hx, hy, hz, on]. Plain uniforms of the shared group (no
+    // airMask.ts CabVolume) — centre + heading [x, y, z, yaw], half extents + pitch [hx, hy, hz, pitch] (off: hx = 0). Plain uniforms of the shared group (no
     // uniform buffer of their own); read by the surface variant only: no gas term is drawn inside the cab, everything beyond it as before
     cabC: uniform(new THREE.Vector4(0, 0, 0, 0)), cabH: uniform(new THREE.Vector4(0, 0, 0, 0)),
     // temporal
@@ -312,15 +312,19 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
     // (world/surface/airMask.ts cabRaySpan, the slab test in the cab's own frame; empty when off) — the surface variant only
     let cabSpan: N = null;
     if (outT) {
-      const cc = n(u.cabC), ch = n(u.cabH), cs = n(cos(cc.w)).toVar(), sn = n(sin(cc.w)).toVar();
-      const rel = n(u.camPos).sub(cc.xyz).toVar();
-      const lo = vec3(rel.x.mul(cs).sub(rel.z.mul(sn)), rel.y, rel.x.mul(sn).add(rel.z.mul(cs))).toVar();
-      const ld = vec3(n(dir).x.mul(cs).sub(n(dir).z.mul(sn)), n(dir).y, n(dir).x.mul(sn).add(n(dir).z.mul(cs))).toVar();
+      const cc = n(u.cabC), ch = n(u.cabH), cs = n(cos(cc.w)).toVar(), sn = n(sin(cc.w)).toVar(), cp = n(cos(ch.w)).toVar(), sp = n(sin(ch.w)).toVar();
+      // world -> the cab's frame: the yaw undone, then the pitch (airMask.ts cabRotate)
+      const toCab = (v: N): N => {
+        const lx = n(v).x.mul(cs).sub(n(v).z.mul(sn)), lz = n(v).x.mul(sn).add(n(v).z.mul(cs));
+        return vec3(lx, n(v).y.mul(cp).add(lz.mul(sp)), n(v).y.negate().mul(sp).add(lz.mul(cp)));
+      };
+      const lo = n(toCab(n(u.camPos).sub(cc.xyz))).toVar();
+      const ld = n(toCab(dir)).toVar();
       const inv = n(step(0, ld).mul(2).sub(1)).div(max(abs(ld), 1e-6)).toVar(); // (sign never 0: a parallel axis -> ±1e6)
       const ta = n(ch.xyz.negate().sub(lo)).mul(inv).toVar(), tb = n(ch.xyz.sub(lo)).mul(inv).toVar();
       const t1 = min(ta, tb).toVar(), t2 = max(ta, tb).toVar();
       const tIn = max(max(max(n(t1).x, n(t1).y), n(t1).z), 0).toVar(), tOut = min(min(n(t2).x, n(t2).y), n(t2).z).toVar();
-      cabSpan = n(select(n(ch.w).greaterThan(0.5).and(tOut.greaterThan(tIn)), vec2(tIn, tOut), vec2(1e9, -1))).toVar(VF_CAB_MARK);
+      cabSpan = n(select(n(ch.x).greaterThan(0).and(tOut.greaterThan(tIn)), vec2(tIn, tOut), vec2(1e9, -1))).toVar(VF_CAB_MARK);
     }
 
     Loop(STEPS, ({i}: {i: N}) => {

@@ -816,8 +816,8 @@ export class VolumetricAtmosphere {
     try { cab = this.cabSource?.() ?? null; } catch (err) { console.warn('volumetric: the cab source failed', err); this.cabSource = null; }
     this.cabLast = cab;
     const u = this.u;
-    if (cab) { (u.cabC.value as THREE.Vector4).set(cab.x, cab.y, cab.z, cab.yaw); (u.cabH.value as THREE.Vector4).set(cab.hx, cab.hy, cab.hz, 1); }
-    else (u.cabH.value as THREE.Vector4).w = 0;
+    if (cab) { (u.cabC.value as THREE.Vector4).set(cab.x, cab.y, cab.z, cab.yaw); (u.cabH.value as THREE.Vector4).set(cab.hx, cab.hy, cab.hz, cab.pitch); }
+    else (u.cabH.value as THREE.Vector4).set(0, 0, 0, 0); // (off: hx = 0)
   }
 
   /** Task reactor-build-20261101 (lane AIR, QA): the depth gas term's state. */
