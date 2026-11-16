@@ -8,7 +8,9 @@
 //   2. the district: the arrival view (portal → checkpoint, tent, truck), the planning map overlay, a street view, a store interior, the
 //      truck cab view — at most MAX_SHOTS frames, each taken right after its pose;
 //   3. the crossing back down, the station state (no district objects / 'surface' resources left), close.
-//   npm run build && node tools/qa/surface-run-check.mjs [outDir] [--size=960x540] [--quality=low|medium|high] [--up-only]
+//   npm run build && node tools/qa/surface-run-check.mjs [outDir] [--size=960x540] [--quality=low] [--plan=all|journey|views]
+//   --plan=journey: door, loading, arrival, map, then straight back down (the whole normal journey, fewest new views compiled);
+//   --plan=views: up, arrival, truck / cab / roll, avenue, store interior (no return); all = both in one session.
 import fs from 'node:fs';
 import path from 'node:path';
 import {launchBrowser, withBrowserLock} from './browser-env.mjs';
@@ -17,14 +19,15 @@ import {serveStatic} from './static-server.mjs';
 const ARGS = process.argv.slice(2), POS = ARGS.filter(a => !a.startsWith('--'));
 const opt = (k, d) => (ARGS.find(a => a.startsWith(`--${k}=`)) ?? `--${k}=${d}`).slice(k.length + 3);
 const out = path.resolve(POS[0] ?? 'qa-artifacts/surface-run-browser');
-const SIZE = opt('size', '960x540').split('x').map(Number), QUALITY = opt('quality', ''), UP_ONLY = ARGS.includes('--up-only');
+const SIZE = opt('size', '960x540').split('x').map(Number), QUALITY = opt('quality', ''), PLAN = ARGS.includes('--up-only') ? 'views' : opt('plan', 'all');
+const VIEWS = PLAN !== 'journey', RETURN = PLAN !== 'views';
 const NETWORK_SEED = Number(opt('network', '1')), HOST = opt('host', 'subway');
 const GUARD_GIB = 10, STOP_GIB = 9.4;
 fs.mkdirSync(out, {recursive: true});
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const anon = () => { try { const s = fs.readFileSync('/sys/fs/cgroup/memory.stat', 'utf8'); const g = k => Number(new RegExp(`^${k} (\\d+)$`, 'm').exec(s)?.[1] ?? 0); return g('anon') + g('shmem'); } catch { return 0; } };
 const gib = () => +(anon() / 1024 ** 3).toFixed(2);
-const report = {started: new Date().toISOString(), size: SIZE, quality: QUALITY || 'default', steps: [], shots: [], consoleErrors: [], peakGiB: 0, guard: false, stoppedAt: null};
+const report = {started: new Date().toISOString(), size: SIZE, quality: QUALITY || 'default', plan: PLAN, steps: [], shots: [], consoleErrors: [], peakGiB: 0, guard: false, stoppedAt: null};
 const step = (name, data = {}) => { report.steps.push({name, gib: gib(), t: new Date().toISOString(), ...data}); console.log(name, `${gib()} GiB`, JSON.stringify(data).slice(0, 1200)); };
 const headroom = name => { if (gib() >= STOP_GIB) { report.stoppedAt = name; step(`self-stop before ${name}`, {stopGib: STOP_GIB}); return false; } return true; };
 const save = () => fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
@@ -68,6 +71,7 @@ await withBrowserLock(async () => {
       station: await ev(() => ({id: window.__game.run.current.station, name: window.__game.layout?.name})).catch(e => String(e)), access: await ev(() => window.__LL.surface.access()).catch(e => String(e))});
     if (!playing) throw new Error('station never reached playing');
     await frames(30);
+    step('station renderer (before)', await ev(() => { const i = window.__game.renderer.info; return {geometries: i.memory?.geometries, textures: i.memory?.textures, calls: i.render?.calls, triangles: i.render?.triangles}; }).catch(e => String(e)));
     if (!headroom('door')) return;
     step('go door', {ok: await ev(() => window.__LL.surface.go())});
     await frames(20);
@@ -84,6 +88,7 @@ await withBrowserLock(async () => {
     await waitState('playing', 300);
     await frames(40);
     await shot('district-arrival', 'arrival at the portal: the checkpoint, tent and truck');
+    step('district renderer', await ev(() => { const i = window.__game.renderer.info; return {geometries: i.memory?.geometries, textures: i.memory?.textures, calls: i.render?.calls, triangles: i.render?.triangles}; }).catch(e => String(e)));
     const S = await ev(() => { const s = window.__game.layout.surface; return s && {portal: s.portal.pose, cp: s.checkpoint, truck: s.truck, core: s.core,
       dest: s.buildings.filter(b => b.destination && b.enterable).map(b => ({id: b.id, name: b.name, programme: b.programme, kind: b.kind, fp: b.footprint, areas: b.areas, ent: b.entrances.map(e => ({x: e.x, z: e.z, side: e.side, door: e.door}))})),
       streets: s.streets.filter(t => t.rank === 'avenue').map(t => ({name: t.name, ax: t.ax, az: t.az, bx: t.bx, bz: t.bz}))}; });
@@ -94,6 +99,7 @@ await withBrowserLock(async () => {
     await shot('planning-map', 'the checkpoint planning map (real roads, destinations, notes, exploration, player and truck)');
     await page.keyboard.press('KeyE');
     await waitState('playing', 60);
+    if (VIEWS) {
     if (!headroom('truck view')) return;
     // the truck from the checkpoint (third person standing), then the street down the nearest avenue
     await ev(t => { window.__LL.lookAt(t.x, 1.4, t.z); }, S.truck);
@@ -138,12 +144,14 @@ await withBrowserLock(async () => {
       await frames(40);
       await shot('store-interior', `${store.name} (${store.programme}) from inside its door`);
     }
-    if (!UP_ONLY && headroom('cross down')) {
+    }
+    if (RETURN && headroom('cross down')) {
       await ev(() => window.__LL.surface.go());
       const down = await ev(() => window.__LL.surface.cross('down')).catch(e => ({ok: false, error: String(e)}));
       await waitState('playing', 600);
       await frames(30);
       step('crossed down', {down, state: await ev(() => window.__LL.surface.state()).catch(e => String(e))});
+      step('station renderer', await ev(() => { const i = window.__game.renderer.info; return {geometries: i.memory?.geometries, textures: i.memory?.textures, calls: i.render?.calls}; }).catch(e => String(e)));
       await shot('station-return', 'back in the station at the stairwell (no district left)');
     }
   } finally {
