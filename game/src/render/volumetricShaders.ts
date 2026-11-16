@@ -46,6 +46,7 @@ import {RM, lfSlotAt, lightFieldSample, rideMaskInside} from '../world/lightFiel
 import {MAX_SLOTS} from '../world/lightField';
 import {GAS} from '../world/gas/field';
 import {REACTOR_AIR, REACTOR_GAS_LOOK} from '../world/reactor/air'; // task reactor-build-20261101 (lane AIR): the depth gas table size / look
+import {SURFACE_AIR} from '../world/surface/airMask'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): the district's outdoor column map
 import {BILATERAL_K, DENSITY_MAP_RANGE} from './atmosphere';
 import {GLOW_SCATTER_NEAR_M, SCATTER_SLOTS, SMOKE_LIMITS, VIS_WINDOWS} from './smoke';
 import {applyAmbientOcclusion, type AoComposite} from './ambientOcclusion'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO)
@@ -160,6 +161,33 @@ export interface FogTextures {
    * allocates it per station). Absent: an all-zero 1x1 stand-in (the same graph; the term stays off).
    */
   gas?: THREE.DataArrayTexture;
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): the Surface Run district's outdoor COLUMN MAP (world/surface/airMask.ts:
+   * R8, the density map's w x h, nearest, clamp — byte = the column's indoor top in SURFACE_AIR.TOP_STEP). Read by the surface variant only.
+   */
+  outdoor?: THREE.DataTexture;
+}
+
+let outdoorStandIn: THREE.DataTexture | null = null;
+/** Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): 1x1 zero column map (an outdoor column) when FogTextures.outdoor is absent. */
+function outdoorPlaceholder(): THREE.DataTexture {
+  return (outdoorStandIn ??= outdoorMapTexture(new Uint8Array(1), 1, 1));
+}
+
+/**
+ * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): the district's column map as the march samples it — R8 unsigned byte,
+ * NEAREST (the exposure's nearest-cell lookup, bit for bit), clamp to edge (beyond the grid the edge columns continue), no mipmaps.
+ */
+export function outdoorMapTexture(data: Uint8Array, w: number, h: number): THREE.DataTexture {
+  const t = new THREE.DataTexture(data, w, h, THREE.RedFormat, THREE.UnsignedByteType);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.generateMipmaps = false;
+  t.unpackAlignment = 1;
+  t.colorSpace = THREE.NoColorSpace;
+  t.name = 'fog-surface-columns';
+  t.needsUpdate = true;
+  return t;
 }
 
 let gasStandIn: THREE.DataArrayTexture | null = null;
@@ -205,10 +233,18 @@ export interface MarchOptions {
    * program by it at setStation, before the warm-up). Absent / false: exactly the previous program.
    */
   depth?: boolean;
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): with `depth`, the regional term's OUTDOOR part only above each column's
+   * indoor top (FogTextures.outdoor: the Surface Run district — sealed interiors never draw the outdoor air). One more sampled texture,
+   * no uniform (the column lookup reuses the density map's transform). Absent / false: exactly the previous program.
+   */
+  surface?: boolean;
 }
 
 /** Task reactor-build-20261101 (lane AIR): name of the depth-gas variable (marks the reactor variant of the march). */
 export const VF_DEPTH_MARK = 'vfDepthSig';
+/** Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): name of the column-top variable (marks the surface variant). */
+export const VF_SURFACE_MARK = 'vfSurfaceTop';
 
 /**
  * The march material (two outputs). Rebuilt when the step count or the shadow texture changes (quality change, the
@@ -223,6 +259,7 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
   const visT = texture(tex.vis);
   const gasT = texture(tex.gas ?? gasPlaceholder());
   const shadowT = tex.shadow ? texture(tex.shadow) : null;
+  const outT = o.depth && o.surface ? texture(tex.outdoor ?? outdoorPlaceholder()) : null; // (lane AIR, Surface Run: the column map)
   const out0 = property('vec4'), out1 = property('vec4');
 
   // occlusion window w (render/smoke.ts): 2D line of sight on the source's storey grid, faded above / below its band
@@ -398,7 +435,14 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
             const dcT = n(select(n(p).y.lessThan(rg.y), mix(t0, t1, fu.sub(fl)), float(0)));
             // (lane GASLIGHT) + the outdoor part c · smoothstep(y0, y1, y) x its visual scale (world/gaslightRules.ts outdoorGasAt)
             const dO = n(u.depthOut);
-            const dc = n(dcT.add(n(dO.z).mul(smoothstep(dO.x, dO.y, n(p).y)).mul(dO.w))).toVar();
+            let outW: N = float(1);
+            if (outT) {
+              // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): x the column's outdoor weight (world/surface/airMask.ts
+              // outdoorWeight: the nearest cell's indoor top — the density map's uv — then smoothstep(top − EDGE, top, y)): sealed interiors 0
+              const top = n(n(outT.sample(muv).level(0)).r.mul(255 * SURFACE_AIR.TOP_STEP)).toVar(VF_SURFACE_MARK);
+              outW = smoothstep(top.sub(SURFACE_AIR.EDGE), top, n(p).y);
+            }
+            const dc = n(dcT.add(n(dO.z).mul(smoothstep(dO.x, dO.y, n(p).y)).mul(dO.w).mul(outW))).toVar();
             If(dc.greaterThan(0.002), () => {
               // slow horizontal sheets (stretched noise, drifting with the air) x the moving wisps — both mean 1 (the exposure is the mean)
               const shv = n(u.depthSheet);

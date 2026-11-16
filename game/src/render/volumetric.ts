@@ -59,13 +59,15 @@ import {
   type SmokeEmitterOptions, type SmokeHandle, type VisLookup,
 } from './smoke';
 import {bindFlareVisibility, isFlareLight} from '../world/flareLight'; // Iteration 15
-import {VF_LIMITS, VF_MARK, createCompositeNode, createFogUniforms, createMarchMaterial, createTemporalMaterial, type FogUniforms} from './volumetricShaders';
+import {VF_LIMITS, VF_MARK, createCompositeNode, createFogUniforms, createMarchMaterial, createTemporalMaterial, outdoorMapTexture, type FogUniforms} from './volumetricShaders';
 import {GAS} from '../world/gas/field'; // task gasmask-breach-20261030
 import {REACTOR_GAS_LOOK, type DepthGasTable} from '../world/reactor/air'; // task reactor-build-20261101 (lane AIR)
 // task reactor-expansion-20261101 (lane GASLIGHT): the toxic-gas visibility rule — the regional term's outdoor part (the Office roof deck,
 // the Reactor's open pit top), the pit's light shafts, the in-engine fog fallback when the pass is off
 import {PIT_SHAFTS, ROOF_GAS_LOOK, fallbackFog, officeRoofGas, type OutdoorGas, type ShaftSpec} from '../world/gaslightRules';
 import {ROOF_FOG, roofAirOf} from '../world/roofAir';
+// task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): the Surface Run district's outdoor toxic air (one column map: exposure + march)
+import {SURFACE_GAS_LOOK, surfaceOutdoorMap, type SurfaceOutdoorMap} from '../world/surface/airMask';
 import {RIDE_MASK} from '../world/rideMask'; // task studio-perf-ao-train-continuity-20261110-022206-01: the ride tunnel's medium (the CPU mirror)
 // task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO): screen-space ambient occlusion inside this pipeline
 import {AO_MARK, AmbientOcclusionPass, type AoDebug} from './ambientOcclusion';
@@ -264,6 +266,9 @@ export class VolumetricAtmosphere {
   private depthCompiled = false;
   private depthAny = false;
   private depthUploads = 0;
+  // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): the surface variant (the district's column map texture; null elsewhere)
+  private surfaceMap: SurfaceOutdoorMap | null = null;
+  private surfaceTex: THREE.DataTexture | null = null;
   // task reactor-expansion-20261101 (lane GASLIGHT): the regional term's outdoor part / the pit's shafts of this station (QA), the shaft
   // look (gain tunable live), the fallback's eye concentration and the scene fog it borrowed for one direct() frame
   private depthOutdoor: OutdoorGas | null = null;
@@ -521,12 +526,18 @@ export class VolumetricAtmosphere {
     // task reactor-expansion-20261101 (lane GASLIGHT): ... and for the Office roof's outdoor toxic air (the same regional term, outdoor part
     // only: its exposure is world/roofAir.ts roofBlend x GAS.ROOF_OUTDOOR_C, drawn here by the identical ramp); each with its own look
     const roof = layout.reactor ? null : roofAirOf(layout);
-    this.depthCompiled = !!layout.reactor || !!roof;
+    // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): ... and the Surface Run district's outdoor air (the outdoor part
+    // only, above each column's indoor top: world/surface/airMask.ts — the exposure's own map, as an R8 texture: the surface variant)
+    const surf = layout.reactor || roof ? null : surfaceOutdoorMap(layout);
+    this.surfaceTex?.dispose();
+    this.surfaceTex = surf ? outdoorMapTexture(surf.top, surf.w, surf.h) : null;
+    this.surfaceMap = surf;
+    this.depthCompiled = !!layout.reactor || !!roof || !!surf;
     this.depthAny = false;
     this.u.depthOn.value = 0;
     this.depthTable.fill(0);
     this.depthTableTex.needsUpdate = true; // (lane FOG) the table texture: zero until the runtime uploads
-    this.applyDepthLook(roof ? ROOF_GAS_LOOK : REACTOR_GAS_LOOK);
+    this.applyDepthLook(roof ? ROOF_GAS_LOOK : surf ? SURFACE_GAS_LOOK : REACTOR_GAS_LOOK); // (lane AIR: + the district's outdoor look)
     this.setOutdoor(null);
     this.setShafts(null);
     this.gasFallbackC = 0;
@@ -537,6 +548,14 @@ export class VolumetricAtmosphere {
       this.setOutdoor(o);
       this.depthAny = true;
       this.u.depthOn.value = 1;
+    }
+    if (surf) { // (lane AIR, Surface Run) no strata (the table ends far below the street), the outdoor part over the whole district
+      const r = surf.gas.rect;
+      this.u.depthRect.value.set(r.x0, r.z0, r.x1, r.z1);
+      this.u.depthRange.value.set(-1e4, -1e4 + 1, 1, 0);
+      this.setOutdoor(surf.gas);
+      this.depthAny = surf.gas.c > 0;
+      this.u.depthOn.value = this.depthAny ? 1 : 0;
     }
     this.field = field;
     this.epoch = null; // the fog clock restarts at the station's first frame
@@ -766,6 +785,14 @@ export class VolumetricAtmosphere {
    */
   setGasFallback(c: number): void {
     this.gasFallbackC = Number.isFinite(c) ? Math.max(0, Math.min(1, c)) : 0;
+  }
+
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR, QA / tests): the surface variant's state — the column map the march
+   * samples (its texture's own bytes: the exposure's map) and whether this station's program carries the term.
+   */
+  surfaceDebug(): {compiled: boolean; map: SurfaceOutdoorMap | null; texture: THREE.DataTexture | null; key: string} {
+    return {compiled: !!this.surfaceTex && this.depthCompiled, map: this.surfaceMap, texture: this.surfaceTex, key: this.marchKey};
   }
 
   /** Task reactor-build-20261101 (lane AIR, QA): the depth gas term's state. */
@@ -1049,10 +1076,13 @@ export class VolumetricAtmosphere {
     const depthTex = (this.scenePass as unknown as {getTexture(n: string): THREE.Texture}).getTexture('depth');
     const steps = this.preset?.steps ?? 24;
     // task reactor-build-20261101 (lane AIR): + the depth gas variant (a reactor layout only; every other key is unchanged)
-    const key = `${steps}|${depthTex.id}|${shadowTex?.id ?? 'none'}|${this.densityTex.id}|${this.airTex.id}|${this.gasTex.id}${this.depthCompiled ? '|depth' : ''}`;
+    // (task studio-surface-run-opus-rebuild-20261116-020827-01, lane AIR: + the surface variant, the district only)
+    const st = this.surfaceTex;
+    const key = `${steps}|${depthTex.id}|${shadowTex?.id ?? 'none'}|${this.densityTex.id}|${this.airTex.id}|${this.gasTex.id}${this.depthCompiled ? '|depth' : ''}${st ? `|surface${st.id}` : ''}`;
     if (this.marchMat && key === this.marchKey) return this.marchMat;
     this.marchMat?.dispose();
-    this.marchMat = createMarchMaterial(this.u, {depth: depthTex, noise: this.noise, density: this.densityTex, air: this.airTex, vis: this.visTex, shadow: shadowTex, gas: this.gasTex}, this.depthCompiled ? {steps, depth: true} : {steps});
+    this.marchMat = createMarchMaterial(this.u, {depth: depthTex, noise: this.noise, density: this.densityTex, air: this.airTex, vis: this.visTex, shadow: shadowTex, gas: this.gasTex, ...(st ? {outdoor: st} : {})},
+      this.depthCompiled ? (st ? {steps, depth: true, surface: true} : {steps, depth: true}) : {steps});
     this.marchKey = key;
     this.marchBuilds++;
     this.errorChecks = 3; // watch the next frames for WebGPU validation / compilation errors of the new program
@@ -1299,6 +1329,8 @@ export class VolumetricAtmosphere {
     this.placeholderAir.dispose();
     this.placeholderGas.dispose();
     this.depthTableTex.dispose(); // (lane FOG)
+    this.surfaceTex?.dispose(); // (lane AIR, Surface Run)
+    this.surfaceTex = null;
     this.gasData = null;
     this.densityMap = null;
     this.noise.dispose();

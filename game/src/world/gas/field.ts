@@ -153,6 +153,11 @@ export class StoreyGas {
    */
   private poolCap: Float32Array | null = null;
   private srcCap: Float32Array | null = null;
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): each source's own cells, strength and pool cells, so a source can be
+   * REMOVED (a Surface Run door closing: removeSources rebuilds the marks from the rest). Bookkeeping only: the step arithmetic never reads it.
+   */
+  private readonly sourceOf = new Map<string, {loc: number[]; s: number; pool: number[]}>();
   /** Active box (domain-local, inclusive); x0 > x1 = empty. */
   x0 = 1; y0 = 1; x1 = 0; y1 = 0;
   asleep = false;
@@ -206,6 +211,57 @@ export class StoreyGas {
     const marked: number[] = [];
     this.markPool(loc, marked);
     if (this.poolCap) for (const i of marked) this.poolCap[i] = Math.max(this.poolCap[i], s);
+    this.sourceOf.set(id, {loc, s, pool: marked}); // (lane AIR, Surface Run: removable sources)
+    this.asleep = false;
+    this.dirty = true;
+    return true;
+  }
+
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): removes source `id` (a Surface Run door shut). The source / pool marks
+   * are rebuilt from the REMAINING sources (another opening into the same room keeps its own pool); the removed source's room stays a pool
+   * region with a fill level of 0 — no inflow, so the gas it holds LINGERS and thins (the capped step: −FILL_RATE·c² − K_POOL·c: from 0.6
+   * below the damage threshold in ~30 s, the last traces over ~1.5 min) instead of vanishing at K_SPILL. The concentration itself is
+   * untouched. Uses the per-cell fill levels (the Bunker's capped path); the Office never calls this. False when the source is unknown here.
+   */
+  removeSources(id: string): boolean {
+    const gone = this.sourceOf.get(id);
+    if (!gone) return false;
+    this.sourceOf.delete(id);
+    const k = this.breaches.indexOf(id);
+    if (k >= 0) this.breaches.splice(k, 1);
+    const n = this.dw * this.dh;
+    this.poolCap ??= new Float32Array(n);
+    this.srcCap ??= new Float32Array(n);
+    const pc = this.poolCap, sc = this.srcCap;
+    this.src.fill(0);
+    this.pool.fill(0);
+    pc.fill(0);
+    sc.fill(0);
+    for (const {loc, s, pool} of this.sourceOf.values()) {
+      for (const i of loc) { this.src[i] = 1; sc[i] = Math.max(sc[i], s); }
+      for (const i of pool) { this.pool[i] = 1; pc[i] = Math.max(pc[i], s); }
+    }
+    for (const i of gone.pool) this.pool[i] = 1; // (its fill level stays 0 unless another source's pool holds the cell)
+    this.lingering = true;
+    this.asleep = false;
+    this.dirty = true;
+    return true;
+  }
+
+  /** Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): a removed source's room still lingers (pool cells of fill level 0). */
+  lingering = false;
+
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): once the lingering gas has settled (the storey fell asleep at a faint
+   * remainder), its pool cells of fill level 0 return to spill: the remainder decays at K_SPILL to nothing (no faint haze kept forever).
+   * False when nothing lingers.
+   */
+  releaseLingering(): boolean {
+    if (!this.lingering || !this.poolCap) return false;
+    this.lingering = false;
+    const pc = this.poolCap;
+    for (let i = 0; i < pc.length; i++) if (this.pool[i] && pc[i] <= 0) this.pool[i] = 0;
     this.asleep = false;
     this.dirty = true;
     return true;
@@ -408,6 +464,16 @@ export class GasField {
       return true;
     }
     return s.addSources(b.id, b.cells, b.strength);
+  }
+
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): stops breach `id`'s sources on every storey (StoreyGas.removeSources:
+   * what it fed decays from here). False when no storey had it.
+   */
+  removeBreach(id: string): boolean {
+    let any = false;
+    for (const s of this.storeyMap.values()) any = s.removeSources(id) || any;
+    return any;
   }
 
   /** Advances by play time dt on the fixed tick (at most MAX_TICKS_PER_FRAME ticks per call). Returns the ticks run. */

@@ -53,7 +53,7 @@ import type {WindowPlan, WindowView} from '../officeWindows';
 import {WINDOWS_LANE, WINDOW_BREACH, WindowBreaches, paneCentre, sourceCells, type Breach, type PaneRef, type WindowsRecord} from '../windowBreach';
 import {roofAirOf, roofBlend, type RoofAir} from '../roofAir'; // task gas-mask-roof-feedback-20261030 (item 10): the toxic roof
 import {GasHud} from '../../ui/gasHud';
-import {GAS, GasField, type GasDomain} from './field';
+import {GAS, GasField, type GasDomain, type StoreyGas} from './field';
 import {GasPuffs, type PuffGrid, type PuffSpec} from './puff'; // task track1-siren-blightbelly-20261031 (lane BLIGHT)
 import type {DepthGasSource} from '../reactor/air'; // task reactor-build-20261101 (lane AIR): the Reactor's depth gas
 
@@ -114,7 +114,18 @@ export interface GasWindowSource {
   exterior: {x0: number; z0: number; x1: number; z1: number};
   lane: string;
   prebreached?: readonly string[];
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): the source's OWN field instead of one GasField over `exterior` (the
+   * Surface Run district: a bounded per-building field, world/surface/airField.ts). A source with a field is used even without panes.
+   */
+  field?: () => GasField;
 }
+
+/**
+ * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): an analytic OUTDOOR air the exposure adds like the roof's (the Surface
+ * Run district's toxic streets: world/surface/airMask.ts surfaceOutdoorGasAt — the volumetric march draws the same function).
+ */
+export interface OutdoorAirSource { gasAt(x: number, y: number, z: number): number }
 
 /**
  * Task studio-bunker-level-20261109-072224-01: a world of permanent LOCAL GAS LEAKS (the Bunker's gas zones, layout.bunker.gasZones):
@@ -149,6 +160,9 @@ export function prebreachRecord(ids: readonly string[]): WindowsRecord {
 const GLASS = new THREE.Color(0xc9d8dc);
 const tv = new THREE.Vector3(), tn = new THREE.Vector3(), td = new THREE.Vector3();
 
+/** Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): a storey field's own cell rect (its domain incl. the closed ring). */
+const storeyRect = (s: StoreyGas): {x0: number; y0: number; w: number; h: number} => ({x0: s.ox, y0: s.oy, w: s.dw, h: s.dh});
+
 export class GasSystem {
   /** The office world's panes (null on the Subway / between worlds). */
   windows: WindowBreaches | null = null;
@@ -172,6 +186,17 @@ export class GasSystem {
    * generators.ts after this system's section build; read only while layout.reactor exists. Null on every other level.
    */
   depth: DepthGasSource | null = null;
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): the Surface Run district's outdoor toxic air, set by its runtime
+   * (world/surface/air.ts) after this system's section build; null everywhere else. Joins the roof term (source 'outdoor').
+   */
+  outdoorAir: OutdoorAirSource | null = null;
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): the eye is inside a SEALED ENCLOSURE right now (the enclosed truck
+   * cab, game.ts): its air is clean — the eye concentration is 0 (no exposure, damage, HUD or cough); the gas still renders around it.
+   * Default: never.
+   */
+  shelter: () => boolean = () => false;
   /**
    * Task studio-skyways-level-20261106-054448 (lane GAS): window worlds besides the Office tower, asked in order at each section build
    * when the layout has no tower windows (the Skyways glazing runtime registers one; null = not its world).
@@ -224,7 +249,8 @@ export class GasSystem {
     const ex = src.exterior;
     const domain = {x0: Math.floor(ex.x0 / CELL) - 1, y0: Math.floor(ex.z0 / CELL) - 1, x1: Math.ceil(ex.x1 / CELL) + 1, y1: Math.ceil(ex.z1 / CELL) + 1};
     const storeys = new Set(src.plans.map(p => p.level));
-    this.field = new GasField(layout.levels.filter(l => storeys.has(l.id)).map(l => ({id: l.id, grid: l.grid})), {domain, closed});
+    // (task studio-surface-run-opus-rebuild-20261116-020827-01, lane AIR: a source may bring its own bounded field)
+    this.field = src.field ? src.field() : new GasField(layout.levels.filter(l => storeys.has(l.id)).map(l => ({id: l.id, grid: l.grid})), {domain, closed});
     const rec = this.host.run.laneStore(src.lane);
     if (rec !== undefined) this.fastForward(this.windows.restore(rec, this.host.clock));
     // (lane GAS, Skyways) the first build of this world: its pre-breached panes as breaches of the capped age — the restore path
@@ -253,7 +279,7 @@ export class GasSystem {
     for (const f of this.windowSources) {
       let s: GasWindowSource | null = null;
       try { s = f(); } catch (err) { console.warn('gas: a window source failed', err); }
-      if (s && s.plans.length) return s;
+      if (s && (s.plans.length || s.field)) return s; // (lane AIR, Surface Run: a source with its own field counts without panes)
     }
     return null;
   }
@@ -281,6 +307,7 @@ export class GasSystem {
     this.puffs.clear(); // lane BLIGHT: temporary puffs never outlive their world (never saved: no re-emission on a revisit)
     this.puffs.world = null;
     this.depth = null; // task reactor-build-20261101 (lane AIR): the Reactor runtime sets it again after this build (never outlives its world)
+    this.outdoorAir = null; // (Surface Run, lane AIR) the district runtime sets it again after this build
     Object.assign(this.exposure, {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null, puff: 0, depth: 0, fallback: 0});
     this.host.atmosphere.setGasFallback?.(0); // (lane GASLIGHT) no fallback fog outlives its world
     this.hud.clear();
@@ -319,9 +346,12 @@ export class GasSystem {
     const f = this.field, P = this.puffs;
     const puffLevels = P.active ? P.levels() : null;
     if (f) {
-      const rect = f.rect;
       for (const s of f.drainChanged()) {
-        this.host.atmosphere.setGasLayer(s.level, puffLevels?.has(s.level) ? this.compose(s.level, rect, s.c) : s.c, rect);
+        // (task studio-surface-run-opus-rebuild-20261116-020827-01, lane AIR: each storey's OWN rect — a single-domain field's storeys all
+        // cover f.rect exactly; the Surface Run field's zones each cover their building. Where storeys of one level overlap (a zone's
+        // closed ring over its neighbour's edge) the layer composes every storey there: never one storey's zeros over another's gas)
+        const rect = storeyRect(s), shared = this.sharedLevel(f, s.level);
+        this.host.atmosphere.setGasLayer(s.level, shared ? this.compose(s.level, rect, null) : puffLevels?.has(s.level) ? this.compose(s.level, rect, s.c) : s.c, rect);
         this.counts.uploads++;
       }
     }
@@ -330,6 +360,13 @@ export class GasSystem {
       this.host.atmosphere.setGasLayer(p.level, this.compose(p.level, rect, st ? null : undefined), rect);
       this.counts.uploads++;
     }
+  }
+
+  /** Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): more than one breach storey on `level` (the Surface Run zones). */
+  private sharedLevel(f: GasField, level: number): boolean {
+    let n = 0;
+    for (const st of f.storeys) if (st.level === level && ++n > 1) return true;
+    return false;
   }
 
   private scratch = new Float32Array(0);
@@ -343,15 +380,17 @@ export class GasSystem {
     if (this.scratch.length < n) this.scratch = new Float32Array(n);
     const out = this.scratch.subarray(0, n);
     if (base) out.set(base.subarray(0, n)); else out.fill(0);
-    const st = base === null ? this.field?.storey(level) ?? null : null;
-    if (st) {
-      const fr = this.field!.rect;
+    // (lane AIR, Surface Run: every breach storey of this level over its own rect, the max where they overlap — one storey for a
+    // single-domain field: exactly its values, as before)
+    if (base === null && this.field) for (const st of this.field.storeys) {
+      if (st.level !== level) continue;
+      const fr = storeyRect(st);
       for (let y = 0; y < rect.h; y++) {
         const ly = rect.y0 + y - fr.y0;
         if (ly < 0 || ly >= fr.h) continue;
         for (let x = 0; x < rect.w; x++) {
-          const lx = rect.x0 + x - fr.x0;
-          if (lx >= 0 && lx < fr.w) out[y * rect.w + x] = st.c[ly * fr.w + lx];
+          const lx = rect.x0 + x - fr.x0, o = y * rect.w + x;
+          if (lx >= 0 && lx < fr.w) { const v = st.c[ly * fr.w + lx]; if (v > out[o]) out[o] = v; }
         }
       }
     }
@@ -457,7 +496,8 @@ export class GasSystem {
   frame(dt: number): void {
     const f = this.field, roof = this.roof, P = this.puffs;
     const D = this.depth && this.host.layout.reactor ? this.depth : null; // task reactor-build-20261101 (lane AIR): only on the Reactor
-    if (!f && !roof && !P.active && !D) { if (this.exposure.fallback) { this.exposure.fallback = 0; this.host.atmosphere.setGasFallback?.(0); } this.hud.clear(); return; } // lane BLIGHT: + one boolean (no puff); lane AIR: + no depth gas (lane GASLIGHT: the fallback closes with the last puff)
+    const OA = this.outdoorAir; // (Surface Run, lane AIR) the district's outdoor air (null elsewhere)
+    if (!f && !roof && !P.active && !D && !OA) { if (this.exposure.fallback) { this.exposure.fallback = 0; this.host.atmosphere.setGasFallback?.(0); } this.hud.clear(); return; } // lane BLIGHT: + one boolean (no puff); lane AIR: + no depth gas (lane GASLIGHT: the fallback closes with the last puff)
     if (f) f.tick(dt);
     if (P.active) P.tick(dt);
     this.upload();
@@ -466,12 +506,15 @@ export class GasSystem {
     // 0 below the hatch: indoor floors never see the outside air)
     const e = this.exposure;
     const pl = this.host.player;
+    // (Surface Run, lane AIR) an eye inside a sealed enclosure (the enclosed truck cab) breathes clean air: every part is 0 there
+    const air = pl.alive && !this.shelter();
     // lane BLIGHT: the breach field + the temporary puffs share the gas (saturating at the cap, never stacking beyond it)
-    const cPuff = pl.alive && P.active ? P.concentrationAt(pl.x, pl.eye, pl.z) : 0;
-    const cField = pl.alive ? Math.min(GAS.CAP, (f ? f.concentrationAt(pl.x, pl.eye, pl.z) : 0) + cPuff) : 0;
-    const cOut = pl.alive && roof ? GAS.ROOF_OUTDOOR_C * roofBlend(pl.x, pl.eye, pl.z, roof) : 0;
+    const cPuff = air && P.active ? P.concentrationAt(pl.x, pl.eye, pl.z) : 0;
+    const cField = air ? Math.min(GAS.CAP, (f ? f.concentrationAt(pl.x, pl.eye, pl.z) : 0) + cPuff) : 0;
+    // (Surface Run, lane AIR) + the district's outdoor air: the same 'outdoor' source as the roof (max, never a sum)
+    const cOut = air ? Math.max(roof ? GAS.ROOF_OUTDOOR_C * roofBlend(pl.x, pl.eye, pl.z, roof) : 0, OA ? OA.gasAt(pl.x, pl.eye, pl.z) : 0) : 0;
     // task reactor-build-20261101 (lane AIR): the Reactor's depth gas at the eye — max with the other sources, never a sum
-    const cDepth = pl.alive && D ? D.depthGasAt(pl.x, pl.eye, pl.z) : 0;
+    const cDepth = air && D ? D.depthGasAt(pl.x, pl.eye, pl.z) : 0;
     const c = Math.max(cField, cOut, cDepth);
     const raw = GAS.DPS_MAX * Math.min(1, Math.max(0, (c - GAS.THRESHOLD) / (1 - GAS.THRESHOLD)));
     const prot = c >= Math.min(GAS.HUD_MIN, GAS.THRESHOLD) ? this.protection() : false;
