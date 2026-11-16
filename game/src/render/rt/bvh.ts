@@ -39,8 +39,11 @@ export const TLAS_MAX_LEAF = 2;
 export const BVH_BINS = 12;
 /** Nodes of at most this many primitives use an exact SAH sweep along their widest centroid axis instead of the bins. */
 export const BVH_SMALL = 12;
-/** Nodes of at least this many primitives are binned and partitioned in chunks across run() calls (a node's passes are O(n)). */
-export const BVH_BIG = 8192;
+/**
+ * Nodes of at least this many primitives are binned and partitioned in chunks across run() calls (a node's passes are O(n)); a
+ * smaller node is split in one go (at most about 2 x BVH_BIG work units).
+ */
+export const BVH_BIG = 2048;
 /** The deepest a leaf may lie (root = depth 0): a traversal stack of this many entries never overflows. */
 export const BVH_MAX_DEPTH = 48;
 /** The colour word of a triangle whose geometry has no vertex colours (opaque white). */

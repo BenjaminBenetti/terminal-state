@@ -279,7 +279,7 @@ describe('rt scene per frame', () => {
     expect(B.layout.staticInstanceCount - disabledSlots()).toBe(597);
     expect(disabledSlots()).toBeGreaterThan(0);
     // c rests: the next rebuild takes it and drops the disabled slots
-    for (t += 0.5; t < 4; t += 0.05) { rt.sync(t, null, 0, 5); check(); }
+    for (t += 0.5; t < 8; t += 0.05) { rt.sync(t, null, 0, 5); check(); }
     expect(rt.stats().staticBuildPending).toBe(false);
     expect(rt.debugEntries(c)![0].state).toBe('static');
     expect(rt.debugEntries(f)![0].state).toBe('static');

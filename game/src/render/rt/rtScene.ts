@@ -52,18 +52,17 @@ export const RT_SCENE = {
   /** A changed geometry's BLAS is rebuilt at most this often. */
   rebuildInterval: 0.5,
   /**
-   * BLAS build work per chunk (primitive visits; about 0.2 ms in optimised V8 code, several ms the first time a loop runs before
-   * it is optimised) — the budget is checked between chunks, so this is about the most a frame runs past its budget.
+   * BLAS build work per chunk (primitive visits; ~0.05 ms in optimised V8 code, a few times that in a busy page or before a loop
+   * is optimised) — the budget is checked between chunks, so a chunk (or one node below BVH_BIG) is about the most a frame runs
+   * past it.
    */
-  chunkWork: 8_000,
-  /** prepareSteps yields after about this much BLAS work (a few ms). */
-  prepareWork: 160_000,
+  chunkWork: 2_000,
   /** Main-thread ms a frame a pending static TLAS rebuild may use (at least one chunk of staticWork a frame). */
   staticBudgetMs: 1,
-  /** Static TLAS build work per chunk (BvhBuilder work units; ~0.2 ms). */
-  staticWork: 4_000,
+  /** Static TLAS build work per chunk (BvhBuilder work units; ~0.03 ms optimised). */
+  staticWork: 1_000,
   /** Static rebuild listing / record writing per chunk (recs + entries visited / records written). */
-  staticListChunk: 256,
+  staticListChunk: 128,
   /** Disabled static slots (hidden / removed entries) alone start a rebuild once they are this share of the static instances. */
   staticGarbageShare: 1 / 16,
   /** A material whose texture had not decoded is asked again after 1, 2, 4 ... up to this many re-inventories. */
