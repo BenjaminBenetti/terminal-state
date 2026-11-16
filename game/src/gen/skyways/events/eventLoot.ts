@@ -4,12 +4,13 @@
 //
 // Each event has places that match the venue. Each place gets a few existing, audited holder kinds keyed to the place's exact table
 // (gen/skyways/events/eventLootPurposes.ts -> items/lootTables.ts EXPO_* / GOLF_* / EVAC_*):
-//  - technology expo: an AV tool chest and a demo-stock carton in its storage room (else the staff room), a presenter's flight case in
-//    each demo theatre, and a demo-stock carton and tote on the expo floor;
+//  - technology expo: an AV tool chest and a demo-stock carton in its storage room (else the staff room, else a demo theatre), a
+//    presenter's flight case in each demo theatre, and a demo-stock carton and tote on the expo floor;
 //  - mini-golf: a filing cabinet at the front desk (reception), a tool chest and a tall cupboard in the course storage (else the staff
 //    room) for maintenance, and a drinks cooler and a snack rack in the clubhouse (else a party room) for concessions;
-//  - evacuation centre: a medical cabinet and a tote of dressings in the medical bay, a crate and a carton of rations by the ration
-//    line, and a tall cupboard and a crate in the supply store (else the shelter office).
+//  - evacuation centre: a medical cabinet and a tote of dressings in the medical bay (else the triage corner), a crate and a carton of
+//    rations by the ration line, and a tall cupboard and a crate in the supply store (else the shelter office).
+// A full room hands a holder to the place's next room, then to its smaller fallback kind (SKYWAYS_EVENT_SUPPLIES).
 //
 // Save compatibility and RNG neutrality:
 //  - the pass draws only from its own fork, and only when the add-on is a new event (a convention or prize-car layout stays
