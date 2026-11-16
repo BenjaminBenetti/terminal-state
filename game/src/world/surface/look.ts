@@ -23,7 +23,7 @@ import type {Game} from '../../game';
 import type {StationLayout} from '../../gen/stationTypes';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {MOOD, syncGlowFog} from '../lights';
-import {fogCullDistance} from '../levelCulling';
+import {CULL_LAYER, fogCullDistance} from '../levelCulling';
 import {modelParts} from '../exterior';
 import {preloadOfficeArch} from '../officeArch';
 import {SURFACE_TEXTURES, SURFACE_TEX_SLOTS, setSurfaceResourceOwner, setSurfaceTexture, surfaceArchMaterial, surfaceTexturesReady, liveSurfaceMaterials} from './archMaterials';
@@ -70,7 +70,18 @@ export interface SurfaceLookStats {
   visibleDecor: number; missingModels: string[];
 }
 
-interface Culled { obj: THREE.Object3D; x: number; z: number; r: number; near: number }
+/** A distance-culled decor piece (`mask`: its own layers, put back when it is shown). */
+interface Culled { obj: THREE.Object3D; x: number; z: number; r: number; near: number; mask: number }
+
+/**
+ * P0 follow-up (the district's Enhanced lighting): what the look hides it hides for the RENDER only — the piece moves to the level
+ * culler's CULL_LAYER, as every culled station mesh does, and gets its own layers back when shown. `visible` stays true, so the traced
+ * flashlight scene (render/rt/rtScene.ts: it walks visible objects and ignores layers) keeps every lit piece from the load on — no
+ * piece leaves and comes back (a new entry, a BLAS job) as the eye moves — and the full warm-up still compiles them.
+ */
+export const LOOK_HIDDEN_MASK = (1 << CULL_LAYER | 0) >>> 0;
+/** The piece is drawn (not on the look's / culler's hidden layer). */
+export const lookShown = (o: THREE.Object3D): boolean => o.layers.mask !== LOOK_HIDDEN_MASK;
 
 /**
  * Follow-up 2 (draws): the walls round a building's roof decks. `fp` = the footprint (the facade faces lie on its lines); x0..z1 = the
@@ -93,6 +104,8 @@ export interface LookInstSet {
   tile: {x: number; z: number; r: number; near: number} | null;
   /** The instances drawn at the last decision (their indices; `shown` of them). */
   shownIdx: Int32Array; shown: number;
+  /** The piece's own layers (LOOK_HIDDEN_MASK while none of its instances is drawn). */
+  mask: number;
 }
 
 /** Plain mesh-data accumulator (positions / normals / uvs / indices). */
@@ -292,7 +305,7 @@ export function buildSurfaceLookView(layout: StationLayout, mats: Parameters<typ
       if (!mat) { g.dispose(); continue; }
       const m = addMesh(g, mat, `surface-depot-${key}`);
       const bs = g.boundingSphere!;
-      culled.push({obj: m, x: bs.center.x, z: bs.center.z, r: bs.radius, near: LOOK_DECOR.depotNear});
+      culled.push({obj: m, x: bs.center.x, z: bs.center.z, r: bs.radius, near: LOOK_DECOR.depotNear, mask: m.layers.mask});
       stats.depotMeshes++;
       stats.depotTris += triCount(g);
     }
@@ -306,7 +319,7 @@ export function buildSurfaceLookView(layout: StationLayout, mats: Parameters<typ
     const m = addMesh(g, mat, `surface-decor-${e.key}@${e.cx},${e.cz}`);
     m.renderOrder = 1;
     const bs = g.boundingSphere!;
-    culled.push({obj: m, x: bs.center.x, z: bs.center.z, r: bs.radius, near: LOOK_DECOR.near});
+    culled.push({obj: m, x: bs.center.x, z: bs.center.z, r: bs.radius, near: LOOK_DECOR.near, mask: m.layers.mask});
     stats.decorMeshes++;
     stats.decorTris += triCount(g);
   }
@@ -369,7 +382,7 @@ export function buildSurfaceLookView(layout: StationLayout, mats: Parameters<typ
     const bg = t.boxes.geometry();
     if (bg) {
       const m = addMesh(bg, outdoorFlatMaterial('steel'), `surface-roof-steel@${t.tx},${t.tz}`);
-      culled.push({obj: m, x: cx, z: cz, r, near: LOOK_DECOR.tileNear});
+      culled.push({obj: m, x: cx, z: cz, r, near: LOOK_DECOR.tileNear, mask: m.layers.mask});
       stats.clutterMeshes++;
       stats.clutterTris += triCount(bg);
     }
@@ -403,7 +416,7 @@ export function lookInstSet(im: THREE.InstancedMesh, list: readonly THREE.Matrix
     top.set([x0, z0, x1, z1, y1, y0], BOX * i);
     shownIdx[i] = i;
   });
-  return {im, n, mats, sph, top, walls: Int32Array.from(walls ?? new Array<number>(n).fill(-1)), tile, shownIdx, shown: n};
+  return {im, n, mats, sph, top, walls: Int32Array.from(walls ?? new Array<number>(n).fill(-1)), tile, shownIdx, shown: n, mask: im.layers.mask === LOOK_HIDDEN_MASK ? 1 : im.layers.mask};
 }
 
 /** Follow-up 2: the walls round building `k`'s decks (RoofWalls). A side counts only where every cell just outside it is open street. */
@@ -462,7 +475,8 @@ const _fr = new THREE.Frustum(), _pm = new THREE.Matrix4(), _sp = new THREE.Sphe
  * rule every registered mesh follows; the look's materials take the scene fog), a roof piece's own deck walls do not hide it
  * (roofPieceHidden) and — with `occl` — the district's facade strips do not hide its box (lookOccluders.ts LookOcclusion, built here
  * for this view); a roof tile beyond its draw distance is hidden whole, as before. The drawn instances are packed to the front of the
- * instance buffer (rewritten only when the set changes); a piece with none is hidden. No shadow casters here (castShadow off).
+ * instance buffer (rewritten only when the set changes); a piece with none is hidden (LOOK_HIDDEN_MASK: render only). No shadow
+ * casters here (castShadow off).
  */
 export function cullSurfaceInstances(v: SurfaceLookView, cam: THREE.Camera, maxDistance: number, occl: LookOcclusion | null = null): {shown: number; total: number} {
   const oc = occl && v.strips.length && (cam as THREE.PerspectiveCamera).isPerspectiveCamera ? occl : null;
@@ -475,7 +489,7 @@ export function cullSurfaceInstances(v: SurfaceLookView, cam: THREE.Camera, maxD
   for (const set of v.inst) {
     total += set.n;
     const t = set.tile;
-    if (t && Math.hypot(t.x - ex, t.z - ez) - t.r >= t.near) { set.shown = 0; if (set.im.visible) set.im.visible = false; continue; }
+    if (t && Math.hypot(t.x - ex, t.z - ez) - t.r >= t.near) { set.shown = 0; if (set.im.layers.mask !== LOOK_HIDDEN_MASK) set.im.layers.mask = LOOK_HIDDEN_MASK; continue; }
     const s = set.sph, b = set.top, idx = set.shownIdx;
     let k = 0, changed = false;
     for (let i = 0; i < set.n; i++) {
@@ -493,8 +507,8 @@ export function cullSurfaceInstances(v: SurfaceLookView, cam: THREE.Camera, maxD
     if (k !== set.shown) changed = true;
     set.shown = k;
     shown += k;
-    if (k === 0) { if (set.im.visible) set.im.visible = false; continue; }
-    if (!set.im.visible) set.im.visible = true;
+    if (k === 0) { if (set.im.layers.mask !== LOOK_HIDDEN_MASK) set.im.layers.mask = LOOK_HIDDEN_MASK; continue; }
+    if (set.im.layers.mask !== set.mask) set.im.layers.mask = set.mask;
     if (!changed && set.im.count === k) continue;
     const arr = set.im.instanceMatrix.array as Float32Array;
     for (let j = 0; j < k; j++) arr.set(set.mats.subarray(16 * idx[j], 16 * idx[j] + 16), 16 * j);
@@ -511,7 +525,7 @@ export function resetSurfaceInstances(v: SurfaceLookView): void {
     for (let i = 0; i < set.n; i++) set.shownIdx[i] = i;
     set.shown = set.n;
     set.im.count = set.n;
-    set.im.visible = true;
+    set.im.layers.mask = set.mask;
     set.im.instanceMatrix.needsUpdate = true;
   }
 }
@@ -601,14 +615,17 @@ export function disposeSurfaceLookView(v: SurfaceLookView): void {
   v.culled.length = 0;
 }
 
-/** Distance culling of the view's small decor round the eye (x, z). Returns how many culled pieces are shown. */
+/**
+ * Distance culling of the view's small decor round the eye (x, z) — render only (LOOK_HIDDEN_MASK: the traced scene keeps every piece).
+ * Returns how many culled pieces are shown.
+ */
 export function cullSurfaceDecor(v: SurfaceLookView, x: number, z: number): number {
   let shown = 0;
   for (const c of v.culled) {
     const d = Math.hypot(c.x - x, c.z - z) - c.r;
-    const on = d < c.near;
-    if (c.obj.visible !== on) c.obj.visible = on;
-    if (on) shown++;
+    const m = d < c.near ? c.mask : LOOK_HIDDEN_MASK;
+    if (c.obj.layers.mask !== m) c.obj.layers.mask = m;
+    if (m !== LOOK_HIDDEN_MASK) shown++;
   }
   return shown;
 }

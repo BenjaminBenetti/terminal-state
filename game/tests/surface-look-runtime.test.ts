@@ -17,7 +17,7 @@ import {MOOD} from '../src/world/lights';
 import {fogCullDistance} from '../src/world/levelCulling';
 import type {Game} from '../src/game';
 import {
-  LOOK_DECOR, SURFACE_LOOK_MODEL_KEYS, SurfaceLook, buildSurfaceLookView, cullSurfaceDecor, disposeSurfaceLookView, surfaceQaPoses,
+  LOOK_DECOR, LOOK_HIDDEN_MASK, SURFACE_LOOK_MODEL_KEYS, SurfaceLook, buildSurfaceLookView, cullSurfaceDecor, disposeSurfaceLookView, lookShown, surfaceQaPoses,
 } from '../src/world/surface/look';
 import {FAR_CITY, FAR_CITY_KEYS, farCityPlan} from '../src/world/surface/lookCity';
 import {installSurfaceAir, type SurfaceAirHost} from '../src/world/surface/air';
@@ -103,7 +103,10 @@ describe('Surface Run look: the runtime group', () => {
     const atCentre = cullSurfaceDecor(v, cx, cz), atCorner = cullSurfaceDecor(v, S.extent.x0 + 10, S.extent.z0 + 10);
     expect(atCorner).toBeLessThan(v.culled.length);
     expect(atCentre).toBeGreaterThan(0);
-    for (const c of v.culled) expect(c.obj.visible).toBe(Math.hypot(c.x - (S.extent.x0 + 10), c.z - (S.extent.z0 + 10)) - c.r < c.near);
+    for (const c of v.culled) expect(lookShown(c.obj)).toBe(Math.hypot(c.x - (S.extent.x0 + 10), c.z - (S.extent.z0 + 10)) - c.r < c.near);
+    // (render only — P0 follow-up: a hidden piece is on the culler's layer, never invisible: the traced flashlight scene keeps it)
+    expect(v.culled.every(c => c.obj.visible)).toBe(true);
+    expect(v.culled.filter(c => !lookShown(c.obj)).every(c => c.obj.layers.mask === LOOK_HIDDEN_MASK)).toBe(true);
     expect(LOOK_DECOR.near).toBeLessThan(fogCullDistance(LOOK_SKY.fogDensity));
     // release: every geometry the view made is disposed; the model library's are not
     let disposed = 0;
@@ -206,7 +209,7 @@ describe('Surface Run look: the runtime group', () => {
     // stand in a corner: far decor chunks are hidden by distance
     host.camera.position.set(layout.surface!.extent.x0 + 8, 1.6, layout.surface!.extent.z0 + 8);
     for (let k = 0; k < LOOK_DECOR.every; k++) for (const f of host.frameHooks) f(1 / 60);
-    expect(look.view!.culled.some(c => !c.obj.visible)).toBe(true);
+    expect(look.view!.culled.some(c => !lookShown(c.obj))).toBe(true);
     const cam = new THREE.PerspectiveCamera();
     const plan = planWarmup(host.scene, {mode: 'full', cameraMask: cam.layers.mask, pools: host.warmRegistry.poolRoots()});
     const planned = new Set([...plan.items, ...plan.others].map(i => i.object));

@@ -19,7 +19,7 @@ import {GROUND, OWNER, SIDE_NORMAL, entranceFloor, surfaceLookPlan} from '../src
 import {surfaceOcclusionSee} from '../src/world/surface/lookOcclusion';
 import {LookOcclusion, closedShell, facadeStrips, streetSide, type FacadeStrip} from '../src/world/surface/lookOccluders';
 import {
-  BOX, buildSurfaceLookView, cullSurfaceInstances, disposeSurfaceLookView, lookInstSet, resetSurfaceInstances, roofPieceHidden, roofWalls,
+  BOX, LOOK_HIDDEN_MASK, buildSurfaceLookView, cullSurfaceInstances, disposeSurfaceLookView, lookInstSet, lookShown, resetSurfaceInstances, roofPieceHidden, roofWalls,
   type RoofWalls, type SurfaceLookView,
 } from '../src/world/surface/look';
 
@@ -159,7 +159,7 @@ describe('Surface Run look: per-instance culling', () => {
     cam.updateMatrixWorld();
     const got = (): number[] => Array.from({length: im.count}, (_, j) => { const m = new THREE.Matrix4(); im.getMatrixAt(j, m); return m.elements[14]; });
     expect(cullSurfaceInstances(v, cam, 293)).toEqual({shown: 1, total: 4});
-    expect([im.visible, got()]).toEqual([true, [-20]]);
+    expect([lookShown(im), got()]).toEqual([true, [-20]]);
     // the eye well over the roof (at 14 m its sight line still meets the parapet): the roof piece shows
     cam.position.set(0, 20, 0);
     cam.lookAt(0, 6, -30);
@@ -181,16 +181,17 @@ describe('Surface Run look: per-instance culling', () => {
     cam.rotation.set(Math.PI / 2, 0, 0);
     cam.updateMatrixWorld();
     expect(cullSurfaceInstances(v, cam, 293).shown).toBe(0);
-    expect(im.visible).toBe(false);
-    // reset: the full list back in build order
+    // (render only: the culler's hidden layer; `visible` stays — the traced flashlight scene keeps the piece)
+    expect([lookShown(im), im.layers.mask, im.visible]).toEqual([false, LOOK_HIDDEN_MASK, true]);
+    // reset: the full list back in build order, on its own layers
     resetSurfaceInstances(v);
-    expect([im.visible, im.count, got()]).toEqual([true, 4, [-20, 20, -400, -40]]);
+    expect([lookShown(im), im.layers.mask, im.count, got()]).toEqual([true, 1, 4, [-20, 20, -400, -40]]);
     // a tile beyond its draw distance: hidden whole, as the former per-tile rule did
     const far = lookInstSet(im, list, null, {x: 0, z: -900, r: 90, near: 170});
     cam.rotation.set(0, 0, 0);
     cam.updateMatrixWorld();
     expect(cullSurfaceInstances(view([far]), cam, 293).shown).toBe(0);
-    expect(im.visible).toBe(false);
+    expect([lookShown(im), im.visible]).toEqual([false, true]);
   });
 
   it('the facade occlusion buffer: a box wholly behind a strip is hidden; above it, in front of it, or the strip seen from behind: shown', () => {
