@@ -7,6 +7,10 @@ stock, and nobody can buy a corpse anywhere.
 
 ## Finding it
 
+- **Layout version 5** (the crevice, `docs/survivor-market-crevice.md`): the den's entry is the first container on one side of the
+  Arrival Square, a few metres from the train's gates, with the same boards on its front ("BODIES BOUGHT" over the door, "10 TIES"
+  beside it). The entry container leads straight into the same customer room, chute, booth and sealed back room, carved into the rock
+  behind it. The way from the platform is flat (no stair). The rest of this section describes version 4.
 - The den is off the **Back Lane**: a doorway through the market shed's wall beside the lane, with painted boards over it
   ("BODIES BOUGHT", "10 TIES"). A 2 m back passage under a plain lamp leads to the low customer room (3 to 5 m deep, a 2.6 m ceiling, a
   dim red lamp). The floor chute stands in the room's middle, open side toward the customer. A board hangs in front of the booth ("DEAD
