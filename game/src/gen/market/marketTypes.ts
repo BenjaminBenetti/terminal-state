@@ -71,8 +71,10 @@ export interface MarketLayout {
    * A station keeps the version it was first built with (its geometry, ids and stock never reroll); unvisited markets build the newest.
    * 3 (task studio-market-bar-20261108-225231-01): version 2's settlement plus a substantial upper-level bar (its bartender a stall).
    * 4 (task studio-corpse-market-shop-20261114-031614-01): version 3 plus the corpse buyer's den (`den`; the same stalls / spots).
+   * 5 (task studio-survivor-market-crevice-20261116-074419): THE CREVICE — a new settlement (gen/market/v5/) with the same six stalls, the
+   * bar's bartender and the den; its geometry for the look in `crevice`.
    */
-  v: 1 | 2 | 3 | 4;
+  v: 1 | 2 | 3 | 4 | 5;
   /** Exactly one stall per MARKET_STALLS id (version 3: + the bar, BAR_STALL, last). */
   stalls: MarketStall[];
   /** Resident spots (wander targets / idle posts), at least a dozen, spread over the market's storeys. */
@@ -81,6 +83,47 @@ export interface MarketLayout {
   residents: number;
   /** (version 4, task studio-corpse-market-shop-20261114-031614-01) The corpse buyer's den. Absent on versions 1-3. */
   den?: MarketDen;
+  /** (version 5, task studio-survivor-market-crevice-20261116-074419) The crevice's shape for the look (world/marketArch.ts, the crevice
+   *  view): the container boxes, the bridges, the chasm. Absent on versions 1-4. */
+  crevice?: MarketCrevice;
+}
+
+/**
+ * Task studio-survivor-market-crevice-20261116-074419: THE CREVICE's shape (layout version 5), world metres (x / z; y absolute). Plain data
+ * the look reads: which wall faces belong to which shipping container (its paint, its frame, its windows), where the bridges' decks run
+ * (the cooked bridge kit draws them), the chasm (the dark depth below).
+ */
+export interface MarketCrevice {
+  /** The crevice's top (every open band ends there), the platform hall's vault, the chasm's floor (m, absolute). */
+  topY: number;
+  hallY: number;
+  chasmY: number;
+  /** Storey floors (m) and a container's interior height (m). */
+  bases: number[];
+  cont: number;
+  /** The chasm (storey 0, VOID). */
+  chasm: {x0: number; z0: number; x1: number; z1: number};
+  containers: MarketCrevContainer[];
+  /** The bridge decks (storey `level`, deck at y): from walk edge to walk edge along x, `area` their storey area. */
+  bridges: {x0: number; z0: number; x1: number; z1: number; y: number; level: number; area: number}[];
+}
+
+/** One shipping-container box of the crevice (world metres, incl. its walls: the frame / paint / windows go on its outside). */
+export interface MarketCrevContainer {
+  x0: number; z0: number; x1: number; z1: number;
+  /** Its storey floor (absolute) and storey. The box stands from y to y + the storey pitch (its roof is the walk above). */
+  y: number;
+  level: number;
+  /** The side its front (the walk side: its doors / shopfront) faces. */
+  face: 'N' | 'E' | 'S' | 'W';
+  /** Paint (world/marketArch.ts MARKET_PAINTS index), use (gen/market/v5/carve.ts CrevUse), room area (-1: closed — a box nobody opens). */
+  paint: number;
+  use: string;
+  area: number;
+  /** Its openings in the front wall: [s0, s1] along the front (world x for N / S faces, z for E / W), head height above y; wide = a shopfront. */
+  openings: {s0: number; s1: number; h: number; wide: boolean}[];
+  /** Whether a rock-cut backroom lies behind it (its back wall has a door). */
+  backroom: boolean;
 }
 
 /**
