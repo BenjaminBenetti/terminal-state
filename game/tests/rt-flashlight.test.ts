@@ -9,7 +9,8 @@ import * as THREE from 'three';
 import {MeshStandardNodeMaterial, WGSLNodeBuilder, WebGPURenderer} from 'three/webgpu';
 import {GpuLog, validatingDevice} from './helpers/validatingWebgpu';
 import {coneCosAt, makeRtCone} from '../src/render/rt/rtCone';
-import {RT_GRID_MAX, RT_PROBE_REASONS, RT_REQUIRED_LIMITS, RtGpu, probeRtCompute, rtGridSize, type RtProbe} from '../src/render/rt/rtGpu';
+import {RT_GPU_SPARE, RT_GRID_MAX, RT_PROBE_REASONS, RT_REQUIRED_LIMITS, RtGpu, probeRtCompute, rtGridSize, type RtProbe} from '../src/render/rt/rtGpu';
+import {BLAS_TRI_FLOATS, BVH_NODE_FLOATS, RtSceneBuffers} from '../src/render/rt/rtFormat';
 import {FRAME_FLOATS, KERNEL_STORAGE_BUFFERS, RT_KERNELS, VPL_COUNT, VPL_GRID, kernelSource} from '../src/render/rt/rtKernels';
 import {RT_ALPHA, RT_CAMERA_JUMP, RtFlashlight, rtStratum} from '../src/render/rt/rtFlashlightRuntime';
 import {RtScene} from '../src/render/rt/rtScene';
@@ -197,6 +198,34 @@ function flashlightRig(): {camera: THREE.PerspectiveCamera; spot: THREE.SpotLigh
 }
 
 describe('the device resources: only while a station is traced', () => {
+  it('the scene\'s buffers keep room to spare: what play adds is uploaded as its own span, never the whole scene again', async () => {
+    const {renderer} = fakeRenderer();
+    const probe = await probeRtCompute(renderer);
+    const gpu = new RtGpu(renderer, probe as RtProbe);
+    gpu.alloc();
+    const made: string[] = [];
+    const device = gpu.device as unknown as {createBuffer(d: {label?: string}): unknown};
+    const createBuffer = device.createBuffer.bind(device);
+    device.createBuffer = d => { made.push(d.label ?? ''); return createBuffer(d); };
+    // a packed scene with spare capacity in its arrays (as RtScene leaves it): 100 k nodes / triangles used
+    const S = new RtSceneBuffers(), used = 100_000, capacity = 140_000;
+    S.blasNodes = new Float32Array(capacity * BVH_NODE_FLOATS); S.blasNodeCount = used;
+    S.blasTris = new Float32Array(capacity * BLAS_TRI_FLOATS); S.blasTriCount = used;
+    S.tlas = new Float32Array(1024 * 4); S.layout.vec4Count = 1024;
+    gpu.upload(S);
+    expect(made.sort()).toEqual(['rt-bn', 'rt-bt', 'rt-tl']);
+    const first = gpu.stats.uploadedBlas;
+    expect(first).toBe(used * (BVH_NODE_FLOATS + BLAS_TRI_FLOATS) * 4); // (the used part, whole: a fresh buffer)
+    expect(gpu.stats.bytes.bn).toBeGreaterThanOrEqual(used * BVH_NODE_FLOATS * 4 + RT_GPU_SPARE.bn);
+    // play adds a model of 12 k triangles (its nodes and triangles appended in the arrays' spare capacity)
+    S.blasNodeCount += 12_000; S.blasTriCount += 12_000;
+    S.dirtyBlas(used, used + 12_000, used, used + 12_000);
+    gpu.upload(S);
+    expect(made.length, 'no new buffer').toBe(3);
+    expect(gpu.stats.uploadedBlas - first, 'only the new span').toBe(12_000 * (BVH_NODE_FLOATS + BLAS_TRI_FLOATS) * 4);
+    gpu.free();
+  });
+
   it('a scene allocates and binds the result textures; none frees every buffer and puts the zero placeholders back', async () => {
     const {renderer, log} = fakeRenderer();
     const probe = await probeRtCompute(renderer);

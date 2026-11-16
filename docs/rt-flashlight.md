@@ -57,9 +57,15 @@ scene is the whole `THREE.Scene` under one contract; there is **no per-item list
   which is rebuilt every frame from its current transforms. That covers a door leaf, a prop knocked over, a body
   under physics and the moving train. An entry at rest for 1 s goes back into the static tree, rebuilt at most twice
   a second.
-- **New and removed things.** A full re-inventory runs every 0.5 s. A mesh that appeared, such as a pickup or a
-  carried prop, gets its tree built inside the frame's 2 ms budget and never blocks a frame. A mesh that was removed
-  is switched off at once and leaves at the next static rebuild.
+- **At a station's load.** The scene is prepared when the station's lighting is made. What the station adds after
+  that is taken in by the last steps of the build, behind the loading screen: the arrival, the enemies, pickups,
+  the player train and the lanes' content. A last settle after the warm-up then sends the whole scene to the device.
+  The first frames of play have nothing to catch up on.
+- **New and removed things in play.** A full re-inventory runs every 0.5 s. A mesh that appeared, such as a dropped
+  pickup or a carried prop, gets its tree built in small chunks within the frame's 2 ms budget, and never blocks a
+  frame. A mesh that was removed is switched off at once and leaves at the next static rebuild. The device buffers
+  keep an eighth to spare (at least 16384 nodes and triangles), so what play adds is uploaded as its own span, not
+  the whole scene again.
 - **Characters are proxies, and are documented as such.** Skinned characters are not traced as meshes: their
   bone-driven poses are not on the CPU. Each frame's living, standing characters within the beam's reach are traced
   as **upright capsules**. These are the same bodies as the virtual-light bounce's cylinders
@@ -148,16 +154,72 @@ Per drawn frame with the flashlight on (grid W x H, at most 640 x 360):
 - **The gather:** W x H x 1024 kernel evaluations (about 236 M at the cap), plus the reservoir picks. This is the
   pass's main arithmetic.
 - **Passes:** one compute pass of six dispatches. No extra draw of the scene and no new render pass.
-- **Device memory:** about 33 MB fixed while a station is traced. That is two 640 x 360 result textures (2.8 MB),
+- **Device memory:** about 33 MB fixed while a station is traced, plus the scene's trees with an eighth to spare. That is two 640 x 360 result textures (2.8 MB),
   the receivers' two history buffers (29.5 MB), the filter's scratch (0.9 MB), the VPLs (48 KB) and the cone
-  (16 KB). The scene's trees come on top (*station table below*). All of it is released with the station, when RT
+  (16 KB). The scene's trees come on top (table below). All of it is released with the station, when RT
   Flashlight or Enhanced lighting is turned off, and on a device error.
-- **CPU, per frame:** the scene's change check, the dynamic tree and the frame's upload (*measured below*). The
-  encode itself is under 0.1 ms in Node.
-- **Station load:** building the station's trees in paced steps behind the loading screen (*measured below*).
+
+The traced scene per station, measured on real campaign stations in Node:
+
+| Station | Triangles (unique / drawn) | Traced objects | Tree bytes (nodes / triangles / instances) | Prepare (first / again) |
+|---|---|---|---|---|
+| Subway | 663 k / 2.79 M | 3267 | 21.4 / 31.8 / 0.8 MB | 2.1 s / 0.34 s |
+| Mall | 893 k / 3.24 M | 3265 | 28.7 / 42.9 / 0.8 MB | 2.4 s / 0.55 s |
+| Office | 1.06 M / 7.02 M | 5375 | 34.5 / 50.9 / 1.3 MB | 3.3 s / 0.58 s |
+| Market | about 280 k | about 790 | 11 / 17 / 0.3 MB | not measured |
+
+Stations are seeded at random, so a given station varies. The prepare runs in paced steps behind the loading screen
+(its longest step is 60 to 75 ms) or under the pause menu. "Again" is a station whose geometries' trees the session
+already holds, for example after a relight or a reload.
+
+- **CPU per frame** is the scene's change check, the dynamic tree, the paced static rebuild and the upload. The
+  encode itself is about 0.1 ms in Node. The full figures are in *Measured in Node* below.
+- **Load time:** the settle takes about 0.5 s on a new game and 0.16 to 0.19 s on a reload or Continue, in paced
+  steps (Node, Market).
+
+**Measured in Node** (the real Game on a validating WebGPU device, a Market station, every traced frame of
+`game/tests/rt-flashlight-game.test.ts`; Node's timings of this code, not a browser's):
+
+| Frames | Scene sync, median / p90 / max | Encode + upload, median | Uploaded per frame, median |
+|---|---|---|---|
+| all play phases (new game, torch on, RT Off then On, after a death, after Continue) | 0.36 to 0.55 / 0.5 to 1.1 / 2.5 to 3.2 ms | 0.1 ms | about 1 KB (the dynamic tree and the capsules) |
+
+The whole scene goes to the device once a load: 44 MB on this station, at the end of the warm-up behind the loading
+screen. That cost is load time, not a play frame. Before the load-time settle, the first frames after a load ran
+sync at a 2.4 to 3.8 ms median with single frames of 47 to 96 ms.
+
+**On a software WebGPU device** (Firefox 158 on lavapipe, Subway seed 93, a 640 x 360 canvas and a 320 x 180
+grid): the six kernels compiled in 211 ms, and the first prepare took 1.09 s. A frame took 589 ms with the bounce
+traced against 395 ms with the gate shut. That is lavapipe's CPU emulation of a GPU and says nothing about a real
+GPU; its timestamp queries did not give usable per-kernel times.
 
 These numbers come from Node (the real Game on a validating no-op device) and from a software WebGPU device
 (lavapipe). **No frame rate on any real GPU is claimed or known.**
+
+## What the browser check showed
+
+These are serial spot checks on Firefox 158 WebGPU over lavapipe, on the direct path. The volumetric pass crashes on
+that driver, so it was not used. The view is a torch-only room on Subway seed 93 with a shelf, a locker, a fan and a
+tool chest. RT On and Off were drawn at the same pose and time.
+
+- **Replace, not stack.** The status read "bounce traced", the virtual lights were not bound, and pictures with the
+  torch off or with no bounce were pixel-identical On and Off.
+- **The same mood.** The traced bounce added a mean of 4.9 display levels against 5.5 for the virtual lights. No
+  point-emitter patches appeared.
+- **Rapid aim.** On a 12-degree-per-frame turn the traced bounce trailed a converged still by 2.7 to 4.7 % of the
+  bounce; the virtual lights trailed by 25 to 120 %. With every VPL visible, the traced bounce has no lag at all
+  (its shape U is each frame's own).
+- **A moving occluder.** A box added after the load was found by the re-inventory and slid 1.6 m across the beam.
+  One frame after it stopped, 1.3 to 2.6 % of the bounce was left over. After it was removed the room matched the
+  original to noise. The virtual lights never saw it.
+- **Noise at rest:** a mean of 0.03 display levels (p99 0.7).
+- **Unsupported:** on WebGL 2 the status named the reason, the virtual-light bounce was bound and nothing was
+  allocated. Turning RT Off in the page released everything, and the picture equalled the no-bounce one exactly.
+- **Off, then On again:** the bounce came back equal to the first allocation, to noise.
+- **Grazing props.** A fan and a tool chest across the beam get less bounce than under the virtual lights. They are
+  traced, their receivers match and visibility is about 0.97. Their faces point across the beam, so the lit floor and
+  the far wall reach them at grazing angles. The virtual lights, unshadowed and gathered at a few centres, lit them
+  more.
 
 ## Failure and cleanup
 

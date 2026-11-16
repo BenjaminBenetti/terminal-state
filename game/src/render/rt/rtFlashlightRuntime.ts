@@ -109,6 +109,11 @@ export class RtFlashlight {
 
   get hasScene(): boolean { return this.scene !== null; }
 
+  /** Bring the device's copy of the traced scene up to date now (a loading screen's end), not in the next traced frame. */
+  uploadScene(): void {
+    if (this.scene && this.gpu.allocated) this.gpu.upload(this.scene.buffers);
+  }
+
   /** Forget the history (the next frame starts from its own samples). */
   invalidate(why: string): void {
     this.prevValid = false;

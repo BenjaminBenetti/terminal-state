@@ -34,6 +34,9 @@ export function rtGridSize(w: number, h: number): {w: number; h: number} {
 }
 
 /** What the kernels need of a device (the probe compares these with device.limits). */
+/** The least spare room (bytes) of the traced scene's device buffers: 16384 BLAS nodes / triangles, 4096 TLAS vec4. */
+export const RT_GPU_SPARE = {bn: 16384 * 32, bt: 16384 * 48, tl: 4096 * 16} as const;
+
 export const RT_REQUIRED_LIMITS = {
   maxStorageBuffersPerShaderStage: Math.max(...RT_KERNELS.map(k => KERNEL_STORAGE_BUFFERS[k])),
   maxStorageTexturesPerShaderStage: Math.max(...RT_KERNELS.map(k => KERNEL_STORAGE_TEXTURES[k])),
@@ -253,7 +256,10 @@ export class RtGpu {
       const need = Math.max(16, Math.ceil(bytes / 16) * 16), cur = B[key];
       if (cur && cur.size >= need) return false;
       if (need > cap) throw new Error(`the traced scene's ${key} buffer (${need} bytes) is larger than this device's storage binding limit (${cap})`);
-      const size = Math.min(cap, cur ? Math.max(need, Math.ceil(cur.size * 1.25 / 16) * 16) : need);
+      // (with room to spare — an eighth, at least RT_GPU_SPARE: what a station adds in play, a dropped pickup or a model that arrives
+      // late, fits the buffer it has instead of a new buffer and the whole scene uploaded again in one frame)
+      const spare = Math.max(Math.ceil(need / 8), RT_GPU_SPARE[key]);
+      const size = Math.min(cap, Math.ceil(Math.max(need + spare, cur ? cur.size * 1.25 : 0) / 16) * 16);
       cur?.destroy();
       B[key] = d.createBuffer({label: `rt-${key}`, size, usage: BUF.STORAGE | BUF.COPY_DST});
       this.stats.bytes[key] = size;

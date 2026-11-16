@@ -1774,6 +1774,10 @@ export class Game {
     void this.preparePantry(null, this.run, true); // (lane ITEMS: carried pantry items restored after the prepare — a loaded save — get their models; usually a no-op)
     void this.prepareWeaponVariety(null, key, this.run, true); // (lane LOOT-UI: likewise carried / remembered new weapons; usually a no-op)
     this.updateCamera(0);
+    // task studio-rt-flashlight-compute-20261115-233136-01: what the station added after its lighting (the arrival, the enemies'
+    // props, pickups, the player train and the lanes' content) joins the traced scene here, behind the loading screen, in paced
+    // steps — the first frames of play have nothing to catch up on (render/rt/rtScene.ts settleSteps)
+    if (this.lightPool?.rt && this.rtScene && this.rtFlashlight?.hasScene) yield* this.rtScene.settleSteps();
   }
   genMs = 0;
 
@@ -2920,9 +2924,25 @@ export class Game {
    */
   prepareGraphics(ui: WarmupUi = this.titleWarmupUi()): Promise<WarmupResult> {
     if (this.warmRun) return this.warmRun;
-    const run = this.runWarmup(ui).finally(() => { this.warming = false; this.warmRun = null; this.flushRetired(); });
+    const run = this.runWarmup(ui).finally(() => { this.warming = false; this.warmRun = null; this.flushRetired(); this.settleRtScene(); });
     this.warmRun = run;
     return run;
+  }
+
+  /**
+   * Task studio-rt-flashlight-compute-20261115-233136-01: after a warm-up (behind the loading screen or the pause menu) the traced
+   * scene takes in what changed since the build (the warm-up's stand-ins gone, a model that arrived meanwhile) and the device gets
+   * the whole scene now, not in the first frame the flashlight is lit. Usually little work: the build's last steps settled it.
+   */
+  private settleRtScene(): void {
+    const rt = this.rtFlashlight, scene = this.rtScene;
+    if (!rt?.hasScene || !scene || !this.lightPool?.rt) return;
+    try {
+      scene.settle();
+      rt.uploadScene();
+    } catch (err) {
+      rt.failWith(`its scene could not be brought up to date (${String((err as Error)?.message ?? err).slice(0, 160)})`); // (-> rtFailed)
+    }
   }
 
   /**

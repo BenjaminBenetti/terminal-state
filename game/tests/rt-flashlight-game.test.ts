@@ -97,15 +97,22 @@ describe('RT Flashlight in the real Game (WebGPU path, validating device)', () =
     };
     const until = async (f: () => boolean, max = 6000) => { for (let i = 0; i < max && !f(); i++) await h.waitFrames(1); return f(); };
     /** Every traced frame's CPU (ms): the scene's sync, the upload + encode + submit (the runtime's own clock), by phase. */
-    const cpu = new Map<string, {sync: number[]; encode: number[]}>();
+    const cpu = new Map<string, {sync: number[]; encode: number[]; bytes: number[]}>();
     const frameFn = rt.frame.bind(rt);
     rt.frame = (...a: Parameters<typeof rt.frame>) => {
+      const up0 = rt.gpu.stats.uploadedBlas + rt.gpu.stats.uploadedTlas;
       const ok = frameFn(...a);
-      if (ok) { let c = cpu.get(phase); if (!c) cpu.set(phase, (c = {sync: [], encode: []})); c.sync.push(rt.stats.syncMs); c.encode.push(rt.stats.encodeMs); }
+      if (ok) {
+        // (a frame the warm-up draws behind the loading screen — its finish frame, torch lit after a reload — is counted apart)
+        const key = (game as unknown as {warming: boolean}).warming || g.state !== 'playing' ? `${phase} (loading / menu)` : phase;
+        let c = cpu.get(key);
+        if (!c) cpu.set(key, (c = {sync: [], encode: [], bytes: []}));
+        c.sync.push(rt.stats.syncMs); c.encode.push(rt.stats.encodeMs); c.bytes.push(rt.gpu.stats.uploadedBlas + rt.gpu.stats.uploadedTlas - up0);
+      }
       return ok;
     };
     const pct = (xs: number[], q: number): number => { const s = [...xs].sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.floor(q * s.length))] : 0; };
-    const cpuLine = (name: string): string => { const c = cpu.get(name); return c ? `sync median ${pct(c.sync, 0.5).toFixed(2)} / p90 ${pct(c.sync, 0.9).toFixed(2)} / max ${pct(c.sync, 1).toFixed(2)} ms, encode median ${pct(c.encode, 0.5).toFixed(2)} / max ${pct(c.encode, 1).toFixed(2)} ms over ${c.sync.length} frames` : 'no traced frame'; };
+    const cpuLine = (name: string): string => { const c = cpu.get(name); return c ? `sync median ${pct(c.sync, 0.5).toFixed(2)} / p90 ${pct(c.sync, 0.9).toFixed(2)} / max ${pct(c.sync, 1).toFixed(2)} ms, encode median ${pct(c.encode, 0.5).toFixed(2)} / max ${pct(c.encode, 1).toFixed(2)} ms, scene upload median ${pct(c.bytes, 0.5)} / max ${pct(c.bytes, 1)} B over ${c.sync.length} frames` : 'no traced frame'; };
     const sweep = async (name: string) => {
       phase = name;
       h.log.reset();
@@ -282,7 +289,7 @@ describe('RT Flashlight in the real Game (WebGPU path, validating device)', () =
     expect([rt.hasScene, rt.gpu.allocated]).toEqual([false, false]);
     expect(rt.gpu.lifecycle.frees, 'every allocation was freed').toBe(rt.gpu.lifecycle.allocs);
     expect([RTB.E.value, RTB.N.value]).toEqual(placeholders);
-    const all = {sync: [...cpu.values()].flatMap(c => c.sync), encode: [...cpu.values()].flatMap(c => c.encode)};
+    const all = {sync: [...cpu.values()].flatMap(c => c.sync), encode: [...cpu.values()].flatMap(c => c.encode), bytes: [...cpu.values()].flatMap(c => c.bytes)};
     cpu.set('all', all);
     process.stdout.write(`rt-flashlight-game: CPU per traced frame, every phase: ${cpuLine('all')}; by phase ${[...cpu.keys()].filter(k => k !== 'all').map(k => `${k}: ${cpuLine(k)}`).join(' | ')}\n`);
     expect(frameErrors, 'no frame threw').toEqual([]);
