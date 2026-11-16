@@ -145,10 +145,14 @@ export function surfaceAirGame(L: StationLayout, mats: WorldMaterials, o: {activ
   h.gas = sys;
   const air: SurfaceAirRuntime = installSurfaceAir(h as never);
   if (o.tentFlap) air.tentFlap = o.tentFlap; // (the architecture's own flap object, set before the section build)
-  const place = (x: number, z: number, level = 0, yaw = h.player.yaw) => {
+  // (task studio-surface-run-field-followup-20261116-211729-01, lane FIXES: the camera looks where the player does — Game.updateCamera's
+  // YXZ pitch / yaw — since the doors are aimed by the crosshair ray)
+  camera.rotation.order = 'YXZ';
+  const place = (x: number, z: number, level = 0, yaw = h.player.yaw, pitch = 0) => {
     const y = L.levels[level].baseY;
     Object.assign(h.player, {x, z, y, eye: y + 1.6, yaw});
     camera.position.set(x, y + 1.6, z);
+    camera.rotation.set(pitch, yaw, 0);
     camera.updateMatrixWorld(true);
   };
   place(at.x, at.z);

@@ -8,6 +8,14 @@
 //  - [E] at a door (on its storey, within DOOR_RT.reach of the doorway, looking at it) opens / shuts it; it swings INTO the building over
 //    DOOR_RT.time. Never shut on a body: a living body in the doorway refuses / re-opens a closing door (the player train's rule). A living
 //    enemy pressing against a shut leaf for DOOR_RT.pushOpen s pushes it open (the train / lift "push into a shut door" rule, for enemies).
+//    [Task studio-surface-run-field-followup-20261116-211729-01 (lane FIXES), user: "Large doors must be closable while aiming at the
+//    actual door/leaf from a clear position, not only at the opening centre where the player blocks closing. Retain real obstruction/
+//    safety rules rather than deleting those checks." — the AIM is the crosshair ray on the door's actual leaves (each at its pose) or its
+//    opening, within DOOR_RT.reach of the eye along the ray (doorAimHit; world/surface/air.ts adds the storey and the nothing-structural-
+//    in-between rules); the OBSTRUCTION is each leaf's real path (doorSweeps: the quarter-disc sector its width sweeps about its hinge
+//    between its current and target angle, padded by half its thickness): a body whose circle reaches that path refuses / re-opens the
+//    closing door, one standing clear of it (beside / behind an open leaf, out on the street) does not. The leaves fill the doorway to its
+//    head (a 4.2 m depot doorway: no gap over a shut door).]
 //    A door opened in play (by the player or an enemy) swings shut by itself after DOOR_RT.autoClose s of a clear doorway (a self-closing
 //    street door); one that stood open as generated stays open until shut.
 //  - COLLISION: the player train's pattern — 'column' prop boxes (anchored steel: damage/materials NEVER('steel'), not dynamic, not a holder)
@@ -26,7 +34,7 @@ import type {PropPlacement} from '../../gen/props';
 import type {Side} from '../../gen/stationTypes';
 import type {SurfaceEntrance, SurfaceInfo} from '../../gen/surface/surfaceTypes';
 import {GAS} from '../gas/field';
-import {sideNormal} from '../towerShared';
+import {rayBox, sideNormal, type Box3Like, type P3} from '../towerShared';
 import {storeyFloor} from './airPanes';
 
 /** RUN lane store (per district memory) of the doors' state. */
@@ -35,10 +43,15 @@ export const SURFACE_DOORS_LANE = 'surface.doors';
 export const DOOR_RT = {
   /** Swing time (s) shut <-> open. */
   time: 0.6,
-  /** [E] reach (m, horizontal, eye to the doorway centre), the look cone (rad), same storey (feet within this of the door floor, m). */
-  reach: 2.1,
-  look: 0.95,
+  /**
+   * [E] reach (m along the crosshair ray, eye to the aimed point on a leaf / the opening), same storey (feet within this of the door
+   * floor, m). (lane FIXES: was 2.1 m horizontal to the doorway CENTRE in a look cone, out of reach of a wide door's leaf ends.)
+   */
+  reach: 2.4,
   storey: 1.2,
+  /** (lane FIXES) A leaf's aim box is padded by this (m) round its slab; a body within this (m) of a leaf's path is in it. */
+  aimPad: 0.06,
+  sweepPad: 0.03,
   /** A living enemy pressing on a shut leaf this long (s) pushes it open; "pressing" = its circle within this (m) of the leaf box. */
   pushOpen: 1.2,
   pushReach: 0.18,
@@ -48,7 +61,7 @@ export const DOOR_RT = {
   inset: 0.12,
   thick: 0.05,
   double: 1.7,
-  /** Leaf height cap (m) below the doorway head; the tent flap's width / height (m). */
+  /** Leaf gap (m) below the doorway head; the tent flap's width / height (m). */
   headGap: 0.03,
   flapWidth: 1.2,
   flapHeight: 2.0,
@@ -172,8 +185,11 @@ export function planSurfaceDoors(info: SurfaceInfo, g: DoorGrid, levels?: readon
 /** The gas breach id of a door. */
 export const doorBreachId = (id: string): string => `door:${id}`;
 
-/** Leaf height of a door (m). */
-export const leafHeight = (p: SurfaceDoorPlan): number => Math.max(0.5, Math.min(p.height, p.tent ? DOOR_RT.flapHeight : 2.4) - DOOR_RT.headGap);
+/**
+ * Leaf height of a door (m): up to the doorway head (the flap: at most its own height). (lane FIXES: street leaves were capped at 2.4 m,
+ * leaving a 0.2 m slit over every shut 2.6 m door and 1.8 m of open doorway over the depot's 4.2 m one.)
+ */
+export const leafHeight = (p: SurfaceDoorPlan): number => Math.max(0.5, (p.tent ? Math.min(p.height, DOOR_RT.flapHeight) : p.height) - DOOR_RT.headGap);
 
 /** World point at along-coordinate a, cross offset `inward` (m, into the building) from the facade line. */
 export function doorPoint(p: SurfaceDoorPlan, a: number, inward: number): {x: number; z: number} {
@@ -183,14 +199,92 @@ export function doorPoint(p: SurfaceDoorPlan, a: number, inward: number): {x: nu
 
 const ease = (t: number): number => t * t * (3 - 2 * t);
 
+/** (lane FIXES) A leaf's swing angle (rad) at open fraction t: 0 shut (along the facade) .. PI / 2 open (straight in). */
+export const leafAngle = (t: number): number => ease(Math.min(1, Math.max(0, t))) * Math.PI / 2;
+
+type Leaf = SurfaceDoorPlan['leaves'][number];
+
+/** A leaf's shut direction u (along the facade, hinge -> tip) and the inward normal v. */
+const leafAxes = (p: SurfaceDoorPlan, leaf: Leaf): [number, number, number, number] =>
+  (p.along === 'x' ? [leaf.dir, 0, -p.n[0], -p.n[1]] : [0, leaf.dir, -p.n[0], -p.n[1]]);
+
 /** A leaf's pose at open fraction t: its centre (x, z) and the unit direction of its width (shut = along the facade, open = inward). */
-export function leafPose(p: SurfaceDoorPlan, leaf: SurfaceDoorPlan['leaves'][number], t: number): {x: number; z: number; dx: number; dz: number} {
-  const phi = ease(Math.min(1, Math.max(0, t))) * Math.PI / 2;
-  const u: [number, number] = p.along === 'x' ? [leaf.dir, 0] : [0, leaf.dir];
-  const v: [number, number] = [-p.n[0], -p.n[1]]; // inward
-  const dx = Math.cos(phi) * u[0] + Math.sin(phi) * v[0], dz = Math.cos(phi) * u[1] + Math.sin(phi) * v[1];
+export function leafPose(p: SurfaceDoorPlan, leaf: Leaf, t: number): {x: number; z: number; dx: number; dz: number} {
+  const phi = leafAngle(t);
+  const [ux, uz, vx, vz] = leafAxes(p, leaf);
+  const dx = Math.cos(phi) * ux + Math.sin(phi) * vx, dz = Math.cos(phi) * uz + Math.sin(phi) * vz;
   const h = doorPoint(p, leaf.hinge, DOOR_RT.inset);
   return {x: h.x + dx * leaf.width / 2, z: h.z + dz * leaf.width / 2, dx, dz};
+}
+
+/**
+ * (lane FIXES) Does a leaf swinging from open fraction `from` to `to` pass through a body circle (x, z, radius r)? Its PATH is the sector
+ * its width sweeps about the hinge between the two angles, padded by half its thickness + r + DOOR_RT.sweepPad (so the target pose is in
+ * it: a shut leaf on a body in the threshold is refused). A body on the side the leaf swings AWAY from (behind its starting pose: beside
+ * the back of an open leaf as it shuts) is not in its path; one beyond the leaf's tip arc or out past the shut line (the street side)
+ * only where the padding reaches it. No motion (from == to): only a body overlapping the leaf where it stands.
+ */
+export function leafSweeps(p: SurfaceDoorPlan, leaf: Leaf, from: number, to: number, x: number, z: number, r: number): boolean {
+  const L = leaf.width, R = r + DOOR_RT.thick / 2 + DOOR_RT.sweepPad;
+  const h = doorPoint(p, leaf.hinge, DOOR_RT.inset);
+  const ox = x - h.x, oz = z - h.z;
+  if (ox * ox + oz * oz > (L + R) * (L + R)) return false;
+  const [ux, uz, vx, vz] = leafAxes(p, leaf);
+  const s = ox * ux + oz * uz, w = ox * vx + oz * vz; // along the shut leaf, inward
+  const rho = Math.hypot(s, w);
+  if (rho < 1e-9) return true;
+  const a0 = leafAngle(from), a1 = leafAngle(to), lo = Math.min(a0, a1), hi = Math.max(a0, a1);
+  const th = Math.atan2(w, s);
+  // the vacated side: behind the starting pose, away from the swing
+  if (a1 < a0 && th > a0) return false;
+  if (a1 > a0 && th < a0) return false;
+  if (th >= lo && th <= hi) return rho - L < R;
+  // nearest of the two bounding poses (segments hinge -> tip)
+  const seg = (phi: number): number => {
+    const cx = Math.cos(phi), cz = Math.sin(phi), k = Math.min(L, Math.max(0, s * cx + w * cz));
+    return Math.hypot(s - k * cx, w - k * cz);
+  };
+  return Math.min(seg(lo), seg(hi)) < R;
+}
+
+/** (lane FIXES) Does any leaf of the door, swinging from open fraction `from` to `to`, pass through the body circle (x, z, r)? */
+export function doorSweeps(p: SurfaceDoorPlan, from: number, to: number, x: number, z: number, r: number): boolean {
+  for (const l of p.leaves) if (leafSweeps(p, l, from, to, x, z, r)) return true;
+  return false;
+}
+
+const aimBox: Box3Like = {min: {x: 0, y: 0, z: 0}, max: {x: 0, y: 0, z: 0}};
+const aimO: P3 = {x: 0, y: 0, z: 0}, aimD: P3 = {x: 0, y: 0, z: 0};
+
+/**
+ * (lane FIXES) The crosshair ray (eye o, unit d) on a door at open fraction t: the nearest t <= maxT on one of its LEAVES (each at its
+ * pose: its slab padded by DOOR_RT.aimPad, floor to leaf top) or its OPENING (the doorway's span and head across the leaf line: aiming
+ * through an open doorway, or at it from inside), or null. Pure geometry: the caller adds the storey / nothing-in-between rules.
+ */
+export function doorAimHit(p: SurfaceDoorPlan, t: number, o: P3, d: P3, maxT: number): number | null {
+  if (!p.leaves.length) return null;
+  const H = leafHeight(p), pad = DOOR_RT.aimPad, T = DOOR_RT.thick / 2 + pad;
+  let best: number | null = null, bt = maxT;
+  for (const l of p.leaves) {
+    // the leaf's own frame: x' along its width (centre 0), z' across its slab
+    const q = leafPose(p, l, t), ex = q.dx, ez = q.dz;
+    const rx = o.x - q.x, rz = o.z - q.z;
+    aimO.x = rx * ex + rz * ez; aimO.y = o.y; aimO.z = -rx * ez + rz * ex;
+    aimD.x = d.x * ex + d.z * ez; aimD.y = d.y; aimD.z = -d.x * ez + d.z * ex;
+    aimBox.min.x = -l.width / 2 - pad; aimBox.max.x = l.width / 2 + pad;
+    aimBox.min.y = p.floor; aimBox.max.y = p.floor + H;
+    aimBox.min.z = -T; aimBox.max.z = T;
+    const hit = rayBox(aimO, aimD, aimBox, bt);
+    if (hit !== null && hit < bt) { bt = hit; best = hit; }
+  }
+  // the opening: the doorway's span x its head, across the leaf line (the facade line to just inside the shut leaf)
+  const a = doorPoint(p, p.a - p.width / 2, -pad), b = doorPoint(p, p.a + p.width / 2, DOOR_RT.inset + T);
+  aimBox.min.x = Math.min(a.x, b.x); aimBox.max.x = Math.max(a.x, b.x);
+  aimBox.min.y = p.floor; aimBox.max.y = p.floor + Math.max(H, p.height);
+  aimBox.min.z = Math.min(a.z, b.z); aimBox.max.z = Math.max(a.z, b.z);
+  const hit = rayBox(o, d, aimBox, bt);
+  if (hit !== null && hit < bt) best = hit;
+  return best;
 }
 
 /** Axis-aligned box helper (a 'column' collision box on the door's storey floor). */
@@ -224,7 +318,10 @@ export function fitDoorBoxes(d: SurfaceDoorState): boolean {
   return changed;
 }
 
-/** The doorway volume a body blocks (closing is refused / re-opened while one is in it): the leaves' swept area plus a margin outside. */
+/**
+ * The doorway's passage box (the doorway's width from a margin outside to the longest leaf's reach inside). (lane FIXES: no longer the
+ * closing rule — that is each leaf's real path, doorSweeps; this box took a player standing clear beside an open leaf of a wide door.)
+ */
 export function inDoorway(p: SurfaceDoorPlan, x: number, z: number, r: number): boolean {
   const out = p.n[0] + p.n[1];
   const a = p.along === 'x' ? x : z, c = p.along === 'x' ? z : x;
