@@ -27,6 +27,7 @@ import {SKYWAYS_MAPBOARD_DAMAGE_CLASS} from '../gen/skyways/mapBoardKind'; // ta
 import {SUBWAY_MAP_KIOSK_DAMAGE_CLASS} from '../gen/subwayMapKioskKind'; // task studio-ui-subway-maps-20261108-074144-01
 import {BUNKER_MODEL_DAMAGE_CLASS, BUNKER_OBJECTIVE_DAMAGE_CLASS} from '../gen/bunker/bunkerKinds'; // task studio-bunker-level-20261109-072224-01
 import {CORPSE_DEN_DAMAGE_CLASS} from '../gen/market/v4/denKinds'; // task studio-corpse-market-shop-20261114-031614-01
+import {SURFACE_DAMAGE_CLASS} from '../gen/surface/kinds'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT)
 import type {ShapeMat} from '../gen/propShapes';
 import type {PurposeMat} from '../gen/purposeShapes';
 import type {BreakCue, Surface} from '../audio/sfx';
@@ -263,6 +264,7 @@ export const PROP_DAMAGE: Record<PropKind, PropDamageSpec> = {
   ...(Object.fromEntries(Object.entries(BUNKER_OBJECTIVE_DAMAGE_CLASS).map(([k, c]) => [k, NEVER(c)])) as Record<keyof typeof BUNKER_OBJECTIVE_DAMAGE_CLASS, PropDamageSpec>), // (task studio-bunker-level-20261109-072224-01: the Bunker's generators / core cluster — marks only)
   ...(Object.fromEntries(Object.entries(BUNKER_MODEL_DAMAGE_CLASS).map(([k, c]) => [k, NEVER(c)])) as Record<keyof typeof BUNKER_MODEL_DAMAGE_CLASS, PropDamageSpec>), // (follow-up: the Bunker's model-backed flavour kinds — marks only)
   ...(Object.fromEntries(Object.entries(CORPSE_DEN_DAMAGE_CLASS).map(([k, c]) => [k, NEVER(c)])) as Record<keyof typeof CORPSE_DEN_DAMAGE_CLASS, PropDamageSpec>), // (task studio-corpse-market-shop-20261114-031614-01: the Market den's chute / booth — marks only)
+  ...(Object.fromEntries(Object.entries(SURFACE_DAMAGE_CLASS).map(([k, c]) => [k, NEVER(c)])) as Record<keyof typeof SURFACE_DAMAGE_CLASS, PropDamageSpec>), // (task studio-surface-run-opus-rebuild-20261116-020827-01, lane KIT: the Surface Run kit — marks only, nothing breaks)
 };
 
 /** Spec for any prop kind (unknown future kinds: painted sheet metal, never breaks). */
