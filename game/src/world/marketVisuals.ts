@@ -11,8 +11,10 @@
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import type {StationLayout} from '../gen/stationTypes';
-import {marketAwnings, marketFans, type MarketFan} from '../gen/market/art';
+import {marketAwnings, marketFans, type MarketAwning, type MarketFan} from '../gen/market/art';
 import {settleLines, type MarketLine} from '../gen/market/v2/art';
+import {crevOf, creviceAwnings, creviceFans, creviceLaundryFloor, creviceLines, creviceObstacles} from '../gen/market/v5/art';
+import {MARKET_BRIDGE_KEY, buildCreviceView, creviceLineGeometry, type CreviceView} from './marketCrevice';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {SurfaceNodeMaterial} from './materials';
 import {marketSpan, marketTexture} from './marketTextures';
@@ -41,6 +43,8 @@ export interface MarketView {
   lines: number;
   /** Task studio-market-bar-20261108-225231-01: the hung garments on the laundry lines (null: no cast loaded / no laundry). */
   laundry: LaundryView | null;
+  /** Task studio-survivor-market-crevice-20261116-074419 (layout version 5): the crevice view (container frames, bridges); null before. */
+  crevice: CreviceView | null;
   geometries: THREE.BufferGeometry[];
   materials: THREE.Material[];
 }
@@ -64,20 +68,23 @@ function rotorGeometry(r: number): THREE.BufferGeometry {
   return g;
 }
 
-/** The awnings' sloped canvas quads + a front batten each, uv in metres / the tarp span. */
-function awningGeometry(layout: StationLayout): {canvas: THREE.BufferGeometry; battens: THREE.BufferGeometry; n: number} | null {
-  const list = marketAwnings(layout);
+/** The awnings' sloped canvas quads + a front batten each, uv in metres / the tarp span. (Task studio-survivor-market-crevice-20261116-
+ *  074419: an awning with axis 'z' — a version-5 E / W front — runs along z: x0 / x1 its z span, z its wall's x.) */
+function awningGeometry(list: readonly MarketAwning[]): {canvas: THREE.BufferGeometry; battens: THREE.BufferGeometry; n: number} | null {
   if (!list.length) return null;
   const span = marketSpan('tarp');
   const pos: number[] = [], uv: number[] = [], idx: number[] = [];
   const battens: THREE.BufferGeometry[] = [];
   for (const a of list) {
     const b = pos.length / 3, z1 = a.z + (a.dir ?? 1) * a.depth, slant = Math.hypot(a.depth, a.yWall - a.yEdge);
-    pos.push(a.x0, a.yWall, a.z, a.x1, a.yWall, a.z, a.x1, a.yEdge, z1, a.x0, a.yEdge, z1);
+    if (a.axis === 'z') pos.push(a.z, a.yWall, a.x0, a.z, a.yWall, a.x1, z1, a.yEdge, a.x1, z1, a.yEdge, a.x0);
+    else pos.push(a.x0, a.yWall, a.z, a.x1, a.yWall, a.z, a.x1, a.yEdge, z1, a.x0, a.yEdge, z1);
     uv.push(a.x0 / span.u, 0, a.x1 / span.u, 0, a.x1 / span.u, slant / span.v, a.x0 / span.u, slant / span.v);
-    idx.push(b, b + 2, b + 1, b, b + 3, b + 2);
-    const bt = new THREE.BoxGeometry(a.x1 - a.x0, 0.06, 0.05);
-    bt.translate((a.x0 + a.x1) / 2, a.yEdge - 0.03, z1);
+    if (a.axis === 'z') idx.push(b, b + 1, b + 2, b, b + 2, b + 3); // (x / z swapped: a reflection; the same handedness as along x)
+    else idx.push(b, b + 2, b + 1, b, b + 3, b + 2);
+    const bt = a.axis === 'z' ? new THREE.BoxGeometry(0.05, 0.06, a.x1 - a.x0) : new THREE.BoxGeometry(a.x1 - a.x0, 0.06, 0.05);
+    if (a.axis === 'z') bt.translate(z1, a.yEdge - 0.03, (a.x0 + a.x1) / 2);
+    else bt.translate((a.x0 + a.x1) / 2, a.yEdge - 0.03, z1);
     battens.push(bt.toNonIndexed());
     bt.dispose();
   }
@@ -121,7 +128,7 @@ function lineGeometry(lines: readonly MarketLine[]): {steel: THREE.BufferGeometr
  * Builds the market's fans + awnings + lines (+ laundry from `opts.garments`: the loaded market-human-cast.glb) for a layout (null: not a
  * market). Pure three.js (tests call it directly).
  */
-export function buildMarketView(layout: StationLayout, opts: {garments?: GLTF | null} = {}): MarketView | null {
+export function buildMarketView(layout: StationLayout, opts: {garments?: GLTF | null; bridgeKit?: GLTF | null} = {}): MarketView | null {
   if (!layout.market) return null;
   const root = new THREE.Group();
   root.name = 'market-visuals';
@@ -129,8 +136,16 @@ export function buildMarketView(layout: StationLayout, opts: {garments?: GLTF | 
   const steel = new SurfaceNodeMaterial({color: FAN_STEEL, roughness: 0.55, metalness: 0.5});
   steel.name = 'market-fan-steel';
   materials.push(steel);
+  // (task studio-survivor-market-crevice-20261116-074419: layout version 5 — THE CREVICE: its container frames / ends / windows and the
+  //  bridges (world/marketCrevice.ts), and its own fans / awnings / lines (gen/market/v5/art.ts) through the same paths below)
+  const crevice = crevOf(layout) ? buildCreviceView(layout, {bridgeKit: opts.bridgeKit}) : null;
+  if (crevice) {
+    root.add(crevice.group);
+    geometries.push(...crevice.geometries);
+    materials.push(...crevice.materials);
+  }
   // --- fans: static rods (one instanced unit cylinder, scaled), spinning rotors (one InstancedMesh) ---
-  const fans = marketFans(layout);
+  const fans = crevice ? creviceFans(layout) : marketFans(layout);
   let rotors: THREE.InstancedMesh | null = null;
   if (fans.length) {
     const rod = new THREE.CylinderGeometry(0.018, 0.018, 1, 6);
@@ -148,7 +163,7 @@ export function buildMarketView(layout: StationLayout, opts: {garments?: GLTF | 
     root.add(rods, rotors);
   }
   // --- awnings: the tarp canvas (Codex texture; a plain olive stand-in while not loaded) + battens ---
-  const aw = awningGeometry(layout);
+  const aw = awningGeometry(crevice ? creviceAwnings(layout, crevice.art) : marketAwnings(layout));
   if (aw) {
     const t = marketTexture('tarp');
     const canvasMat = new SurfaceNodeMaterial({...(t ? {map: t} : {color: AWNING_STANDIN}), roughness: 0.95, metalness: 0, side: THREE.DoubleSide});
@@ -163,15 +178,16 @@ export function buildMarketView(layout: StationLayout, opts: {garments?: GLTF | 
   }
   // --- (versions 2 / 3: the settlement) lines across the lanes: wire + poles (steel); the laundry: real garments (task
   //     studio-market-bar-20261108-225231-01, world/marketClothes.ts: the cast's wearables — none while the cast is not loaded) ---
-  const lines = layout.market.v >= 2 ? settleLines(layout) : [];
-  const lg = lineGeometry(lines);
+  const crevLines = crevice ? creviceLines(layout) : null;
+  const lines = crevLines ?? (layout.market.v >= 2 ? settleLines(layout) : []);
+  const lg = crevLines ? (crevLines.length ? {steel: creviceLineGeometry(crevLines)!} : null) : lineGeometry(lines);
   let laundry: LaundryView | null = null;
   if (lg) {
     geometries.push(lg.steel);
     const wires = new THREE.Mesh(lg.steel, steel);
     wires.name = 'market-lines';
     root.add(wires);
-    laundry = buildLaundry(layout, lines, opts.garments);
+    laundry = buildLaundry(layout, lines, opts.garments, crevice ? creviceLaundryFloor(layout, creviceObstacles(layout, crevice.art)) : undefined);
     if (laundry) {
       root.add(laundry.group);
       geometries.push(...laundry.geometries);
@@ -179,7 +195,7 @@ export function buildMarketView(layout: StationLayout, opts: {garments?: GLTF | 
     }
   }
   root.traverse(o => { if (o === root) return; o.castShadow = false; o.receiveShadow = false; o.userData.level = 0; });
-  const view: MarketView = {root, fans, rotors, awnings: aw?.n ?? 0, lines: lines.length, laundry, geometries, materials};
+  const view: MarketView = {root, fans, rotors, awnings: aw?.n ?? 0, lines: lines.length, laundry, crevice, geometries, materials};
   turnFans(view, 0);
   return view;
 }
@@ -212,7 +228,9 @@ export class MarketVisuals {
 
   build(layout: StationLayout): void {
     if (this.view) this.teardown();
-    const v = buildMarketView(layout, {garments: layout.market ? this.host.propModels?.get(MARKET_HUMAN_KEY) ?? null : null});
+    // (task studio-survivor-market-crevice-20261116-074419: a version-5 market's bridges from the lazy kit, fetched before the build;
+    //  undelivered: the crevice view's stand-in pieces)
+    const v = buildMarketView(layout, {garments: layout.market ? this.host.propModels?.get(MARKET_HUMAN_KEY) ?? null : null, bridgeKit: crevOf(layout) ? this.host.propModels?.get(MARKET_BRIDGE_KEY) ?? null : null});
     if (!v) { this.restoreFog(); return; }
     this.applyFog();
     this.host.scene.add(v.root);
@@ -260,6 +278,7 @@ export class MarketVisuals {
     this.host.scene.remove(v.root);
     for (const g of v.geometries) g.dispose();
     for (const m of v.materials) m.dispose();
+    for (const t of v.crevice?.textures ?? []) t.dispose(); // (the crevice paint's thin-trim map copies; the shared surface maps stay)
     v.root.traverse(o => { if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose(); }); // (the laundry's are nested)
     this.counts.teardowns++;
   }
