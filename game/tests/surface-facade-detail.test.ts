@@ -9,7 +9,7 @@
 //  - CLOSED WINDOWS only on interior storeys and never over a live opening; awnings over glazed shop bays above head height; relief
 //    never over an opening; the shaded finishes are real members of their tint family;
 //  - the DRAW BUDGET: the detail adds at most a few draws per view and a few percent of the facade triangles;
-//  - a reachable roof (v2 roofAccess) keeps its walk open: no deck over it, no look-only clutter on it, a cap on its bulkhead.
+//  - a reachable roof (v2 roofAccess: lane INTERIOR draws it) stays walkable with the detail drawn: nothing over its walk.
 import * as THREE from 'three';
 import {describe, expect, it} from 'vitest';
 import {installCanvasShim} from './helpers/canvas2d';
@@ -19,7 +19,7 @@ import {WorldMaterials} from '../src/world/materials';
 import {buildWorld, type BuiltWorld} from '../src/world/builder';
 import {LEVELS} from '../src/levels/registry';
 import type {StationLayout} from '../src/gen/stationTypes';
-import {SIDE_NORMAL, entranceFloor, surfaceLookPlan, topAt, type BuildingLook} from '../src/world/surface/archPlan';
+import {SIDE_NORMAL, entranceFloor, surfaceLookPlan, topAt} from '../src/world/surface/archPlan';
 import {AWNING_TINTS, EMPTY_FACADE_DETAIL, MIN_OPENING, facadeDetailMembers, shadeMemberKey} from '../src/world/surface/facadeDetail';
 import {OUTFACADE} from '../src/world/surface/arch';
 import {outdoorFacadeMaterial, outdoorModelMaterial} from '../src/world/surface/lookSky';
@@ -212,44 +212,44 @@ describe('Surface Run facades: built (lane FACADE)', () => {
     expect(va.length).toBeGreaterThan(3);
     va.forEach((v, i) => expect(v.draws - vb[i].draws, `view ${i}`).toBeLessThanOrEqual(3));
     for (const m of A.surfaceArch!.meshes) {
-      const key = m.userData.surfaceArch as string;
-      expect(m.material, key).toBeTruthy();
+      // (the part meshes carry their key; the tent's own meshes their material's)
+      const key = String(m.userData.surfaceArch ?? (m.material as THREE.Material).userData?.surfaceArch ?? '');
+      expect(m.material, m.name).toBeTruthy();
+      expect(key, m.name).not.toBe('');
+      if (key === 'surface-sign' || key === 'surface-void') continue; // (no surface of their own: as surface-look-arch.test.ts)
       expect(surfaceImpactClass(key), key).not.toBeNull();
     }
   }, 240_000);
 
-  it('a reachable roof (v2 roofAccess) keeps its walk open: no deck drawn over it, no look-only clutter on it, its bulkhead capped, the coping out to the walk', () => {
-    const layout = gen('subway', 93);
-    const S = layout.surface!;
-    // a plain intact shell with a single deck: give it a walk inside its parapet and a bulkhead at one corner of it
-    const pre = surfaceLookPlan(gen('subway', 93))!;
-    const pick = pre.buildings.find(bl => bl.b.condition === 'intact' && bl.decks.length === 1 && bl.sides.length && !bl.b.host && bl.decks[0].x1 - bl.decks[0].x0 > 10 && bl.decks[0].z1 - bl.decks[0].z0 > 10) as BuildingLook;
-    expect(pick).toBeDefined();
-    const d = pick.decks[0], walk = {x0: d.x0 + 0.2, z0: d.z0 + 0.2, x1: d.x1 - 0.2, z1: d.z1 - 0.2};
-    const bulk = {x0: walk.x0 + 1, z0: walk.z0 + 1, x1: walk.x0 + 3.5, z1: walk.z0 + 3, side: 'S' as const, h: 2.6};
-    S.buildings[pick.id].roofAccess = {level: 1, y: d.y, walk, bulkhead: bulk};
-    const plan = surfaceLookPlan(layout)!, bl = plan.buildings[pick.id];
-    expect(plan.placements.some(p => p.x > walk.x0 && p.x < walk.x1 && p.z > walk.z0 && p.z < walk.z1)).toBe(false);
+  it("a reachable roof (v2 roofAccess, lane INTERIOR's) stays walkable with the detail drawn: nothing of the facade over its walk, no look-only clutter on it", () => {
+    const layout = gen('subway', 93, 2), plan = surfaceLookPlan(layout)!;
+    const roofs = plan.buildings.filter(bl => bl.b.roofAccess);
+    expect(roofs.length).toBeGreaterThan(0);
     const w = buildWorld(layout, mats(), {});
-    expect(w.surfaceArch!.stats.roofWalks).toBeGreaterThan(0);
-    // up-facing roof / coping triangles: none at the deck's height strictly inside the walk; a cap at the bulkhead's top
+    w.group.updateMatrixWorld(true);
     const v = new THREE.Vector3();
-    let overWalk = 0, cap = 0;
-    for (const m of w.surfaceArch!.meshes) {
-      const key = m.userData.surfaceArch as string;
-      if (key !== 'surface-roof' && key !== 'surface-coping') continue;
-      const pos = m.geometry.attributes.position, idx = m.geometry.index!;
-      for (let t = 0; t < idx.count; t += 3) {
-        const p = [0, 1, 2].map(j => v.fromBufferAttribute(pos, idx.getX(t + j)).clone());
-        if (Math.abs(p[0].y - p[1].y) > 1e-4 || Math.abs(p[0].y - p[2].y) > 1e-4) continue;
-        const cx = (p[0].x + p[1].x + p[2].x) / 3, cz = (p[0].z + p[1].z + p[2].z) / 3;
-        if (cx > walk.x0 + 0.05 && cx < walk.x1 - 0.05 && cz > walk.z0 + 0.05 && cz < walk.z1 - 0.05) {
-          if (Math.abs(p[0].y - (d.y + bulk.h)) < 1e-3 && cx > bulk.x0 && cx < bulk.x1 && cz > bulk.z0 && cz < bulk.z1) cap++;
-          else if (p[0].y < bl.top + 0.05 && p[0].y > d.y - 0.05) overWalk++;
+    let over = 0, walkTris = 0;
+    for (const bl of roofs) {
+      const ra = bl.b.roofAccess!, W = ra.walk, B = ra.bulkhead;
+      const inWalk = (x: number, z: number) => x > W.x0 + 0.05 && x < W.x1 - 0.05 && z > W.z0 + 0.05 && z < W.z1 - 0.05 && !(x > B.x0 - 0.05 && x < B.x1 + 0.05 && z > B.z0 - 0.05 && z < B.z1 + 0.05);
+      // the detail stands on the side walls, outside the footprint: nothing of it reaches over the walk
+      for (const r of [...bl.detail.relief, ...bl.detail.blinds, ...bl.detail.awnings]) expect(bl.sides.some(sd => sd.side === r.side), `b${bl.id}`).toBe(true);
+      expect(plan.placements.some(p => inWalk(p.x, p.z)), `b${bl.id}: look-only clutter on the walk`).toBe(false);
+      // no horizontal arch triangle over the walk within head room (the walk itself is the builder's floor, at ra.y)
+      for (const m of w.surfaceArch!.meshes) {
+        const pos = m.geometry.attributes.position, idx = m.geometry.index;
+        const n = idx ? idx.count : pos.count;
+        for (let t = 0; t < n; t += 3) {
+          const p = [0, 1, 2].map(j => v.fromBufferAttribute(pos, idx ? idx.getX(t + j) : t + j).applyMatrix4(m.matrixWorld).clone());
+          if (Math.abs(p[0].y - p[1].y) > 1e-4 || Math.abs(p[0].y - p[2].y) > 1e-4) continue;
+          const cx = (p[0].x + p[1].x + p[2].x) / 3, cz = (p[0].z + p[1].z + p[2].z) / 3;
+          if (!inWalk(cx, cz)) continue;
+          if (Math.abs(p[0].y - ra.y) < 0.02) walkTris++;
+          else if (p[0].y > ra.y + 0.02 && p[0].y < ra.y + 2.1) over++;
         }
       }
     }
-    expect(overWalk).toBe(0);
-    expect(cap).toBeGreaterThan(0);
+    expect(over).toBe(0);
+    expect(walkTris).toBe(0); // (the walk's floor is the builder's, not a LOOK deck over it: no z-fight)
   }, 240_000);
 });

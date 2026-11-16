@@ -86,8 +86,8 @@ function audit(layout: StationLayout, plan: SurfaceLookPlan, T: ReturnType<typeo
   };
   const g = layout.grid, W = g.w;
   const cellAt = (x: number, z: number) => { const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL); return cx < 0 || cz < 0 || cx >= W || cz >= g.h ? -1 : cz * W + cx; };
-  const walls: Gap[] = [], steps: Gap[] = [], roofs: Gap[] = [];
-  let samples = 0, high = 0;
+  const walls: Gap[] = [], steps: Gap[] = [], roofs: Gap[] = [], housings: Gap[] = [];
+  let samples = 0, high = 0, housing = 0;
   const why = (r: {vis: number; back: number}) => (r.vis === -Infinity ? (r.back > -Infinity ? 'back face only' : 'nothing') : `deep ${r.vis.toFixed(2)}`);
   for (const bl of plan.buildings) {
     if (!bl.sides.length) continue;
@@ -128,15 +128,39 @@ function audit(layout: StationLayout, plan: SurfaceLookPlan, T: ReturnType<typeo
         if (r.vis < -0.2) steps.push({b: bl.id, side: 'N', s, y, why: why(r)});
       }
     }
+    // (v2) a reachable roof's stair housing (lane INTERIOR's roofAccessView.ts): its walls seen from outside, from the roof surface (on
+    // a facade plane: from the parapet's top) to its cap, the roof door's opening open; and its cap
+    const ra = bl.b.roofAccess;
+    if (ra) {
+      const B = ra.bulkhead, fp = bl.b.footprint, yc = ra.y + B.h, e = ra.door && ra.door.door !== 'boarded' ? ra.door : null;
+      const planeOf = (r: {x0: number; z0: number; x1: number; z1: number}, sd: Side) => (sd === 'N' ? r.z0 : sd === 'S' ? r.z1 : sd === 'W' ? r.x0 : r.x1);
+      for (const sd of ['N', 'S', 'W', 'E'] as const) {
+        const {alongX, n} = SIDE_NORMAL[sd], plane = planeOf(B, sd), from = Math.abs(plane - planeOf(fp, sd)) < 1e-3 ? bl.top : ra.y;
+        const s0 = alongX ? B.x0 : B.z0, s1 = alongX ? B.x1 : B.z1;
+        for (let s = s0 + 0.2; s < s1 - 0.15; s += 0.5) for (let y = from + 0.2; y < yc - 0.1; y += 0.5) {
+          if (e && e.side === sd && Math.abs(s - (alongX ? e.x : e.z)) < e.width / 2 + 0.15 && y < ra.y + e.height + 0.2) continue;
+          samples++;
+          housing++;
+          const r = probe(alongX, n, plane, s, y, 1.5, 1.5);
+          if (r.vis < -0.2) housings.push({b: bl.id, side: sd, s, y, why: why(r)});
+        }
+      }
+      for (let x = B.x0 + 0.25; x < B.x1 - 0.2; x += 0.5) for (let z = B.z0 + 0.25; z < B.z1 - 0.2; z += 0.5) {
+        housing++;
+        if (!(T.ups.get(`${Math.floor(x / 4)},${Math.floor(z / 4)}`) ?? []).some(u => Math.abs(u.y - yc) < 0.3 && x >= u.x0 && x <= u.x1 && z >= u.z0 && z <= u.z1 && inTri(u.p, x, z))) housings.push({b: bl.id, side: 'N', s: x, y: z, why: 'no cap'});
+      }
+    }
     const f = bl.b.footprint;
     for (let x = f.x0 + 0.45; x < f.x1 - 0.4; x += 2) for (let z = f.z0 + 0.45; z < f.z1 - 0.4; z += 2) {
+      if (ra && x > ra.bulkhead.x0 && x < ra.bulkhead.x1 && z > ra.bulkhead.z0 && z < ra.bulkhead.z1) continue; // (its cap: above)
       let best = -Infinity;
       for (const u of T.ups.get(`${Math.floor(x / 4)},${Math.floor(z / 4)}`) ?? []) if (x >= u.x0 && x <= u.x1 && z >= u.z0 && z <= u.z1 && u.y <= bl.top + 0.3 && u.y > best && inTri(u.p, x, z)) best = u.y;
       samples++;
-      if (best < Math.max(bl.ceilTop + 0.05, 1.5)) roofs.push({b: bl.id, side: 'N', s: x, y: z, why: `roof ${best}`});
+      // (a reachable roof: its walk / rim at the roof surface)
+      if (best < (ra ? ra.y - 0.05 : Math.max(bl.ceilTop + 0.05, 1.5))) roofs.push({b: bl.id, side: 'N', s: x, y: z, why: `roof ${best}`});
     }
   }
-  return {walls, steps, roofs, samples, high};
+  return {walls, steps, roofs, housings, samples, high, housing};
 }
 
 const show = (l: Gap[]) => l.slice(0, 6).map(q => `b${q.b} ${q.side} s=${q.s.toFixed(2)} y=${q.y.toFixed(2)} ${q.why}`).join(' | ');
@@ -153,6 +177,9 @@ describe('Surface Run facades: every exposed building wall is covered (lane FACA
       expect(a.walls.length, show(a.walls)).toBe(0);
       expect(a.steps.length, show(a.steps)).toBe(0);
       expect(a.roofs.length, show(a.roofs)).toBe(0);
+      expect(a.housings.length, show(a.housings)).toBe(0);
+      // a v2 district's reachable roofs: their stair housings were sampled (v1 has none)
+      if (v === 2) expect(a.housing).toBeGreaterThan(50); else expect(a.housing).toBe(0);
       // the Office host tower rises above the outdoor band: its top storeys were sampled (and covered)
       if (host === 'office') expect(a.high).toBeGreaterThan(50);
       // the fix is in play: party walls drawn where no builder face stood, collapsed corners' steps closed
