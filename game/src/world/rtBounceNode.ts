@@ -19,6 +19,7 @@
 import * as THREE from 'three';
 import {StorageTexture, type Node} from 'three/webgpu';
 import * as TSL from 'three/tsl';
+import {fetchTexel, plainTexture} from '../render/textureFetch';
 
 // three's per-kind TSL typings reject most mixed chains (as in render/volumetricShaders.ts)
 type N = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -57,8 +58,9 @@ export const RT_TOLERANCE = {base: 0.04, perMetre: 0.012, proxy: 0.35} as const;
  * grid: x / y the receiver grid's size, z / w the plane tolerance (RT_TOLERANCE.base / perMetre).
  */
 export const RTB = {
-  E: texture(placeholder(RT_E_TYPE, 'rt-bounce-E')),
-  N: texture(placeholder(RT_N_TYPE, 'rt-bounce-N')),
+  // (task studio-cpu-submit-parallelism-20261116-205022-01: plain base nodes, looked up through fetchTexel — render/textureFetch.ts)
+  E: plainTexture(texture(placeholder(RT_E_TYPE, 'rt-bounce-E'))),
+  N: plainTexture(texture(placeholder(RT_N_TYPE, 'rt-bounce-N'))),
   viewProj: uniform(new THREE.Matrix4()).setGroup(renderGroup).setName('rtViewProj'),
   cam: uniform(new THREE.Vector4(0, 0, 0, 0)).setGroup(renderGroup).setName('rtCam'),
   grid: uniform(new THREE.Vector4(1, 1, RT_TOLERANCE.base, RT_TOLERANCE.perMetre)).setGroup(renderGroup).setName('rtGrid'),
@@ -81,7 +83,8 @@ const lookup = Fn(([p, nrm]: [N, N]) => {
       for (let k = 0; k < 4; k++) {
         const dx = k & 1, dy = k >> 1;
         const c = n(clamp(n(ivec2(i0)).add(ivec2(dx, dy)), ivec2(0, 0), hi));
-        const e = n(n(RTB.E).load(c)), nn = n(n(RTB.N).load(c));
+        // (no uv-transform matrix per lookup: an identity mat3 uniform + an object-level update each — render/textureFetch.ts)
+        const e = n(fetchTexel(RTB.E, c)), nn = n(fetchTexel(RTB.N, c));
         const nt = n(nn.xyz).mul(2).sub(1), cls = nn.w;
         const proxy = n(cls).lessThan(0.75);
         const plane = abs(n(dot(nt, rel)).sub(e.w));
