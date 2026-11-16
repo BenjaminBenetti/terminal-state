@@ -375,7 +375,7 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng): CreviceCarve | 
     for (let y = rw.y; y < rw.y + rw.h; y++) for (let x = rw.x; x < rw.x + rw.w; x++) {
       for (let lo = 0; lo < L; lo++) {
         const i = g[lo].idx(x, y);
-        if ((g[lo].cells[i] === FLOOR || g[lo].cells[i] === VOID) && g[lo].ceil[i] > B[L] - 0.35) g[lo].ceil[i] = B[L] - 0.35;
+        if ((g[lo].cells[i] === FLOOR || g[lo].cells[i] === VOID) && g[lo].ceil[i] > B[L] - S.deckDepth) g[lo].ceil[i] = B[L] - S.deckDepth;
       }
       if (g[L].cells[g[L].idx(x, y)] !== SOLID) return fail('bridge over a storey-L floor');
     }
