@@ -174,7 +174,7 @@ describe('the journey builds the next station paced (lane BUILD)', async () => {
     const src = fs.readFileSync(new URL('../src/game.ts', import.meta.url), 'utf8');
     const paced = [...src.matchAll(/this\.buildSectionPaced\(/g)].length, sliced = [...src.matchAll(/this\.buildSectionSliced\(/g)].length, sync = [...src.matchAll(/this\.buildSection\(/g)].length;
     expect(paced).toBe(1);
-    expect(sliced).toBe(4); // (tests/loading-build-sliced.test.ts: what that drain does)
+    expect(sliced).toBe(6); // (tests/loading-build-sliced.test.ts: what that drain does; + the Surface Run crossing and its recovery, lane ACCESS)
     expect(sync).toBe(0); // (the game itself no longer builds a station in one block; tests and tools do, through the wrapper below)
     const journey = src.slice(src.indexOf('async travelToStation('), src.indexOf('private fuelCartsLike('));
     expect(journey).toContain('await this.buildSectionPaced(key, layout, {kind: \'start\'}, false)');

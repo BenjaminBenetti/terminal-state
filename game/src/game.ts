@@ -9,7 +9,8 @@ import {BODY_CLEAR, levelsOf, type Levels} from './gen/levels';
 import type {StationLayout} from './gen/station';
 import {PropModelLibrary, loadAssets, type AssetBundle} from './assets/loader';
 import {foreignTo, levelWorkingSet, selectLevelKeys} from './assets/levelAssets';
-import {SURFACE_LANE, isSurfaceHost, isSurfaceKey, sectionAssetLevel, surfaceVersionFor} from './gen/surface/surfaceRun';
+import {SURFACE_LANE, hostKeyOf, isSurfaceHost, isSurfaceKey, sectionAssetLevel, surfaceKeyOf, surfaceVersionFor} from './gen/surface/surfaceRun';
+import {abortCrossers, arriveCrossers, departCrossers, surfaceCrossRefusal, surfaceCrossers, type SurfaceCrosser, type SurfaceCrossGate, type SurfaceCrossRefusal, type SurfaceCrossResult} from './world/surface/crossing'; // (lane ACCESS: Game.crossSurface)
 import {installSurfaceRun} from './world/surface/install'; // task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN // Task track3-eaton-centre-20261031 (lane PACKAGE): level-scoped lazy assets
 import {adoptStationName} from './campaign/stationName';
 import {LevelResources} from './assets/levelResources'; // lane PACKAGE (track3): level textures / GPU resources released with their level
@@ -1578,8 +1579,10 @@ export class Game {
     // arrival (New game / Travel / Retry) spawns inside it at its interior floor (explicit y). Only the pose is set here: updates run
     // only in 'playing' (after this build and the warm-up), and lane TRAIN's sectionHooks.build below adds the car's floor volume and
     // colliders synchronously, so the player is never simulated before the train exists. The train identity follows the level.
-    this.trainPlacement = playerTrainPlacement(this.layout);
-    this.playerTrain.parkAt(key);
+    // (task studio-surface-run-opus-rebuild-20261116-020827-01, lane ACCESS) a Surface Run district has NO train: nothing of the car is built
+    // there (every train system sees no placement) and the record stays parked at the station below (PlayerTrainRecord.at)
+    this.trainPlacement = isSurfaceKey(key) ? null : playerTrainPlacement(this.layout);
+    if (!isSurfaceKey(key)) this.playerTrain.parkAt(key);
     const pose = arrivalPose(this.layout, arrival, this.trainPlacement);
     const lv = pose.level !== undefined && pose.level > 0 && pose.level < this.levels.count ? pose.level : 0;
     const y = pose.y ?? this.levels.grid(lv).floorAt(pose.x, pose.z); // Lane B: the arrival's own storey
@@ -2037,6 +2040,7 @@ export class Game {
   openTravelMap(mode: 'travel' | 'view' = 'travel'): boolean {
     const run = this.run;
     if (!run.campaign || this.mapBack) return false;
+    if (mode === 'travel' && isSurfaceKey(run.current)) return false; // (lane ACCESS: Surface Run — the train's console is underground)
     if (mode === 'travel') run.campaign = revealAround(run.campaign, run.campaign.current, this.trainEquipment?.routeRadius() ?? 1);
     // (task studio-alpha-survival-controls-20261107-060450-01) E / Tab close the map too: the ones physically down now (the console's E)
     // close it only after a release; the key that closes it is kept from the game until released (no interact / inventory / depart)
@@ -2163,6 +2167,7 @@ export class Game {
     const run = this.run, c0 = run.campaign;
     if (!c0) return {ok: false, error: 'No campaign run.'};
     if (this.lifecycle.busy || this.trainRide.riding) return {ok: false, error: 'The train is busy.'};
+    if (isSurfaceKey(run.current)) return {ok: false, error: 'The train is parked underground — go back down to it first.'}; // (lane ACCESS: Surface Run)
     const plan = travelPlan(c0, to);
     if (!plan) return {ok: false, error: 'That station cannot be reached from here.'};
     const target = run.node(to)!;
@@ -2470,6 +2475,9 @@ export class Game {
       sections: l => LEVELS[l]?.sections(this.run.seeds[l]) ?? null, current: this.run.current.level,
     });
     if (refusal) return Promise.resolve({ok: false, reason: refusal});
+    // (task studio-surface-run-opus-rebuild-20261116-020827-01, lane ACCESS) never from a Surface Run district: the train (and every other
+    // level) is reached only from its station — back down first (Game.crossSurface)
+    if (isSurfaceKey(this.run.current)) return Promise.resolve({ok: false, reason: 'not-ready'});
     const lock = this.beginGesture(); // a menu click: pointer lock is requested inside the gesture
     const flight = this.lifecycle.run(async (): Promise<TravelResult> => {
       const from = {...this.run.current};
@@ -2510,6 +2518,135 @@ export class Game {
       }
     });
     return flight ?? Promise.resolve({ok: false, reason: 'busy'});
+  }
+
+  // ==== Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ACCESS): SURFACE RUN — crossing to / from the district =========
+  // A Subway / Office / Mall station with a Surface Run (layout.surfaceAccess) and its district (section 'surface') are TWO worlds: only
+  // one exists at a time, the other is a run memory. [E] at the way up / out (world/surface/accessRuntime.ts) or at the district's portal
+  // crosses behind the truthful loading screen like a menu travel — the destination prepared (generated, exactly its models / textures
+  // fetched), the crossing participants depart (world/surface/crossing.ts), the old world left (its memory saved) and torn down, the
+  // new one built (sliced), the participants arrive, the complete warm-up, play. The train never comes up: it stays parked at the station
+  // (buildSectionSteps builds no car in a district; PlayerTrainRecord.at stays the station). Nothing about the player is reset, the
+  // Retry snapshot (run.entry: the station's entry, both sections in its scope) is not retaken, and campaign / journey state is untouched.
+
+  /** The crossing in flight (null otherwise): QA and the access prompt read it. */
+  surfaceCrossing: {from: SectionKey; to: SectionKey; phase: 'prepare' | 'depart' | 'build' | 'arrive' | 'warmup' | 'recover'} | null = null;
+  /** Crossings started / completed / refused / failed (QA, tests). */
+  readonly surfaceCrossCounts = {started: 0, done: 0, refused: 0, failed: 0, recovered: 0};
+  /** Set only while a crossing's loading screen replaces play: the [E] press keeps the pointer captured (enterPlay resumes with it). */
+  private holdPointerLock = false;
+
+  /** The way up / down of a section: a host station's district (it has an access), a district's station; null: none. */
+  surfaceCrossTarget(from: SectionKey = this.run.current): SectionKey | null {
+    if (isSurfaceKey(from)) return hostKeyOf(from);
+    return from.section === 'main' && isSurfaceHost(from.level) && !!this.world && !!this.layout?.surfaceAccess ? surfaceKeyOf(from) : null;
+  }
+
+  /** The live inputs of the crossing gate (world/surface/crossing.ts surfaceCrossRefusal). */
+  surfaceCrossGate(): SurfaceCrossGate {
+    return {busy: this.lifecycle.busy, alive: this.player.alive, state: this.state, ready: !!this.world && !!this.gpu,
+      moving: !!this.trainRide?.riding || !!this.run.campaign?.transit || this.transitGap || this.travelling,
+      seated: !!this.skywaysCar?.driving, climbing: !!this.player.climbing, to: this.surfaceCrossTarget()};
+  }
+
+  /** Why the player cannot cross now (null: they can). */
+  surfaceCrossRefusal(): SurfaceCrossRefusal | null {
+    return surfaceCrossRefusal(this.surfaceCrossGate(), this.run.current, surfaceCrossers(this));
+  }
+
+  /** The station's display name of a section (its network node, else the level's seeded name): prompts, the loading screen. */
+  surfaceStationName(k: SectionKey): string {
+    return (k.station ? this.run.node(k.station)?.name : undefined) ?? levelDisplayName(k.level, this.run.seeds[k.level]);
+  }
+
+  /** CROSS to the other world of this station (up / out to its district, back down / in to the station). Single flight. */
+  crossSurface(): Promise<SurfaceCrossResult> {
+    const from: SectionKey = {...this.run.current}, to = this.surfaceCrossTarget(from);
+    const refusal = surfaceCrossRefusal(this.surfaceCrossGate(), from, surfaceCrossers(this));
+    if (refusal || !to) { this.surfaceCrossCounts.refused++; return Promise.resolve({ok: false, reason: refusal?.code ?? 'no-access', error: refusal?.text ?? 'There is no way out here.'}); }
+    const flight = this.lifecycle.run(async (): Promise<SurfaceCrossResult> => {
+      this.surfaceCrossCounts.started++;
+      const up = !isSurfaceKey(from), station = this.surfaceStationName(up ? from : hostKeyOf(from));
+      const crossers = surfaceCrossers(this).slice();
+      this.surfaceCrossing = {from, to, phase: 'prepare'};
+      this.cancelUse('surface');
+      this.cancelFlareHold();
+      this.aiming = false;
+      this.holdPointerLock = true; // (setState('loading') would release it: the crossing came from a key press in play, not a menu click)
+      const ui = this.showLoading(up ? `${station} · the street` : station, up ? 'Going up to the street…' : `Back down to ${station}…`);
+      this.holdPointerLock = false;
+      let departed: SurfaceCrosser[] = [], left: BuiltWorld | null = null;
+      try {
+        await nextPaint();
+        const layout = await this.prepareSection(to, this.run, this.progressTo(ui, up ? 'Going up to the street' : `Back down to ${station}`));
+        if (layout.surface) $('#station-intro').textContent = layout.surface.name; // (the district's own name, once generated)
+        await this.warmRun; // never rebuild under a running warm-up
+        this.surfaceCrossing.phase = 'depart';
+        departed = departCrossers(crossers, from, to); // (the old world intact: each takes what it carries out of it)
+        this.surfaceCrossing.phase = 'build';
+        left = this.world; // (the world being left: a recovery tears down only a NEW, half-built one)
+        this.leaveSection(true); // the old world's every delta into its memory; its frame work / audio / lights / resources go with it
+        await this.buildSectionSliced(to, layout, {kind: 'surface'}, false, ui);
+        this.surfaceCrossing.phase = 'arrive';
+        const failed = arriveCrossers(departed, to);
+        departed = [];
+        this.surfaceCrossing.phase = 'warmup';
+        const w = await this.prepareGraphics(ui); // the COMPLETE warm-up of the new world (nothing compiles on its first frames)
+        if (w.status === 'cancelled') return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'};
+        this.readyLine(ui, w);
+        await this.enterPlay();
+        if (this.state === 'paused') $('#pause .fine').textContent = 'The browser did not capture the mouse — click Resume to try again.';
+        this.hud.toast(up ? `${layout.surface?.name ?? 'The street'} — street level` : `${station} — back underground`);
+        if (failed.length) this.hud.toast(`Something you carried did not come with you (${failed.join(', ')})`, true);
+        this.surfaceCrossCounts.done++;
+        return {ok: true, to};
+      } catch (err) {
+        if (err instanceof PacedBuildCancelled) return {ok: false, reason: 'cancelled', error: 'The crossing was interrupted.'}; // (replaced under the build: its replacement owns the screen)
+        console.error('Surface Run: the crossing failed', err);
+        this.lastError = String((err as Error)?.stack ?? err);
+        this.surfaceCrossCounts.failed++;
+        return await this.recoverSurfaceCrossing(from, up, departed, left, ui, err);
+      } finally {
+        this.surfaceCrossing = null;
+      }
+    });
+    return flight ?? Promise.resolve({ok: false, reason: 'busy', error: 'Busy — try again in a moment.'});
+  }
+
+  /**
+   * A crossing that failed: the player stays where they were. Before the old world was left, it is still live (the participants that
+   * departed restore what they took); after, the old section is rebuilt from its just-saved memory with the player at its way up / down
+   * (ArrivalKind 'surface'), then the participants restore. A failure of that rebuild is the error screen (as a failed travel's).
+   */
+  private async recoverSurfaceCrossing(from: SectionKey, up: boolean, departed: SurfaceCrosser[], left: BuiltWorld | null, ui: WarmupUi, err: unknown): Promise<SurfaceCrossResult> {
+    const msg = String((err as Error)?.message ?? err).slice(0, 120);
+    const where = up ? 'The way up' : 'The way down';
+    if (!left) {
+      abortCrossers(departed, from);
+      await this.enterPlay();
+      this.hud.toast(`${where} is blocked — you are still here.`, true);
+      return {ok: false, reason: 'failed', error: msg};
+    }
+    try {
+      if (this.surfaceCrossing) this.surfaceCrossing.phase = 'recover';
+      if (this.world !== left) this.leaveSection(false); // (a half-built destination world: torn down, nothing of it kept)
+      const back = await this.prepareSection(from, this.run, this.progressTo(ui, 'Going back'));
+      await this.buildSectionSliced(from, back, {kind: 'surface'}, false, ui);
+      abortCrossers(departed, from);
+      const w = await this.prepareGraphics(ui);
+      if (w.status === 'cancelled') return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'};
+      this.readyLine(ui, w);
+      await this.enterPlay();
+      this.hud.toast(`${where} could not be reached — you are still here.`, true);
+      this.surfaceCrossCounts.recovered++;
+      return {ok: false, reason: 'failed', error: msg};
+    } catch (err2) {
+      if (err2 instanceof PacedBuildCancelled) return {ok: false, reason: 'cancelled', error: 'The crossing was interrupted.'};
+      console.error('Surface Run: rebuilding the section the crossing left failed', err2);
+      $('#error-msg').textContent = `The crossing failed (${msg}) and the area could not be rebuilt: ${String((err2 as Error)?.message ?? err2).slice(0, 120)}`;
+      this.setState('error');
+      return {ok: false, reason: 'failed', error: msg};
+    }
   }
 
   /**
@@ -2976,7 +3113,7 @@ export class Game {
     // Only frozen menus silence audio; any other (incl. future overlay) state keeps it running.
     this.sfx.suspend(s === 'paused' || s === 'inventory' || s === 'title' || s === 'loading' || s === 'error');
     if (s === 'inventory') { this.invUI.selected = null; this.invUI.render(); }
-    if (s !== 'playing' && prev === 'playing') this.input.unlock();
+    if (s !== 'playing' && prev === 'playing' && !this.holdPointerLock) this.input.unlock(); // (lane ACCESS: a Surface Run crossing keeps it: Game.crossSurface)
     this.lastFrame = performance.now();
     for (const fn of this.stateListeners) { try { fn(s, prev); } catch (err) { console.warn('Iteration 16: a state listener failed', err); } }
     // task studio-graphics-gpu-materials-toggle-20261114-212239-01: a lighting choice changed while the game was not paused (another tab)

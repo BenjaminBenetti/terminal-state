@@ -295,4 +295,18 @@ export interface SurfaceAccessInfo {
   areas: number[];
   /** Short prompt name of the outside ("the street"). */
   label: string;
+  // ---- lane ACCESS (optional, additive; written by gen/surface/access*.ts, read by world/surface/access*.ts) ----
+  /**
+   * The closed door the access ends at, when the access draws its own (world/surface/accessView.ts): the street door at the top of
+   * the Subway stairwell, the makeshift door fitted into the Office lobby's boarded street doors. Centre of the leaf's bottom edge on
+   * the wall face (absolute y), `yaw` = the direction the door faces (its front normal (sin yaw, cos yaw) points INTO the station),
+   * `w` / `h` = the opening. Absent for the Mall (its street door set is the mall's own, world/mallStreetExit.ts).
+   */
+  door?: {x: number; z: number; y: number; yaw: number; w: number; h: number; level: number};
+  /** Mall: the id of the street exit (layout.mall.exits) that is usable: drawn without its lock (chain, notices, board, lit sign). */
+  exit?: string;
+  /** Subway: the exit hall (layout area id) the stairwell climbs from, the climb's rise (m) and the street named on its signs. */
+  hall?: number;
+  rise?: number;
+  street?: string;
 }

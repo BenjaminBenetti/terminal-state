@@ -87,6 +87,12 @@ export interface StreetExitSpec {
    */
   capY: number;
   seed: number;
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ACCESS): the Surface Run access's street exit (layout.surfaceAccess.exit,
+   * gen/surface/accessDoor.ts) — the doors lead out (Game.crossSurface): drawn without the lock (chain + padlock, notices, the boarded
+   * pane, the lit EXIT CLOSED face). Absent = locked, exactly as before.
+   */
+  usable?: true;
 }
 
 /** The culler's view of an exit (world/levelCulling.ts ExitAperture): the glazed opening on its hall-side plane. */
@@ -101,6 +107,7 @@ const num = (v: unknown, d: number): number => (typeof v === 'number' && Number.
  */
 export function streetExitSpecs(layout: {mall?: unknown}, ceilAt: (level: number, x: number, z: number) => number, capY = Infinity): StreetExitSpec[] {
   const raw = ((layout.mall as {exits?: unknown[]} | undefined)?.exits ?? []) as Record<string, unknown>[];
+  const usable = (layout as {surfaceAccess?: {exit?: string}}).surfaceAccess?.exit; // (lane ACCESS: Surface Run)
   const out: StreetExitSpec[] = [];
   raw.forEach((r, k) => {
     const side = String(r.side ?? '');
@@ -133,6 +140,7 @@ export function streetExitSpecs(layout: {mall?: unknown}, ceilAt: (level: number
       id: String(r.id ?? `X${k + 1}`), level, streetY, nx, nz, plane, s0, s1, y0, y1, collider, view: {...view}, vestibule,
       hallCeil: num(hall?.ceil, num(ceilAt(level, hx, hz), y1 + 0.6)), panels: panels.length ? panels : defaultPanels(s0, s1, y0, y1),
       capY, seed: num(r.seed, 7919 * (k + 1)) >>> 0,
+      ...(usable !== undefined && String(r.id ?? '') === usable ? {usable: true as const} : {}),
     });
   });
   return out;
@@ -859,7 +867,7 @@ export function buildStreetExit(s: StreetExitSpec): StreetExitView {
     // leaf pairs: two door panels meeting edge to edge
     const pairs: number[] = [];
     for (let i = 0; i + 1 < doors.length; i++) if (Math.abs(doors[i].u1 - doors[i + 1].u0) < 0.02) { pairs.push((doors[i].u1 + doors[i + 1].u0) / 2); i++; }
-    if (hall) {
+    if (hall && !s.usable) { // (lane ACCESS: a usable exit has no lock — its draws below are kept for the stream: see the else branch)
       // the LOCK: a heavy chain wrapped round the two push bars of every pair across its meeting stiles, sagging, with a padlock
       const pw = w - t * 0.7 - 0.07, steel: V3 = [0.33, 0.32, 0.3];
       for (const c of pairs) {
@@ -891,7 +899,7 @@ export function buildStreetExit(s: StreetExitSpec): StreetExitView {
         const d = doors[Math.floor(r() * doors.length)];
         fbox(d.u0 + st, d.u1 - st, 0.27, 0.92, w - t * 0.7 - 0.03, w - t * 0.7 - 0.012, [1, 1, 1], 'plywood');
       }
-    }
+    } else if (hall) { if (doors.length >= 2) r(); if (doors.length) r(); } // (the same seeded draws as the locked set: the street plan after it is unchanged)
     // (the street set carries no boards: its leaves are smashed in — the city is what the player should see through the chained set)
   };
   // reveal / vestibule pocket (indoors, lit): floor (mat + tile), side walls, soffit; the threshold under the inner set
@@ -918,7 +926,7 @@ export function buildStreetExit(s: StreetExitSpec): StreetExitView {
     const above = s.hallCeil - s.y1 > sh + 0.2;
     const y0 = above ? H + 0.1 : Math.max(2.25, H - 0.12 - sh), wS = above ? -0.09 : wc - 0.075;
     fbox(-sw / 2 - 0.03, sw / 2 + 0.03, y0 - 0.03, y0 + sh + 0.03, wS, wS + (above ? 0.09 : 0.012), [0.16, 0.16, 0.16]);
-    panel('sign', -sw / 2, sw / 2, y0, y0 + sh, wS - 0.003, -1, [1, 1, 1], 1);
+    if (!s.usable) panel('sign', -sw / 2, sw / 2, y0, y0 + sh, wS - 0.003, -1, [1, 1, 1], 1); // (lane ACCESS: no EXIT CLOSED face on the usable exit)
   }
   // ---- STREET -------------------------------------------------------------------------------------------------------------
   const street = new Acc({position: 3, normal: 3, uv: 2, color: 3, aCell: 4, aExit: 4, aView: 4}, {aView: [s.view.x0, s.view.z0, s.view.x1, s.view.z1]});
