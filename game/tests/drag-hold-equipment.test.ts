@@ -177,7 +177,9 @@ describe('train equipment: a drag / a carry starts with a HOLD of E, never a tap
 describe('train equipment: an unfinished hold is dropped', () => {
   for (const kind of [dollyKinds[0], carryKinds[0]]) {
     it(`${EQUIPMENT[kind].name}: no drag / carry, no tap, the ring cleared, E still down does nothing — on the aim / range / input / state changes; another part and an owner already active do not drop it`, () => {
-      const other = dollyKinds[dollyKinds.length - 1];
+      // (re-pin, task studio-surface-run-opus-rebuild-20261116-020827-01, lane CARGO: the last dolly kind WITH a console face — the upgrade
+      // kit 'armor-kit' sorts last now, and its plate stack stands ~0.3 m further back on the nose plate, out of the aim step's reach)
+      const faced = dollyKinds.filter(k => !EQUIPMENT[k].upgrade), other = faced[faced.length - 1];
       const w = world(kind, [stationRec(other, 2, 4.55, 0, 3)]), {h, eq, u} = w, u2 = eq.unit('eq-2')!;
       let taps = 0;
       (eq.uses as Record<string, EquipmentUse>)[kind] = {prompt: () => null, tap: () => { taps++; return true; }};

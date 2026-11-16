@@ -219,6 +219,9 @@ export class FuelStations {
     this.live = null;
     this.stage = null;
     if (!key.station || seed === null) return; // fuel exists in campaign runs only
+    // (task studio-surface-run-opus-rebuild-20261116-020827-01, lane ACCESS) a station's fuel is realized in its own world only: its Surface
+    // Run district (section 'surface') gets none of the station's plan (never a second copy) and the map's figure stays the station's
+    if (key.section !== 'main') return;
     this.live = {...key};
     const cm = this.containers;
     const {ins, byKey} = cm ? this.holderInputs(cm) : {ins: [], byKey: new Map<string, Holder>()};

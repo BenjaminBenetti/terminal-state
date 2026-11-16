@@ -12,10 +12,14 @@ import {installSurfaceAccess} from './accessRuntime';
 import {installSurfaceLook} from './look';
 import {installSurfaceAir} from './air';
 import {installSurfaceLife} from './life';
+import {installSurfaceCargo} from './cargo';
 
 export function installSurfaceRun(game: Game): void {
   installSurfaceAccess(game);
   installSurfaceLook(game);
   installSurfaceAir(game);
   installSurfaceLife(game);
+  // (lane CARGO) the depot recoverables, the truck's attachment points, the upgrade kit, the crossing participant 'cargo' — BEFORE the
+  // train equipment's install (Game order): its build seeds the lane the equipment's build reads
+  installSurfaceCargo(game);
 }

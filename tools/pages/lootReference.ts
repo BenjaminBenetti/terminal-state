@@ -236,6 +236,10 @@ export const LOOT_TABLES_EXPORT_ROLES: Readonly<Record<string, string>> = {
   // auto-detected) and its gear piece (a chance per hideout from the level's gear pool + the gas mask)
   ANNEX_CACHE_GEAR_KEY: 'special: hideout gear piece (pickup reward tag)', ANNEX_CACHE_GEAR: 'special: hideout gear piece (chance, gas-mask weight)',
   annexCacheGearRows: 'special: hideout gear piece (rows API)',
+  // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ROOMS): the Surface Run building interiors' loose floor finds (scarce
+  // odds + loose salvage per carved storey, gen/surface/rooms/finish.ts planLoose). The district is a host-level section that the
+  // per-level census does not generate yet, so no floor-program section reads it; one is due when the census gains the district.
+  SURFACE_INTERIOR_FLOOR: 'floor program (Surface Run building interiors, per carved storey; not yet in the per-level census)',
 };
 
 const SLOT_TEXT: Readonly<Record<SlotCategory, [string, string]>> = {

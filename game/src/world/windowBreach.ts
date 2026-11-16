@@ -88,34 +88,45 @@ export class WindowBreaches {
   /** Touched panes. */
   readonly state = new Map<string, PaneState>();
   private readonly byLevel = new Map<number, WindowPlan[]>();
+  /** Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): the plans with an exterior face (`outer`: the Surface Run facades). */
+  private readonly outerPlans: WindowPlan[] = [];
 
   constructor(readonly plans: readonly WindowPlan[], private readonly view: WindowView | null = null) {
     for (const p of plans) {
       let l = this.byLevel.get(p.level);
       if (!l) this.byLevel.set(p.level, (l = []));
       l.push(p);
+      if (p.outer !== undefined) this.outerPlans.push(p);
       for (const pane of p.panes) if (paneBreakable(p, pane)) { const id = paneId(p, pane); this.refs.set(id, {id, plan: p, pane}); }
     }
   }
 
   /**
    * The window opening a bullet's world hit went into (`point` = the hit on the wall face, `dir` = unit ray direction), or
-   * null when it is not a window opening (the damage system handles it as before).
+   * null when it is not a window opening (the damage system handles it as before). Task studio-surface-run-opus-rebuild-20261116-020827-01
+   * (lane AIR): failing the room-side test, a plan with an exterior face (`outer`) also takes a STREET-SIDE hit on that face — any storey
+   * by height (outdoors the hit reports the street's own storey band); without such plans this is exactly the room-side path.
    */
   attribute(wh: WorldHit, point: Vec3, dir: Vec3): PaneHit | null {
     if (wh.kind !== 'wall' || wh.level === undefined || wh.level < 0) return null;
     const list = this.byLevel.get(wh.level);
-    if (!list) return null;
+    const hit = list ? this.attributeIn(list, point, dir, wh, false) : null;
+    return hit || !this.outerPlans.length ? hit : this.attributeIn(this.outerPlans, point, dir, wh, true);
+  }
+
+  private attributeIn(list: readonly WindowPlan[], point: Vec3, dir: Vec3, wh: WorldHit, street: boolean): PaneHit | null {
     const M = WINDOW_BREACH.MULLION;
     for (const p of list) {
-      // the room-side face of this span's wall: facing the room, within FACE_TOL of plan.inner, inside the opening
-      if (-(wh.nx * p.n[0] + wh.nz * p.n[1]) < 0.7) continue;
+      // the room-side face of this span's wall: facing the room, within FACE_TOL of plan.inner, inside the opening (lane AIR: or, street-side,
+      // the exterior face: facing out, within FACE_TOL of plan.outer)
+      const facing = (wh.nx * p.n[0] + wh.nz * p.n[1]) * (street ? 1 : -1);
+      if (facing < 0.7) continue;
       const c = p.along === 'x' ? point.z : point.x, a = p.along === 'x' ? point.x : point.z;
-      if (Math.abs(c - p.inner) > WINDOW_BREACH.FACE_TOL) continue;
+      if (Math.abs(c - (street ? p.outer! : p.inner)) > WINDOW_BREACH.FACE_TOL) continue;
       if (a < p.a0 - 0.01 || a > p.a1 + 0.01 || point.y < p.y0 - 0.01 || point.y > p.y1 + 0.01) continue;
-      // continue the ray to the glass plane (it travels outward through the reveal)
+      // continue the ray to the glass plane (it travels outward through the reveal; lane AIR: street-side, inward)
       const out = p.n[0] + p.n[1], dc = p.along === 'x' ? dir.z : dir.x;
-      if (dc * out <= 1e-4) continue;
+      if (dc * out * (street ? -1 : 1) <= 1e-4) continue;
       const t = (p.glass - c) / dc;
       const at: Vec3 = {x: point.x + dir.x * t, y: point.y + dir.y * t, z: point.z + dir.z * t};
       const ga = p.along === 'x' ? at.x : at.z;

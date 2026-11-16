@@ -60,6 +60,7 @@ import type {LevelSeeds, RunState} from '../run/runState';
 import type {BatterySnapshot, RunParticipant, RunSnapshot, SurvivalSnapshot, VitalsSnapshot} from '../run/snapshot';
 import {checksumOf} from './checksum';
 import {FILTER_LIFE_S, LEGACY_FILTER_LIFE_S, isFilterMask} from '../items/gear';
+import {SURFACE_SECTION} from '../gen/surface/surfaceRun'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ACCESS)
 
 export const SERIALIZED_RUN_V = 1 as const;
 export const SAVE_FORMAT = 'terminal-state-save' as const;
@@ -314,8 +315,11 @@ export function captureRun(src: RunSource): SerializedRunV1 {
     point: src.point,
     campaign: jsonSafe(run.campaign, 'campaign') as CampaignState,
     seeds: {...run.seeds},
-    section: run.current.section,
-    arrival: run.arrival.kind,
+    // (task studio-surface-run-opus-rebuild-20261116-020827-01, lane ACCESS) a save always resumes in the parked train at its STATION: a run in
+    // its Surface Run district (section 'surface') saves the station's own section, and an arrival by the district crossing ('surface')
+    // saves as 'start' (the train-local pose). The district's memory (`${station}:surface`) is saved with every other memory, exactly.
+    section: run.current.section === SURFACE_SECTION ? 'main' : run.current.section,
+    arrival: run.arrival.kind === 'surface' ? 'start' : run.arrival.kind,
     entered: run.entered.slice(-ENTERED_KEEP),
     playtime: run.playtime,
     clock: src.clock,

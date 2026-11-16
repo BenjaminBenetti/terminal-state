@@ -332,7 +332,7 @@ describe('seeded roster: the version pin (saves)', () => {
     // the game applies exactly this rule (always an explicit version in the generator inputs, the lane recorded at the first build)
     const src = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/game.ts'), 'utf8');
     expect(src).toMatch(/rosterVersion: rosterVersionFor\(run\.peekMemory\(key\)\)/);
-    expect(src).toMatch(/if \(run\.laneStore\(ROSTER_LANE, key\) === undefined\) run\.setLaneStore\(ROSTER_LANE, \{v: ctx\.rosterVersion \?\? 0\}, key\);/);
+    expect(src).toMatch(/if \(!isSurfaceKey\(key\) && run\.laneStore\(ROSTER_LANE, key\) === undefined\) run\.setLaneStore\(ROSTER_LANE, \{v: ctx\.rosterVersion \?\? 0\}, key\);/); // (Surface Run: every host / level section stamps it; a district section carries no roster)
     const reg = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/levels/registry.ts'), 'utf8');
     expect(reg).toMatch(/applyEnemyRoster\(layout, id, ctx\.levelSeed, ctx\.rosterVersion \?\? 0\)/);
   });

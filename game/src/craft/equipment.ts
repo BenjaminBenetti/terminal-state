@@ -33,11 +33,22 @@
 // bad field. The field is the mode's NAME, never an index: task studio-scanner-medical-20261114-054010-01 appended 'medical' and every
 // older record's mode still means what it did.
 
+//
+// Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane CARGO; user: "The depot offers physical recoverable versions of EXISTING
+// craftable train upgrades/devices, with their existing effects … No invented upgrade effects, second crafting-material charge,
+// duplicated UID or stacked already-fitted upgrade"): one more row — the TRAIN ARMOUR KIT ('armor-kit'), the physical, recoverable form
+// of the bench's existing one-time 'armor' upgrade (run/trainUpgrades.ts). It is an ordinary unit of this registry (a uid of the run's
+// counter, moved on the hand truck like a device, saved / validated / carried like every unit) whose one extra trait is `upgrade`: [E]
+// on it standing in the PARKED car fits that upgrade through the train's own seam (Game.trainUpgrades: TrainUpgradesApi block / install)
+// and the kit is used up — only when the install succeeded (world/surface/cargoKit.ts). It has no recipe (it is found, never crafted)
+// and no effect of its own. Every older kind's row is unchanged (`upgrade: null`).
+
 import type {StackJSON} from '../items/inventory';
 import {LOCKBOX_SLOTS} from '../run/trainLockbox';
+import type {TrainUpgradeId} from '../run/trainUpgrades';
 import {SCAN_MODES} from './scanner';
 
-export const EQUIPMENT_KINDS = ['chest', 'radar', 'sentry', 'scanner'] as const;
+export const EQUIPMENT_KINDS = ['chest', 'radar', 'sentry', 'scanner', 'armor-kit'] as const;
 export type EquipmentKind = (typeof EQUIPMENT_KINDS)[number];
 
 /** A kind's traits — everything the shared systems need to know about it. */
@@ -74,6 +85,12 @@ export interface EquipmentDef {
   readonly kg: number;
   readonly radius: number;
   readonly height: number;
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane CARGO): a recoverable UPGRADE KIT — the train upgrade it fits (`id`,
+   * run/trainUpgrades.ts) and what that upgrade is called in prompts (`the`); null for every other kind. Fitting goes through the
+   * train's normal seam and uses the kit up; nothing else reads this.
+   */
+  readonly upgrade: {readonly id: TrainUpgradeId; readonly the: string} | null;
 }
 
 /** The sentry's feed: four ordinary slots of its rounds (the item's own stack limit each). */
@@ -83,11 +100,25 @@ export const SENTRY_FEED_SLOTS = 4;
 const DOLLY_RADIUS = 0.36, DOLLY_HEIGHT = 1.25;
 
 export const EQUIPMENT: Readonly<Record<EquipmentKind, EquipmentDef>> = Object.freeze({
-  chest: Object.freeze({kind: 'chest', name: 'Storage chest', the: 'the storage chest', move: 'carry', plug: false, slots: LOCKBOX_SLOTS, slotItem: null, legacyAmmoCap: 0, displayModes: [], kg: 45, radius: 0.4, height: 0.5}),
-  radar: Object.freeze({kind: 'radar', name: 'Route radar', the: 'the route radar', move: 'dolly', plug: true, slots: 0, slotItem: null, legacyAmmoCap: 0, displayModes: [], kg: 58, radius: DOLLY_RADIUS, height: DOLLY_HEIGHT}),
-  sentry: Object.freeze({kind: 'sentry', name: 'Defense sentry', the: 'the defense sentry', move: 'dolly', plug: true, slots: SENTRY_FEED_SLOTS, slotItem: 'ammo_556', legacyAmmoCap: 300, displayModes: [], kg: 92, radius: DOLLY_RADIUS, height: DOLLY_HEIGHT}),
-  scanner: Object.freeze({kind: 'scanner', name: 'Item scanner', the: 'the item scanner', move: 'dolly', plug: true, slots: 0, slotItem: null, legacyAmmoCap: 0, displayModes: SCAN_MODES, kg: 74, radius: DOLLY_RADIUS, height: DOLLY_HEIGHT}),
+  chest: Object.freeze({kind: 'chest', name: 'Storage chest', the: 'the storage chest', move: 'carry', plug: false, slots: LOCKBOX_SLOTS, slotItem: null, legacyAmmoCap: 0, displayModes: [], kg: 45, radius: 0.4, height: 0.5, upgrade: null}),
+  radar: Object.freeze({kind: 'radar', name: 'Route radar', the: 'the route radar', move: 'dolly', plug: true, slots: 0, slotItem: null, legacyAmmoCap: 0, displayModes: [], kg: 58, radius: DOLLY_RADIUS, height: DOLLY_HEIGHT, upgrade: null}),
+  sentry: Object.freeze({kind: 'sentry', name: 'Defense sentry', the: 'the defense sentry', move: 'dolly', plug: true, slots: SENTRY_FEED_SLOTS, slotItem: 'ammo_556', legacyAmmoCap: 300, displayModes: [], kg: 92, radius: DOLLY_RADIUS, height: DOLLY_HEIGHT, upgrade: null}),
+  scanner: Object.freeze({kind: 'scanner', name: 'Item scanner', the: 'the item scanner', move: 'dolly', plug: true, slots: 0, slotItem: null, legacyAmmoCap: 0, displayModes: SCAN_MODES, kg: 74, radius: DOLLY_RADIUS, height: DOLLY_HEIGHT, upgrade: null}),
+  // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane CARGO): four armour plates strapped to the hand truck (about 4 x 23 kg
+  // of plate + the truck): no plug, no slots, no effect until it is fitted (world/trainEquipmentModel.ts KIT_LOOK)
+  'armor-kit': Object.freeze({kind: 'armor-kit', name: 'Train armour kit', the: 'the train armour kit', move: 'dolly', plug: false, slots: 0, slotItem: null, legacyAmmoCap: 0, displayModes: [], kg: 104, radius: DOLLY_RADIUS, height: DOLLY_HEIGHT,
+    upgrade: Object.freeze({id: 'armor', the: 'the train armour'})}),
 } as const);
+
+/**
+ * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane CARGO): the unit kind of a recoverable's id (gen/surface/surfaceTypes.ts
+ * SurfaceRecoverable.kind): an equipment kind as it is, or an upgrade id -> the kit kind that fits it (null: neither).
+ */
+export function recoverableKind(id: string): EquipmentKind | null {
+  if (isEquipmentKind(id)) return id;
+  for (const k of EQUIPMENT_KINDS) if (EQUIPMENT[k].upgrade?.id === id) return k;
+  return null;
+}
 
 export const isEquipmentKind = (k: unknown): k is EquipmentKind => typeof k === 'string' && (EQUIPMENT_KINDS as readonly string[]).includes(k);
 

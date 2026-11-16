@@ -89,6 +89,28 @@
 // Prop rules (root CLAUDE.md): every kind is loose and movable (rule 2: pushed, grabbed / carried, shot); the chest is storage that
 // opens (rule 1) with finite, remembered, never-refilled contents (crafted EMPTY; exactly what the player puts in); no loose items are
 // baked into a view (rule 4); the plug sockets are anchored wall fixtures (rule 3).
+//
+// Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane CARGO; user: "Give the truck finite, usable storage compartments and
+// secure physical attachment points for bulky salvage/upgrade cargo. Preserve each item's identity, contents, condition and pose, truck
+// state and sole cargo ownership through transfer, travel, save and re-entry"):
+//  - MOUNTS (mode 'mount'): a section may offer MOUNT POINTS (`mounts`: EquipmentMounts — Surface Run's truck attachment points, set by
+//    world/surface/cargo.ts). [E] with a grabbed device / a carried chest near a FREE point it FITS (its footprint and height within the
+//    point's space; one unit per point; never while the provider refuses — the truck moving) SECURES it: no body in the world, its view
+//    placed at the point's world pose every frame (rigidly: it follows the truck), never plugged, never pushed. [E] aimed at a secured unit
+//    TAKES IT OFF into the hands: a chest straight into them, a device onto free floor in front of the player, grabbed (no room: refused,
+//    it stays secured). A secured unit is the SECTION's, never the train's: not in aboard(), not in the station lane — the provider
+//    records it with its point id and last world pose (store(): this system's teardown and flush(); load(): its build, before the lane).
+//    A record whose point is gone takes another free point it fits, else stands on the floor under that pose (the station's from then
+//    on: written at once); records read while the provider has no points yet wait (MOUNT_WAIT_FRAMES, still recorded as the section's)
+//    for them. One unit, one place.
+//  - CROSSING (world/surface/crossing.ts participants, via world/surface/cargo.ts): crossDepart takes the GRABBED device out of the old
+//    section (its lane rewritten without it; until it arrives it is the TRAIN's record — aboard() — so a save in between keeps it);
+//    crossArrive puts it on free floor in front of the arrival pose in the new section, grabbed again, and writes that lane at once;
+//    crossAbort puts it back exactly where it stood (the old world still live), else into the old section's lane. A chest in the hands
+//    crosses as it always travels: in the hands (the train's). crossRefuse: no room in the destination's lane. A transit nobody
+//    arrived by the first played frame is put down in front of the player (never left in limbo).
+//  - UPGRADE KITS (EquipmentDef.upgrade): consume(uid) takes a kit out for good after its upgrade was fitted (world/surface/cargoKit.ts:
+//    the kit's [E] use; only on a successful install); inParkedCar(uid) is where it may be fitted.
 
 import * as THREE from 'three';
 import type {Game} from '../game';
@@ -105,6 +127,7 @@ import {PLUG, craftSpots, plugInReach} from '../craft/trainFixtures';
 import {cartAboard, cartStraddles} from '../fuel/trainPort';
 import {playerTrainPlacement, trainSpawnLocal, trainToWorld, type TrainPlacement} from '../gen/playerTrain';
 import {setStoreRule, type ItemStack, type StoreRule} from '../items/inventory';
+import {sectionId, type SectionKey} from '../levels/types';
 import {itemDef} from '../items/items';
 import {SPRINT_SPEED, WALK_SPEED} from '../player/player';
 import {TrainLockbox} from '../run/trainLockbox';
@@ -160,6 +183,12 @@ export const EQUIP = {
   },
   /** The model sources are re-read every this many frames (a map read per kind). */
   pollEvery: 30,
+  /**
+   * (lane CARGO) Mount points: a point is in reach within `reach` m (horizontal) of the player and `rise` m above / below the feet; the
+   * nearest to the spot `ahead` m in front of the player is chosen (never one more than `behind` m behind the player); a unit fits when its
+   * footprint diameter and height are within the point's space (+ `fitTol` m).
+   */
+  mount: {reach: 2.6, rise: 2.2, ahead: 1.0, behind: 0.3, fitTol: 0.02},
 } as const;
 
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
@@ -190,6 +219,15 @@ export const EQUIPMENT_TEXT = {
   holding: (the: string) => `<b>Hold [E]</b> Picking up ${the}…`,
   letGo: (the: string) => `<b>[E]</b> Let go of ${the} · <b>[R]</b> Turn it around`,
   putDown: (the: string) => `<b>[E]</b> Put down ${the}`,
+  // (lane CARGO) mounts and crossings
+  secure: (the: string, mount: string) => `<b>[E]</b> Secure ${the} to ${mount}`,
+  secured: (name: string, mount: string) => `${name} secured to ${mount}`,
+  takeOff: (the: string, mount: string) => `<b>[E]</b> Take ${the} off ${mount}`,
+  isSecured: (the: string, mount: string, why: string) => `${cap(the)} is secured to ${mount} · ${why}`,
+  mountFull: (mount: string) => `no free space on ${mount}`,
+  mountNoFit: (the: string, mount: string) => `${the} does not fit on ${mount}`,
+  noTakeDown: 'No room to take it down here',
+  crossFull: (the: string, n: number, max: number) => `Too much equipment left there (${n} of ${max}) — leave ${the} here`,
 } as const;
 
 interface TrainRuntimeLike {
@@ -274,7 +312,46 @@ interface EquipSfx {
   bodyFall?(x: number, y: number, z: number, strength: number): void;
 }
 
-type Mode = 'world' | 'cargo' | 'held';
+type Mode = 'world' | 'cargo' | 'held' | 'mount';
+
+/**
+ * (lane CARGO) One mount point of the current world (world/surface/cargo.ts: the truck's attachment points), fresh every call: the world
+ * pose of its floor centre (a unit's footprint centre stands there; `pitch` / `roll`: the carrier's tilt, default 0), its storey, the
+ * space it offers (w across, d along its forward, h clear height; m) and whether something that is not equipment takes it.
+ */
+export interface EquipmentMountPoint {
+  readonly id: string;
+  readonly x: number; readonly y: number; readonly z: number; readonly yaw: number; readonly level: number;
+  readonly pitch?: number; readonly roll?: number;
+  readonly w: number; readonly d: number; readonly h: number;
+  readonly blocked?: boolean;
+}
+
+/** (lane CARGO) A secured unit as recorded: its point and a station-style unit record (its last world pose + storey). */
+export interface MountedJSON { point: string; unit: EquipmentJSON }
+
+/** (lane CARGO) What offers mount points in a section (Surface Run: the truck). */
+export interface EquipmentMounts {
+  /** 'the truck' (prompts). */
+  readonly label: string;
+  /** Every point of the current world now ([] = none). */
+  points(): readonly EquipmentMountPoint[];
+  /** Why nothing may be secured / taken off now (the truck moving, someone driving): the text, else null. */
+  block(): string | null;
+  /** The units secured in section `key` (read at its build). */
+  load(key: SectionKeyLike): MountedJSON[];
+  /** The units secured in section `key` now (its teardown, flush()); [] = none. */
+  store(key: SectionKeyLike, list: MountedJSON[]): void;
+}
+
+/** (lane CARGO) A unit fits a point: its footprint diameter and its height within the point's space. */
+export function mountFits(def: EquipmentDef, p: Pick<EquipmentMountPoint, 'w' | 'd' | 'h'>): boolean {
+  const T = EQUIP.mount.fitTol;
+  return 2 * def.radius <= Math.min(p.w, p.d) + T && def.height <= p.h + T;
+}
+
+/** (lane CARGO) The same section (memory id). */
+const sameSection = (a: SectionKeyLike, b: SectionKeyLike): boolean => sectionId(a as SectionKey) === sectionId(b as SectionKey);
 type AimPart = 'frame' | 'module' | 'body';
 
 const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
@@ -290,6 +367,8 @@ const CARRY_MODS = Object.freeze({speedMult: EQUIP.carry.speedMult});
 const CARRY_SPRINT_MODS = Object.freeze({speedMult: (EQUIP.carry.speedMult * WALK_SPEED) / SPRINT_SPEED});
 /** Frames a unit spawned without support waits for its column's surface (a lift's car) before it gives up (the fuel carts' rule). */
 const SEAT_FRAMES = 240;
+/** (lane CARGO) Frames mount records wait for the provider's points before their units are put in the world where they were recorded. */
+const MOUNT_WAIT_FRAMES = 240;
 /** Two footprints nearer than their radii by more than this overlap (records are rounded: resting contact is not an overlap). */
 const TOUCH = 0.005;
 
@@ -300,6 +379,8 @@ export class LiveUnit implements EquipmentUnit {
   readonly seq: number;
   mode: Mode = 'world';
   plug: number | null = null;
+  /** (lane CARGO) The mount point it is secured to (mode 'mount'), else null. */
+  mount: string | null = null;
   /** Rounds of a record written before the kind had slots, not yet turned into stacks (TrainEquipmentSystem.adoptLegacyAmmo). */
   legacyAmmo = 0;
   /** EquipmentUnit.display: the selected display mode (kinds with def.displayModes; the record's, else the first). */
@@ -391,7 +472,7 @@ export class LiveUnit implements EquipmentUnit {
 
 /** A readout of one unit (QA). */
 export interface EquipmentReadout {
-  uid: string; kind: EquipmentKind; mode: Mode | 'pending'; owner: 'train' | 'station'; plug: number | null; ammo: number; stacks: number;
+  uid: string; kind: EquipmentKind; mode: Mode | 'pending' | 'transit'; owner: 'train' | 'station' | 'mount'; plug: number | null; ammo: number; stacks: number;
   x: number; y: number; z: number; yaw: number; level: number;
   /** Its display mode ('' for a kind without modes). */
   display: string;
@@ -441,7 +522,18 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   /** Lids in motion. */
   private readonly lids = new Set<LiveUnit>();
   /** QA / tests. */
-  readonly counts = {spawned: 0, captured: 0, released: 0, grabs: 0, letGo: 0, pushes: 0, restores: 0, steps: 0, bullets: 0, carried: 0, seated: 0, poses: 0, plugged: 0, unplugged: 0, pickups: 0, putDowns: 0, refused: 0, crafted: 0, taps: 0, holds: 0, cables: 0, adopted: 0, flips: 0};
+  readonly counts = {spawned: 0, captured: 0, released: 0, grabs: 0, letGo: 0, pushes: 0, restores: 0, steps: 0, bullets: 0, carried: 0, seated: 0, poses: 0, plugged: 0, unplugged: 0, pickups: 0, putDowns: 0, refused: 0, crafted: 0, taps: 0, holds: 0, cables: 0, adopted: 0, flips: 0,
+    // (lane CARGO) mounts, crossings, used-up upgrade kits
+    secured: 0, unmounted: 0, departed: 0, arrived: 0, aborted: 0, consumed: 0};
+  /** (lane CARGO) The section's mount points (Surface Run: the truck; null: none — world/surface/cargo.ts sets it). */
+  mounts: EquipmentMounts | null = null;
+  /**
+   * (lane CARGO) The grabbed device carried across a station <-> district crossing (crossDepart .. crossArrive / crossAbort): its station
+   * record as it stood, the grab's facing, the sections. While here it is the train's (aboard()).
+   */
+  private transit: {rec: EquipmentJSON; flip: boolean; from: SectionKeyLike; to: SectionKeyLike} | null = null;
+  /** (lane CARGO) This section's mount records read at its build while the provider had no points yet (the section's meanwhile). */
+  private mountWait: {recs: MountedJSON[]; frames: number} | null = null;
   /** Live units still holding a legacy record's rounds aside (adoptLegacyAmmo runs while > 0). */
   private legacyUnits = 0;
   private proto: THREE.Group | null = null;
@@ -613,6 +705,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     const spec = this.spec;
     let aboard = this.pending.length, station = 0;
     for (const u of this.list) {
+      if (u.mode === 'mount') continue; // (lane CARGO: secured to the section's mount point — neither the train's nor left lying here)
       if (u.mode !== 'world') { aboard++; continue; }
       const b = u.body, q = this.toLocal(p, b.x, b.y, b.z), r = bodyRadius(b) - EQUIP.ownMargin;
       // (a unit down in the bed / on another storey is not at the car)
@@ -628,6 +721,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   flush(): void {
     if (!this.worldLive) return;
     this.writeLane(this.stationRecords());
+    this.storeMounts(); // (lane CARGO) and the units secured to its mount points
   }
 
   /** Highest item uid in any unit's slots (live in the world, in the hands, waiting as a record): the inventory's counter stays above it. */
@@ -661,11 +755,38 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     const out: EquipmentJSON[] = [];
     const p = this.placement(), over = this.overflow(p);
     for (const u of this.list) {
+      if (u.mode === 'mount') continue; // (lane CARGO: the section's — its mount record)
       if (u.mode === 'world' && (!(p && this.insideCar(u, p)) || over?.has(u))) continue;
       out.push(this.aboardRecord(u, p));
     }
     for (const r of this.pending) out.push(copyEquipment(r));
+    if (this.transit) out.push(this.transitRecord()); // (lane CARGO: a device on its way across a crossing is the train's meanwhile)
     return out.sort(bySeq);
+  }
+
+  /** (lane CARGO) The units secured to the section's mount points as records (their point + last world pose; uid order). */
+  mountRecords(): MountedJSON[] {
+    const out: MountedJSON[] = [];
+    for (const u of this.list) if (u.mode === 'mount' && u.mount !== null) out.push({point: u.mount, unit: this.stationRecord(u)});
+    for (const m of this.mountWait?.recs ?? []) out.push({point: m.point, unit: copyEquipment(m.unit)});
+    return out.sort((a, b) => bySeq(a.unit, b.unit));
+  }
+
+  /** (lane CARGO) The transit device as a train record (the train's spawn point: it lies in no world meanwhile). */
+  private transitRecord(): EquipmentJSON {
+    const r = copyEquipment(this.transit!.rec), spec = this.spec, I = spec.interior, s = trainSpawnLocal(spec), rad = EQUIPMENT[r.kind].radius + 0.01;
+    delete r.level;
+    r.x = r4(Math.max(I.x0 + rad, Math.min(I.x1 - rad, s.x)));
+    r.y = r4(spec.floorY);
+    r.z = r4(Math.max(-I.halfWidth + rad, Math.min(I.halfWidth - rad, s.z)));
+    r.yaw = 0;
+    return r;
+  }
+
+  /** (lane CARGO) Write the units secured in this world to the provider (teardown / flush). */
+  private storeMounts(): void {
+    if (!this.mounts || !this.here || !this.worldLive) return;
+    try { this.mounts.store(this.here.key, this.mountRecords()); } catch (err) { console.warn('train equipment: storing the mounted units failed', err); }
   }
 
   /** The station's units as records (world pose + storey; uid order). */
@@ -686,8 +807,8 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     let n = this.pending.length;
     const inside: LiveUnit[] = [];
     for (const u of this.list) {
-      if (u.mode !== 'world') n++;
-      else if (p && this.insideCar(u, p)) inside.push(u);
+      if (u.mode === 'cargo' || u.mode === 'held') n++; // (lane CARGO: a mounted unit is not the train's)
+      else if (u.mode === 'world' && p && this.insideCar(u, p)) inside.push(u);
     }
     const room = Math.max(0, EQUIPMENT_LIMITS.aboard - n);
     if (inside.length <= room) return null;
@@ -703,8 +824,10 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     const p = this.placement();
     for (let i = this.list.length - 1; i >= 0; i--) {
       const u = this.list[i];
+      if (u.mode === 'mount') continue; // (lane CARGO: secured to the section's mount point — the section's, like a station unit)
       if (u.mode !== 'world' || (p && this.insideCar(u, p))) this.removeAt(i);
     }
+    this.transit = null; // (lane CARGO: the restored record says where a device in transit is)
     this.unswapRideCollision();
     this.captured = null;
     const seen = new Set<string>();
@@ -793,7 +916,21 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     const mine = new Set<string>(), p = this.placement();
     for (const u of this.list) mine.add(u.uid);
     for (const r of this.pending) mine.add(r.uid);
-    let stale = false;
+    if (this.transit) mine.add(this.transit.rec.uid);
+    // (lane CARGO) the units secured to this section's mount points (the truck's) — after the train's, before the lane
+    let stale = false, mountStale = false;
+    this.mountWait = null;
+    if (this.mounts && this.here) {
+      let recs: MountedJSON[] = [];
+      try { recs = this.mounts.load(this.here.key); } catch (err) { console.warn('train equipment: reading the mounted units failed', err); }
+      const fresh = recs.filter(m => !mine.has(m.unit.uid));
+      if (fresh.length !== recs.length) mountStale = true; // (a uid the train carries is the train's)
+      for (const m of fresh) mine.add(m.unit.uid);
+      const pts = fresh.length ? this.mountPoints() : [];
+      // (the provider has no points yet — its carrier not placed: the records wait a few frames, still the section's)
+      if (fresh.length && !pts.length) this.mountWait = {recs: fresh, frames: MOUNT_WAIT_FRAMES};
+      else if (fresh.length) { const r = this.adoptMounts(fresh, pts); stale = r.stale; mountStale ||= r.mountStale; }
+    }
     for (const r of stationEquipmentOf(run?.laneStore?.(STATION_EQUIPMENT_LANE))) {
       if (mine.has(r.uid)) { stale = true; continue; }
       mine.add(r.uid);
@@ -803,6 +940,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     this.spawnPending();
     // a lane that lists a unit the train owns is written again at once: a save taken in this world never has one unit in two places
     if (stale) this.writeLane(this.stationRecords());
+    if (mountStale) this.storeMounts();
     this.reserveUids();
   }
 
@@ -815,6 +953,12 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     this.prompt = null;
     this.setRoll(0);
     const keepCargo = this.riding && !!this.captured; // the riding car keeps its cargo through the teardown (the view is held)
+    // (lane CARGO) the units secured to the section's mount points go to its mount record (no provider: they lie in the station below)
+    if (this.mounts) {
+      this.storeMounts();
+      for (let i = this.list.length - 1; i >= 0; i--) if (this.list[i].mode === 'mount') this.removeAt(i);
+    }
+    this.mountWait = null;
     const p = this.placement(), over = this.overflow(p);
     const station: EquipmentJSON[] = [];
     for (let i = this.list.length - 1; i >= 0; i--) {
@@ -856,6 +1000,9 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   frame(dt: number): void {
     this.stepCarry(dt);
     if (!this.worldLive) { this.endHold(); this.prompt = null; return; }
+    // (lane CARGO) a device carried across a crossing that nobody put down by the first played frame: in front of the player now
+    if (this.transit && this.host.state === 'playing') this.crossArrive(null);
+    if (this.mountWait) this.stepMountWait();
     this.pollLook();
     this.attachFixtures();
     this.followRide(dt);
@@ -925,6 +1072,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
       this.solvePose(u, dt);
       this.draw(u);
     }
+    this.followMounts();
     if (this.lids.size) this.stepLids(dt);
     this.stepPlugs();
     this.setRoll(Math.min(1, fastest / 2.2));
@@ -1197,6 +1345,273 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     return u;
   }
 
+  // ---------------------------------------------------------------------------------------------------------------------
+  // (lane CARGO) Upgrade kits, mounts, crossings — see the header
+
+  /** A unit of the train standing wholly inside the PARKED car of a live world (where an upgrade kit is fitted). */
+  inParkedCar(uid: string): boolean {
+    const u = this.unit(uid), p = this.parkedPlacement();
+    return !!u && !!p && this.worldLive && u.mode === 'world' && this.insideCar(u, p);
+  }
+
+  /**
+   * An upgrade kit standing in the world used up by its fit (world/surface/cargoKit.ts calls it only after the install succeeded): out of
+   * the list for good, its view gone; the station lane is written again at once (it never names it again). False: no such unit there.
+   */
+  consume(uid: string): boolean {
+    const i = this.list.findIndex(u => u.uid === uid && u.mode === 'world');
+    if (i < 0) return false;
+    this.removeAt(i);
+    this.counts.consumed++;
+    if (this.worldLive) this.writeLane(this.stationRecords());
+    return true;
+  }
+
+  /** The provider's points now ([] on none / a failing provider). */
+  private mountPoints(): readonly EquipmentMountPoint[] {
+    try { return this.mounts?.points() ?? []; } catch (err) { console.warn('train equipment: reading the mount points failed', err); return []; }
+  }
+
+  /**
+   * Mount records -> live units: secured to their point (there, free, big enough) — else to the first other free point it fits (still
+   * secured: the record is written again) — else standing on the floor under the recorded pose (the station's from then on). `stale`:
+   * the station lane must be written again; `mountStale`: the mount record.
+   */
+  private adoptMounts(recs: readonly MountedJSON[], pts: readonly EquipmentMountPoint[]): {stale: boolean; mountStale: boolean} {
+    let stale = false, mountStale = false;
+    const taken = this.takenMounts();
+    const free = (u: LiveUnit, q: EquipmentMountPoint) => !q.blocked && !taken.has(q.id) && mountFits(u.def, q);
+    for (const m of recs) {
+      const u = this.spawnUnit(m.unit, m.unit.level ?? 0);
+      if (!u) { mountStale = true; continue; }
+      let pt = pts.find(q => q.id === m.point && free(u, q)) ?? null;
+      if (!pt) { pt = pts.find(q => free(u, q)) ?? null; mountStale = true; }
+      if (pt) { taken.add(pt.id); this.toMount(u, pt, false); continue; }
+      this.toFloorBelow(u);
+      stale = true;
+    }
+    return {stale, mountStale};
+  }
+
+  /** A unit spawned in the air (its mount point gone) stands on the floor under it. */
+  private toFloorBelow(u: LiveUnit): void {
+    const L = this.host.levels, b = u.body;
+    const s = L ? L.supportIn(b.x, b.z, b.y + 0.05, CART.step) ?? L.supportAt(b.x, b.z, b.y + 0.05, CART.step) : null;
+    if (!s) return;
+    b.y = s.floor; b.level = s.level; b.vx = b.vz = 0;
+    u.unseated = 0;
+    u.poseSettled = false;
+    this.solvePose(u, 0, true);
+    this.draw(u, true);
+    this.markLevel(u);
+  }
+
+  /** Mount records waiting for the provider's points: adopted once there are points (or, after MOUNT_WAIT_FRAMES, put in the world). */
+  private stepMountWait(): void {
+    const W = this.mountWait;
+    if (!W) return;
+    const pts = this.mountPoints();
+    if (!pts.length && --W.frames > 0) return;
+    this.mountWait = null;
+    const r = this.adoptMounts(W.recs, pts);
+    if (r.stale) this.writeLane(this.stationRecords());
+    if (r.mountStale) this.storeMounts();
+  }
+
+  /** The mount point ids a secured unit takes now. */
+  private takenMounts(skip: LiveUnit | null = null): Set<string> {
+    const s = new Set<string>();
+    for (const u of this.list) if (u !== skip && u.mode === 'mount' && u.mount !== null) s.add(u.mount);
+    return s;
+  }
+
+  /**
+   * Where the busy unit (grabbed / carried) would be secured: {point} — a free point in reach it fits; {note} — points in reach, but the
+   * provider refuses now / none is free / none fits it (the prompt says which); null — no point in reach (nothing to say).
+   */
+  mountChoice(u: LiveUnit): {point: EquipmentMountPoint} | {note: string} | null {
+    const M = this.mounts;
+    if (!M || !this.worldLive) return null;
+    let pts: readonly EquipmentMountPoint[];
+    try { pts = M.points(); } catch { return null; }
+    if (!pts.length) return null;
+    const P = this.host.player, K = EQUIP.mount, fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), ax = P.x + fx * K.ahead, az = P.z + fz * K.ahead;
+    const taken = this.takenMounts(u);
+    let best: EquipmentMountPoint | null = null, bd = Infinity, near = false, fits = false;
+    for (const pt of pts) {
+      // (in reach, and not behind the player: a device let go with the back to the truck is simply let go)
+      if (Math.hypot(pt.x - P.x, pt.z - P.z) > K.reach || Math.abs(pt.y - P.y) > K.rise || (pt.x - P.x) * fx + (pt.z - P.z) * fz < -K.behind) continue;
+      near = true;
+      if (!mountFits(u.def, pt)) continue;
+      fits = true;
+      if (pt.blocked || taken.has(pt.id)) continue;
+      const d = Math.hypot(pt.x - ax, pt.z - az);
+      if (d < bd) { bd = d; best = pt; }
+    }
+    if (!near) return null;
+    const why = M.block();
+    if (why) return {note: why};
+    if (best) return {point: best};
+    return {note: fits ? EQUIPMENT_TEXT.mountFull(M.label) : EQUIPMENT_TEXT.mountNoFit(u.def.the, M.label)};
+  }
+
+  /** Secure `u` (grabbed / carried / just spawned from a record) to point `pt` (`live`: the player's doing — the toast and the cue). */
+  private toMount(u: LiveUnit, pt: EquipmentMountPoint, live: boolean): void {
+    if (this.grab?.unit === u) { this.grab = null; this.counts.letGo++; }
+    if (this.eHold.target?.unit === u) this.endHold();
+    if (this.held === u) { this.held = null; this.restoreFlags(u); }
+    if (this.aim?.unit === u) { this.aim = null; this.prompt = null; }
+    if (u.plug !== null) this.disconnect(u, null);
+    this.shutLid(u);
+    u.mode = 'mount';
+    u.mount = pt.id;
+    u.awake = false;
+    u.unseated = 0;
+    u.body.vx = u.body.vz = 0;
+    if (u.view.group.parent !== this.group) this.group.add(u.view.group);
+    this.host.atmosphere?.markShadows(u.view.group, false);
+    this.placeAtMount(u, pt, true);
+    this.markLevel(u);
+    if (live) {
+      this.counts.secured++;
+      this.host.hud.toast(EQUIPMENT_TEXT.secured(u.def.name, this.mounts?.label ?? 'it'));
+      this.sfx?.bodyFall?.(pt.x, pt.y + 0.2, pt.z, 0.4);
+    }
+  }
+
+  /** A secured unit's body (its drawn pose) at its point: rigidly, no physics. */
+  private placeAtMount(u: LiveUnit, pt: EquipmentMountPoint, force = false): void {
+    const b = u.body, p = u.pose, pitch = pt.pitch ?? 0, roll = pt.roll ?? 0;
+    if (!force && b.x === pt.x && b.y === pt.y && b.z === pt.z && b.yaw === pt.yaw && p.pitch === pitch && p.roll === roll && b.level === pt.level) return;
+    b.x = pt.x; b.y = pt.y; b.z = pt.z; b.yaw = pt.yaw;
+    p.dy = 0; p.pitch = pitch; p.roll = roll;
+    u.poseSettled = true;
+    if (b.level !== pt.level) { b.level = pt.level; this.markLevel(u); }
+    this.draw(u, force);
+  }
+
+  /** Every secured unit follows its point (one provider read per frame, only while something is secured). */
+  private followMounts(): void {
+    let pts: readonly EquipmentMountPoint[] | null = null;
+    for (const u of this.list) {
+      if (u.mode !== 'mount') continue;
+      try { pts ??= this.mounts?.points() ?? []; } catch { pts = []; }
+      const pt = pts.find(q => q.id === u.mount);
+      if (pt) this.placeAtMount(u, pt); // (the point not there this frame: it keeps its last pose — still the mount's)
+    }
+  }
+
+  /**
+   * [E] aimed at a secured unit: off the mount into the hands — a chest straight into them, a device onto free floor in front of the
+   * player, grabbed. Refused (it stays secured, with the reason): the provider refuses now, the hands are busy, no room for a device.
+   */
+  unmount(u: LiveUnit): boolean {
+    if (u.mode !== 'mount') return false;
+    const why = this.mounts?.block() ?? null;
+    if (why) { this.refuse(why); return false; }
+    if (this.host.player.climbing) { this.refuse(EQUIPMENT_TEXT.ladder); return false; }
+    if (!this.handsFree()) { this.refuse(EQUIPMENT_TEXT.handsFull); return false; }
+    if (u.def.move === 'carry') {
+      const was = u.mount;
+      u.mode = 'world'; // (pickUp takes a unit standing in the world: straight on into the hands)
+      u.mount = null;
+      if (!this.pickUp(u)) { u.mode = 'mount'; u.mount = was; return false; }
+    } else {
+      const s = this.spotFor(u.def, u, 'around');
+      if (!s) { this.refuse(EQUIPMENT_TEXT.noTakeDown); return false; }
+      const P = this.host.player, b = u.body;
+      u.mode = 'world';
+      u.mount = null;
+      b.x = s.x; b.y = s.y; b.z = s.z; b.level = s.level; b.vx = b.vz = 0;
+      b.yaw = grabYaw(b, P, false);
+      u.pose.dy = u.pose.pitch = u.pose.roll = 0;
+      u.poseSettled = false;
+      u.unseated = 0;
+      u.plugCheck = true;
+      this.solvePose(u, 0, true);
+      this.draw(u, true);
+      this.markLevel(u);
+      this.startGrab(u);
+      this.sfx?.pickup?.();
+    }
+    this.counts.unmounted++;
+    return true;
+  }
+
+  /** May the player cross to `to` with what they carry (a grabbed device needs room in that section's lane)? The refusal, else null. */
+  crossRefuse(to: SectionKeyLike): string | null {
+    const u = this.grab?.unit;
+    if (!u) return null;
+    const n = stationEquipmentOf(this.host.run?.laneStore?.(STATION_EQUIPMENT_LANE, to as never)).length;
+    return n + 1 > EQUIPMENT_LIMITS.station ? EQUIPMENT_TEXT.crossFull(u.def.the, n, EQUIPMENT_LIMITS.station) : null;
+  }
+
+  /** The crossing starts (the old world still live): the grabbed device leaves it with the player (no copy left in its lane). */
+  crossDepart(from: SectionKeyLike, to: SectionKeyLike): void {
+    this.endHold();
+    const g = this.grab;
+    if (!g || !this.worldLive || this.transit) return; // (a chest in the hands simply stays in them: it is the train's throughout)
+    const u = g.unit, rec = this.stationRecord(u);
+    this.grab = null;
+    this.counts.letGo++;
+    this.removeAt(this.list.indexOf(u));
+    this.transit = {rec, flip: g.flip, from: {...from}, to: {...to}};
+    this.counts.departed++;
+    this.writeLane(this.stationRecords());
+  }
+
+  /**
+   * The new section is built (`to`; null = whatever is live — the first played frame's safety): the device in transit stands on free
+   * floor in front of the player, grabbed again, and the section's lane lists it at once. Nothing in transit / no world yet: no-op.
+   */
+  crossArrive(to: SectionKeyLike | null): void {
+    const T = this.transit;
+    if (!T || !this.worldLive || !this.host.levels) return;
+    void to;
+    const def = EQUIPMENT[T.rec.kind], s = this.spotFor(def, null, 'anywhere');
+    if (!s) return;
+    this.transit = null;
+    const P = this.host.player, rec = copyEquipment(T.rec);
+    rec.x = s.x; rec.y = s.y; rec.z = s.z; rec.level = s.level;
+    rec.yaw = grabYaw({x: s.x, z: s.z}, P, T.flip);
+    const u = this.spawnUnit(rec, s.level);
+    if (!u) return; // (its uid is live already: a restore won)
+    u.quietPlug = false;
+    if (P.alive && !this.grab && !this.held) this.startGrab(u, T.flip);
+    this.counts.arrived++;
+    this.writeLane(this.stationRecords());
+  }
+
+  /**
+   * The crossing failed after crossDepart: the device goes back exactly where it stood — into the old world while it is still live (grabbed
+   * again), else into the old section's lane (full: it waits as the train's, never lost).
+   */
+  crossAbort(from: SectionKeyLike): void {
+    const T = this.transit;
+    if (!T) return;
+    this.transit = null;
+    this.counts.aborted++;
+    const rec = copyEquipment(T.rec);
+    if (this.worldLive && this.here && sameSection(this.here.key, from)) {
+      const u = this.spawnUnit(rec, rec.level ?? 0);
+      if (u && this.host.player.alive && !this.grab && !this.held) this.startGrab(u, T.flip);
+      this.writeLane(this.stationRecords());
+      return;
+    }
+    const run = this.host.run, list = stationEquipmentOf(run?.laneStore?.(STATION_EQUIPMENT_LANE, from as never));
+    if (run?.setLaneStore && list.length < EQUIPMENT_LIMITS.station && !list.some(r => r.uid === rec.uid)) {
+      run.setLaneStore(STATION_EQUIPMENT_LANE, {v: 1, here: [...list, rec].sort(bySeq)} satisfies StationEquipmentJSON, from as never);
+      return;
+    }
+    this.transit = T; // (no room there: it stays the train's record until a world takes it)
+    this.crossArrive(null);
+  }
+
+  /** (QA / tests) The device in transit (its station record), or null. */
+  get inTransit(): EquipmentJSON | null {
+    return this.transit ? copyEquipment(this.transit.rec) : null;
+  }
+
   private removeAt(i: number): void {
     if (i < 0) return;
     const u = this.list[i];
@@ -1213,6 +1628,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
 
   /** The unit is the TRAIN's now: riding cargo, in the hands, or a world unit wholly inside the car at its placement. */
   private isTrainOwned(u: LiveUnit): boolean {
+    if (u.mode === 'mount') return false; // (lane CARGO: the section's — its mount record)
     if (u.mode !== 'world') return true;
     const p = this.placement();
     return !!p && this.insideCar(u, p);
@@ -1415,7 +1831,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     const o = this.shot.set(point.x - dir.x * wh.t, point.y - dir.y * wh.t, point.z - dir.z * wh.t);
     let best: LiveUnit | null = null, bt = wh.t - 0.01;
     for (const u of this.list) {
-      if (u.mode !== 'world') continue;
+      if (u.mode !== 'world' && u.mode !== 'mount') continue; // (lane CARGO: a secured unit stops the round too — never shoved)
       const b = u.body;
       const t = u.def.move === 'dolly'
         ? rayCylinder(o, dir, b.x, b.z, bodyRadius(b) * 0.85, b.y + 0.02, b.y + CART_LOOK.height, bt)
@@ -1425,7 +1841,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     if (!best) return false;
     const b = best.body, hx = o.x + dir.x * bt, hy = o.y + dir.y * bt, hz = o.z + dir.z * bt;
     const hl = Math.hypot(dir.x, dir.z);
-    if (hl > 1e-6) {
+    if (hl > 1e-6 && best.mode === 'world') {
       const dv = Math.min(EQUIP.bulletMaxDv, (Math.max(0, damage) * EQUIP.bulletImpulse) / bodyMass(b));
       b.vx += (dir.x / hl) * dv;
       b.vz += (dir.z / hl) * dv;
@@ -1443,13 +1859,13 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   // ---------------------------------------------------------------------------------------------------------------------
   // Grab / carry / aim / prompt / E
 
-  private startGrab(u: LiveUnit): void {
+  private startGrab(u: LiveUnit, flip?: boolean): void {
     if (u.mode !== 'world') return;
     if (u.plug !== null) this.disconnect(u, EQUIPMENT_TEXT.unplugged(u.def.name));
     // it keeps the way it stands: turned round (front toward the player) when that is the nearer of the two — a unit set down turned
-    // round and grabbed again from the same side does not swing round by itself
+    // round and grabbed again from the same side does not swing round by itself ((lane CARGO) `flip`: a crossing's own grab, exactly)
     const off = wrapYaw(u.body.yaw - grabYaw(u.body, this.host.player, false));
-    this.grab = {unit: u, lag: 0, flip: Math.abs(off) > Math.PI / 2};
+    this.grab = {unit: u, lag: 0, flip: flip ?? Math.abs(off) > Math.PI / 2};
     u.awake = true;
     this.counts.grabs++;
   }
@@ -1526,9 +1942,16 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
    * there clear, the footprint free. `anywhere` (death): then round the player, then on the player's own spot.
    */
   private putSpot(u: LiveUnit, anywhere: boolean): {x: number; y: number; z: number; level: number} | null {
+    return this.spotFor(u.def, u, anywhere ? 'anywhere' : 'front');
+  }
+
+  /**
+   * putSpot for any unit of `def` (`u`: the unit itself, when live) — (lane CARGO) also a device taken off a mount ('around': in front,
+   * then round the player — the player faces the truck — never on the player's own spot) and one arriving across a crossing ('anywhere').
+   */
+  private spotFor(def: EquipmentDef, u: LiveUnit | null, mode: 'front' | 'around' | 'anywhere'): {x: number; y: number; z: number; level: number} | null {
     const h = this.host, L = h.levels, P = h.player;
     if (!L) return null;
-    const def = u.def;
     const tryAt = (ax: number, az: number, dist: number, player: boolean): {x: number; y: number; z: number; level: number} | null => {
       const x = P.x + ax * dist, z = P.z + az * dist;
       const f = cartFloorAt(L, x, z, P.y);
@@ -1542,12 +1965,12 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     };
     const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw);
     for (const d of EQUIP.carry.putAt) { const s = tryAt(fx, fz, d, true); if (s) return s; }
-    if (!anywhere) return null;
+    if (mode === 'front') return null;
     for (const d of EQUIP.carry.putAt) for (let k = 1; k < 8; k++) {
       const a = P.yaw + (k / 8) * Math.PI * 2, s = tryAt(-Math.sin(a), -Math.cos(a), d, true);
       if (s) return s;
     }
-    return tryAt(0, 0, 0, false);
+    return mode === 'anywhere' ? tryAt(0, 0, 0, false) : null;
   }
 
   /** The carried chest becomes a world unit standing at (x, y, z), its front toward the player. */
@@ -1607,6 +2030,12 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
 
   /** E while a unit is grabbed / carried: always that unit's (let go / put down) — except the driving console with a chest in the hands. */
   private onBusyInteract(): boolean {
+    // (lane CARGO) near a free mount point it fits (the truck's): E secures the grabbed device / the carried chest there instead
+    const busy = this.grab?.unit ?? this.held;
+    if (busy && this.host.state === 'playing' && this.host.player.alive && !this.riding && !(this.held && (this.rt?.consoleAimed || this.rt?.saveAimed))) {
+      const m = this.mountChoice(busy);
+      if (m && 'point' in m) { this.toMount(busy, m.point, true); return true; }
+    }
     if (this.grab) { this.letGo('user'); return true; }
     if (!this.held) return false;
     if (this.host.state !== 'playing') return true;
@@ -1620,9 +2049,15 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   private busyPrompt(): string | null {
     const h = this.host;
     if (h.state !== 'playing' || !h.player.alive) return null;
-    if (this.grab) return EQUIPMENT_TEXT.letGo(this.grab.unit.def.the);
+    if (this.grab) {
+      const u = this.grab.unit, m = this.mountChoice(u);
+      if (m && 'point' in m) return EQUIPMENT_TEXT.secure(u.def.the, this.mounts!.label);
+      return EQUIPMENT_TEXT.letGo(u.def.the) + (m ? ` · ${m.note}` : '');
+    }
     if (!this.held || this.riding || this.rt?.consoleAimed || this.rt?.saveAimed) return null;
-    return EQUIPMENT_TEXT.putDown(this.held.def.the);
+    const m = this.mountChoice(this.held);
+    if (m && 'point' in m) return EQUIPMENT_TEXT.secure(this.held.def.the, this.mounts!.label);
+    return EQUIPMENT_TEXT.putDown(this.held.def.the) + (m ? ` · ${m.note}` : '');
   }
 
   /** [E] pressed on the aimed unit: the hold gesture BEGINS (the header: AIM / E) — nothing happens on the press. Only when a unit is the aim target. */
@@ -1632,6 +2067,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     if (this.eHold.pending) return true;
     const aim = this.pickAim();
     if (!aim) return false;
+    if (aim.unit.mode === 'mount') { this.unmount(aim.unit); return true; } // (lane CARGO: off the mount at once — no hold gesture)
     this.eHold.begin({unit: aim.unit, part: aim.part}, h.input?.clears ?? 0, foreignOwners(h.inputOwners, this.owner));
     return true;
   }
@@ -1712,7 +2148,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     const o = this.eye, d = this.dir, K = CART_LOOK, face = FACE;
     let best: {unit: LiveUnit; part: AimPart; t: number} | null = null;
     for (const u of this.list) {
-      if (u.mode !== 'world') continue;
+      if (u.mode !== 'world' && u.mode !== 'mount') continue; // (lane CARGO: a secured unit is aimed at to take it off)
       const b = u.body;
       if (Math.hypot(b.x - o.x, b.z - o.z) > EQUIP.useReach + 0.8) continue;
       let part: AimPart, t: number;
@@ -1782,6 +2218,10 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
    * alone (a device: + its plug note).
    */
   private promptFor(u: LiveUnit): string {
+    if (u.mode === 'mount') { // (lane CARGO) a secured unit: take it off (or why not now)
+      const label = this.mounts?.label ?? 'it', why = this.mounts?.block() ?? null;
+      return why ? EQUIPMENT_TEXT.isSecured(u.def.the, label, why) : EQUIPMENT_TEXT.takeOff(u.def.the, label);
+    }
     const use = this.uses[u.kind], def = u.def, carry = def.move === 'carry';
     let tap: string | null = null;
     if (use) {
@@ -1830,7 +2270,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   }
 
   private markLevel(u: LiveUnit): void {
-    const level = u.mode === 'world' ? u.body.level : this.rt?.train?.placement.level ?? u.body.level;
+    const level = u.mode === 'world' || u.mode === 'mount' ? u.body.level : this.rt?.train?.placement.level ?? u.body.level;
     u.markedLevel = u.body.level;
     u.view.group.traverse(o => { if ((o as THREE.Mesh).isMesh) o.userData.level = level; });
   }
@@ -1838,7 +2278,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   /** The unit is drawn off its upright stance (steps, a slope, a threshold): aim uses the drawn frame. */
   private tilted(u: LiveUnit): boolean {
     const p = u.pose;
-    return u.mode === 'world' && (Math.abs(p.pitch) > 0.01 || Math.abs(p.roll) > 0.01 || Math.abs(p.dy) > 0.01);
+    return (u.mode === 'world' || u.mode === 'mount') && (Math.abs(p.pitch) > 0.01 || Math.abs(p.roll) > 0.01 || Math.abs(p.dy) > 0.01);
   }
 
   /** The drawn pose follows the rest pose under the footprint (the fuel carts' rule): solved only when the body moved / still easing. */
@@ -1890,7 +2330,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   poseOf(u: LiveUnit): {x: number; y: number; z: number; yaw: number; level: number} | null {
     if (!this.worldLive || u.mode === 'held') return null;
     const b = u.body;
-    if (u.mode === 'world') return {x: b.x, y: b.y, z: b.z, yaw: b.yaw, level: b.level};
+    if (u.mode === 'world' || u.mode === 'mount') return {x: b.x, y: b.y, z: b.z, yaw: b.yaw, level: b.level};
     const rt = this.rt, p = rt?.train?.placement ?? null, ride = this.ride;
     const w = rt?.carPoint?.(u.local.x, u.local.y, u.local.z) ?? (p ? trainToWorld(p, u.local.x, u.local.y, u.local.z) : null);
     if (!w) return null;
@@ -1929,11 +2369,14 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     const out: EquipmentReadout[] = [];
     for (const u of this.units()) {
       const w = this.poseOf(u) ?? {x: u.body.x, y: u.body.y, z: u.body.z, yaw: u.body.yaw, level: u.body.level};
-      out.push({uid: u.uid, kind: u.kind, mode: u.mode, owner: this.isTrainOwned(u) ? 'train' : 'station', plug: u.plug, ammo: u.ammo, stacks: u.store?.used ?? 0,
+      out.push({uid: u.uid, kind: u.kind, mode: u.mode, owner: u.mode === 'mount' ? 'mount' : this.isTrainOwned(u) ? 'train' : 'station', plug: u.plug, ammo: u.ammo, stacks: u.store?.used ?? 0,
         x: r4(w.x), y: r4(w.y), z: r4(w.z), yaw: r4(w.yaw), level: w.level, display: u.display});
     }
     for (const r of this.pending) out.push({uid: r.uid, kind: r.kind, mode: 'pending', owner: 'train', plug: r.plug ?? null, ammo: equipmentRounds(r), stacks: (r.slots ?? []).filter(Boolean).length, x: r.x, y: r.y, z: r.z, yaw: r.yaw, level: -1,
       display: equipmentDisplay(EQUIPMENT[r.kind], r.display)});
+    const T = this.transit; // (lane CARGO) a device on its way across a crossing (the train's meanwhile)
+    if (T) out.push({uid: T.rec.uid, kind: T.rec.kind, mode: 'transit', owner: 'train', plug: null, ammo: equipmentRounds(T.rec), stacks: (T.rec.slots ?? []).filter(Boolean).length,
+      x: T.rec.x, y: T.rec.y, z: T.rec.z, yaw: T.rec.yaw, level: T.rec.level ?? -1, display: equipmentDisplay(EQUIPMENT[T.rec.kind], T.rec.display)});
     return out;
   }
 

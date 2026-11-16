@@ -21,7 +21,7 @@ import {PLAYER_TRAIN_SPEC as SPEC} from '../src/world/playerTrainSpec';
 import {CART_LOOK} from '../src/world/fuelCartModel';
 import type {PlayerTrainRuntime} from '../src/world/playerTrain';
 import {EQUIP, EQUIPMENT_TEXT, trainEquipmentQaApi} from '../src/world/trainEquipment';
-import {equipmentMaterials, equipmentModelKey} from '../src/world/trainEquipmentModel';
+import {KIT_LOOKS, equipmentMaterials, equipmentModelKey} from '../src/world/trainEquipmentModel';
 import {DT, run, teardown} from './helpers/fuelCartsHost';
 import {aboardRec, equipStation, loadAboard, localOf} from './helpers/trainEquipmentHost';
 
@@ -205,8 +205,11 @@ describe('train equipment: the warm-up pool', () => {
       const mod = u.view.group.getObjectByName(`train-equipment-module:${u.kind}`)!;
       expect(mod, u.kind).toBeTruthy();
       // on the hand truck's nose plate at the cooked mount offset (read from the generated constants)
-      const M = (TRAIN_MODULE_MEASURED as Readonly<Record<string, {mountZ: number} | undefined>>)[u.kind]!;
-      expect([mod.position.x, mod.position.y, mod.position.z]).toEqual([0, CART_LOOK.plateTop, M.mountZ]);
+      // (re-pin, task studio-surface-run-opus-rebuild-20261116-020827-01, lane CARGO: an upgrade kit — kind 'armor-kit' — has no cooked
+      // module of its own; its plate stack stands at the kit look's back face, KIT_LOOKS, on the same nose plate)
+      const mountZ = u.def.upgrade ? KIT_LOOKS[u.def.upgrade.id].back
+        : (TRAIN_MODULE_MEASURED as Readonly<Record<string, {mountZ: number} | undefined>>)[u.kind]!.mountZ;
+      expect([mod.position.x, mod.position.y, mod.position.z]).toEqual([0, CART_LOOK.plateTop, mountZ]);
       expect(materialsOf([u.view.group]).has(cooked.get(u.kind)!)).toBe(true);
       expect(materialsOf([u.view.group]).has(S.standIn)).toBe(false);
     }

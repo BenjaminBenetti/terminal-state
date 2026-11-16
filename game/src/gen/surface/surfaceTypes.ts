@@ -49,7 +49,10 @@ export interface SurfaceBlock {
   /** Block column / row in the 8 x 8 frame (0..7). */
   col: number;
   row: number;
+  /** Kerb rect (the raised block: its sidewalks included). */
   rect: SRect;
+  /** (lane GEN, optional) Property lines (the kerb rect minus the sidewalks). */
+  lot?: SRect;
   /** Inside the explorable core (about 4 x 4 blocks): enterable destinations live here. */
   core: boolean;
   /** Building ids on the block. */
@@ -78,6 +81,8 @@ export interface SurfaceEntrance {
   door: 'closed' | 'open' | 'smashed' | 'boarded';
   /** The doorway's open cells on the building side (gas source cells while the opening is open: grid cell indices of `level`). */
   cells: number[];
+  /** (lane GEN) Its layout.doors index (a boarded doorway has none: its cells stay SOLID). */
+  doorIndex?: number;
 }
 
 /** A run of facade glazing on one wall plane of one storey (the office tower's span model, gen/stationTypes.ts OfficeWindowSpan). */
@@ -125,7 +130,50 @@ export interface SurfaceBuilding {
   entrances: SurfaceEntrance[];
   /** Ids of its window spans in SurfaceInfo.windows. */
   windows: string[];
+  // --- (lane GEN, optional) the generator's shape record for LOOK / the map ---
+  /** Floor-to-floor height of every drawn storey, bottom up (m; the street storey first), and the parapet above the roof slab. */
+  storeyHeights?: number[];
+  parapet?: number;
+  /** Absolute y of the roof surface (the top of the last storey; `height` adds the parapet). */
+  roofY?: number;
+  /** Its main street side and the facade sides that face open ground (the others are party walls against a neighbour). */
+  frontage?: Side;
+  exposed?: Side[];
+  /** A collapsed corner of a standing shell (LOOK draws the broken corner; debris below it is in SurfaceInfo.rubble). */
+  collapse?: {corner: 'NW' | 'NE' | 'SW' | 'SE'; rect: SRect};
+  /** The host's own building (the portal: subway headhouse / host tower / host mall) or the checkpoint's command tent. */
+  host?: 'subway' | 'office' | 'mall' | 'tent' | 'headhouse';
 }
+
+/** (lane GEN) A street-level debris mound: its cells are FLOOR raised above their own ground (ring +edge, crown +crown, m). */
+export interface SurfaceRubble extends SRect {
+  edge: number;
+  crown: number;
+  /** 'pile-up' = a blocked span's mound across a street, 'spill' = debris from a collapsed building, 'corner' = below a collapsed corner. */
+  kind: 'pile-up' | 'spill' | 'corner';
+  street?: number;
+  building?: number;
+}
+
+/** (lane GEN) An open lot of a block (plaza, park, parking, yards, service lanes, vacant / rubble ground, the checkpoint compound). */
+export interface SurfaceLot {
+  id: number;
+  block: number;
+  rect: SRect;
+  use: 'plaza' | 'park' | 'parking' | 'yard' | 'loading' | 'vacant' | 'rubble' | 'compound' | 'forecourt' | 'gangway' | 'alley' | 'rail' | 'court';
+  /** Ground height (m): 0 = asphalt at road grade, 0.15 = raised like the sidewalks. */
+  grade: number;
+  /** Its outdoor area id. */
+  area: number;
+  label: string;
+  /** Kerb-cut sides (driveways through the sidewalk). */
+  driveways: Side[];
+  /** Laid out on the diagonal (paving / paths). */
+  diagonal?: boolean;
+}
+
+/** (lane GEN) A street crossing (a carriageway rect at grade) and the streets meeting there. */
+export interface SurfaceJunction { id: number; rect: SRect; streets: number[]; area: number; signals: boolean }
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Places the runtime lanes need
@@ -219,6 +267,17 @@ export interface SurfaceInfo {
   notes: SurfaceNote[];
   /** Storey labels per layout level ('Street', 'Upper floor'). */
   storeys: {level: number; label: string; y: number}[];
+  // --- (lane GEN, optional) the generator's ground record for LOOK / the map ---
+  /** Open lots, street crossings, debris mounds. */
+  lots?: SurfaceLot[];
+  junctions?: SurfaceJunction[];
+  rubble?: SurfaceRubble[];
+  /** The depot's rail spur: corridor rects at grade from the cordon to the shed, its outward direction and the track's centre line. */
+  rail?: {rects: SRect[]; dir: Side; centre: number};
+  /** The abandoned military roadblock (a barrier line with a vehicle gap) on an avenue. */
+  roadblock?: SRect;
+  /** The cordon: the quarantine wall band around the playable extent (outer rect; extent = its inner edge). */
+  cordon?: SRect;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -236,4 +295,18 @@ export interface SurfaceAccessInfo {
   areas: number[];
   /** Short prompt name of the outside ("the street"). */
   label: string;
+  // ---- lane ACCESS (optional, additive; written by gen/surface/access*.ts, read by world/surface/access*.ts) ----
+  /**
+   * The closed door the access ends at, when the access draws its own (world/surface/accessView.ts): the street door at the top of
+   * the Subway stairwell, the makeshift door fitted into the Office lobby's boarded street doors. Centre of the leaf's bottom edge on
+   * the wall face (absolute y), `yaw` = the direction the door faces (its front normal (sin yaw, cos yaw) points INTO the station),
+   * `w` / `h` = the opening. Absent for the Mall (its street door set is the mall's own, world/mallStreetExit.ts).
+   */
+  door?: {x: number; z: number; y: number; yaw: number; w: number; h: number; level: number};
+  /** Mall: the id of the street exit (layout.mall.exits) that is usable: drawn without its lock (chain, notices, board, lit sign). */
+  exit?: string;
+  /** Subway: the exit hall (layout area id) the stairwell climbs from, the climb's rise (m) and the street named on its signs. */
+  hall?: number;
+  rise?: number;
+  street?: string;
 }
