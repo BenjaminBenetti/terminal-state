@@ -21,8 +21,9 @@ constants (`enemies/families.html`, section Screacher).
 |---|---|---|
 | Health | 600 hp | `SCREACHER_STATS.hp` |
 | Claw damage per hit | 16 hp | `SCREACHER_STATS.attackDamage` |
-| Attack range (centre to centre) | 1.55 m | `SCREACHER_STATS.attackRange` |
-| The swing connects within | 1.95 m | `SCREACHER_STATS.hitRange` |
+| Attack range (centre to centre) | 1.8 m | `SCREACHER_STATS.attackRange` |
+| The swing connects within (straight ahead) | 2.2 m | `SCREACHER_STATS.hitRange` |
+| Hand reach at the hit frame, straight ahead | 1.45 m | `SCREACHER_ASSET.reachM` |
 | Swing length / the hand lands at / recovery | 1 s / 0.42 s / 0.6 s | `SCREACHER_STATS.attackDuration`, `SCREACHER_STATS.attackImpact`, `SCREACHER_STATS.attackCooldown` |
 | Sight range | 0 m (blind) | `SCREACHER_STATS.sightRange` |
 | Collider radius | 0.34 m | `SCREACHER_STATS.radius` |
@@ -40,7 +41,7 @@ changed).
   nothing. No hit on it is ever a head hit, so no head multiplier applies.
 - **No ladders.** Its path requests ignore ladder links. It drops into a track bed like every enemy.
 - **Ordinary melee only.** One long-arm rake per attack. No ranged attack, no summon, no stun. Its hit on the player is a standing
-  humanoid melee hit (attacker `screacher`).
+  humanoid melee hit (attacker `screacher`). How far it reaches: "The swing" below.
 - **Melee knockback mass** 0.9 of a zombie's (`MELEE_MASS.screacher`, `game/src/combat/meleeImpact.ts`).
 
 ## One enemy, four bodies
@@ -81,6 +82,29 @@ over somewhere else, sends it there.
 
 It has no sight cone, no eye ray and no light lure. Standing in front of it, shining the flashlight on it or throwing a flare does
 nothing by itself. The lure grenade's scent makes no sound, so it never draws a Screacher either.
+
+### The swing
+
+<!-- Task studio-screacher-reach-swing-20261116-053933-01. User: it "underuses its long arms and should reach a bit farther so it
+is more threatening". -->
+
+The Attack is a wide, long-arm rake on a one-second clip. The right arm is drawn out and back, whips round nearly straight at the
+side while the left foot steps into a lunge, is at full length in front at chest height when the hand lands (0.42 s), and follows
+through across the front to the left. The step is part of the clip, so the body itself does not travel during the swing. The claw
+reaches farthest straight ahead. Off to the side it is granted only what the arm visibly sweeps around the hit frame: the extra
+reach tapers away, and from the taper's edge to the edge of the swing's cone the previous reach still holds.
+
+| What | Value | Constant |
+|---|---|---|
+| Hand reach straight ahead (from the feet) | 1.45 m | `SCREACHER_REACH.frontM` |
+| Hand reach off to the side (the previous reach, everywhere before 2026-11-16) | 1.2 m | `SCREACHER_REACH.previousM` |
+| The extra reach is gone this far either side of straight ahead | 0.6 rad | `SCREACHER_REACH.taperA` |
+| The swing's cone, either side | 1.2 rad | `SCREACHER_REACH.coneA` |
+| Step-away slack added to the reach and the player's 0.3 m body radius | 0.45 m | `SCREACHER_REACH.slackM` |
+
+So a player straight ahead is hit up to 2.2 m from its centre, and one more than 0.6 rad (about 34°) to the side up to 1.95 m, as
+before. The hit still needs a clear line to the player and the same storey. `game/tests/screacher-reach.test.ts` checks the four
+bodies' swept hands against this profile and checks that the frame which lands the claw shows the hand at full reach.
 
 | Sense | Value | Constant |
 |---|---|---|

@@ -91,9 +91,9 @@ describe('Screacher GLBs vs the asset contract (all four variants)', () => {
       expect(SCREACHER_ASSET.screamCueTime).toBeCloseTo(e.screamCueTime!, 3);
       expect(SCREACHER_ASSET.screamCueTime).toBeCloseTo(e.clips!.Scream.cueTime!, 3);
       expect(clip('Scream').duration).toBeCloseTo(SCREACHER_ASSET.screamDuration, 2);
-      // the striking hand reaches about the contract's 1.2 m in every body (the gameplay uses ONE reach for all four)
-      expect(e.reachM, `${v}: reach`).toBeGreaterThanOrEqual(1.1);
-      expect(e.reachM).toBeLessThanOrEqual(1.3);
+      // the striking hand reaches the contract's 1.45 m in every body (the gameplay uses ONE reach for all four; task
+      // studio-screacher-reach-swing-20261116-053933-01: was 1.2)
+      expect(Math.abs(e.reachM! - SCREACHER_ASSET.reachM), `${v}: reach ${e.reachM}`).toBeLessThan(0.02);
       // per-variant measured hit radii: a lanky body
       expect(e.hitRadii!.torso!).toBeGreaterThan(0.1);
       expect(e.hitRadii!.torso!).toBeLessThan(0.32);

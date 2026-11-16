@@ -5,6 +5,16 @@
  "task": "studio-screacher-production-20261110-221858-01",
  "lane": "RIG",
  "date": "2026-11-10",
+ "revisions": [
+  {
+   "task": "studio-screacher-reach-swing-20261116-053933-01",
+   "date": "2026-11-16",
+   "clips": [
+    "Attack"
+   ],
+   "change": "the Attack is re-authored to use the long arms: a wider wind-up, the arm whipped round nearly straight at the side, a stepping lunge onto the left foot with the chest turned further, the hand at full length in front at the unchanged 0.42 s hit frame (contract reach 1.2 -> 1.45 m), then a follow-through across the front to the left; duration and hit time unchanged; the other six clips are unchanged"
+  }
+ ],
  "generatedBy": "tools/asset-pipeline/enemy/build-screacher.mjs",
  "family": {
   "archetype": "screacher",
@@ -160,8 +170,8 @@
  "outputs": {
   "glb": {
    "path": "game/public/assets/models/enemy-screacher-sc03.glb",
-   "bytes": 1941068,
-   "sha256": "a8f0894e9e647ebf83ac8a92c79d6bae53c77ad183c9f03e6a02eddd3d4686d6",
+   "bytes": 1941072,
+   "sha256": "5f79b330b9c8c5e662a3b8559cf51b460b26fac3743e509dc408b40457c6918e",
    "format": "glTF 2.0 binary; KHR_mesh_quantization (NORMAL int8 normalized; required); JPEG textures; JOINTS_0 u8 / WEIGHTS_0 normalized u8; one SkinnedMesh node"
   },
   "textures": {
@@ -1646,7 +1656,7 @@
    "attackDuration": 1,
    "attackImpact": 0.42,
    "attackHitTime": 0.42,
-   "attackReachM": 1.2,
+   "attackReachM": 1.451,
    "walkGroundSpeed": 1.25,
    "runGroundSpeed": 3.9,
    "screamDuration": 1.6,
@@ -1654,19 +1664,19 @@
    "note": "reachM = horizontal root -> right hand tip at the hit frame, actor scale 1 (the hit pose is held over the two 30 fps frames round impactTime); locomotion clips are authored in place for groundSpeed at timeScale 1; Scream returns to the Idle frame-0 pose with the feet planted throughout"
   },
   "attackSolve": {
-   "lunge": 0.0937,
-   "reachAtHold": 1.2,
-   "legReach": 0.9047,
+   "lunge": 0.2391,
+   "reachAtHold": 1.45,
+   "legReach": 0.8985,
    "range": [
     0.02,
     0.75
    ],
    "reachAtRangeEnds": [
-    1.1056,
-    1.9917
+    1.1755,
+    2.0468
    ],
    "evals": 26,
-   "target": 1.2,
+   "target": 1.45,
    "method": "bisection on the pelvis forward travel of the hit keys (lib/screacher-clips.mjs attackKeys `lunge`) until the CPU-skinned right hand tip is the contract reach from the root in the held hit pose"
   },
   "gait": {
@@ -1857,7 +1867,7 @@
    "Attack": {
     "frames": 31,
     "minY": 0,
-    "atT": 0.03333,
+    "atT": 0.06667,
     "framesBelowMinus1cm": 0,
     "maxLegReach": 0.976,
     "feet": {
@@ -2078,24 +2088,24 @@
   "attack": {
    "hit": {
     "t": 0.42,
-    "reachM": 1.2,
+    "reachM": 1.451,
     "handTipR": [
-     0.089,
-     1.31,
-     1.197
+     0.064,
+     1.387,
+     1.449
     ],
-    "reachL": 0.694,
+    "reachL": 0.657,
     "handTipL": [
-     0.288,
-     1.132,
+     0.186,
+     1.319,
      -0.631
     ],
-    "forwardZ": 1.197,
-    "heightY": 1.31
+    "forwardZ": 1.449,
+    "heightY": 1.387
    },
    "maxReachR": {
-    "m": 1.201,
-    "t": 0.43333
+    "m": 1.451,
+    "t": 0.4
    },
    "handVertices": {
     "L": 654,
@@ -2114,263 +2124,263 @@
     {
      "t": 0.03333,
      "R": [
-      -0.667,
-      1.176,
-      -0.029
+      -0.649,
+      1.125,
+      -0.2
      ],
-     "reachR": 0.667
+     "reachR": 0.679
     },
     {
      "t": 0.06667,
      "R": [
-      -0.865,
-      1.456,
-      -0.365
+      -0.747,
+      1.337,
+      -0.659
      ],
-     "reachR": 0.939
+     "reachR": 0.996
     },
     {
      "t": 0.1,
      "R": [
-      -0.818,
-      1.698,
-      -0.624
+      -0.627,
+      1.567,
+      -0.961
      ],
-     "reachR": 1.029
+     "reachR": 1.148
     },
     {
      "t": 0.13333,
      "R": [
-      -0.725,
-      1.843,
-      -0.735
+      -0.492,
+      1.682,
+      -1.094
      ],
-     "reachR": 1.033
+     "reachR": 1.199
     },
     {
      "t": 0.16667,
      "R": [
-      -0.683,
-      1.89,
-      -0.766
+      -0.435,
+      1.722,
+      -1.132
      ],
-     "reachR": 1.026
+     "reachR": 1.212
     },
     {
      "t": 0.2,
      "R": [
-      -0.666,
-      1.893,
-      -0.779
+      -0.397,
+      1.716,
+      -1.156
      ],
-     "reachR": 1.025
+     "reachR": 1.222
     },
     {
      "t": 0.23333,
      "R": [
-      -0.628,
-      1.898,
-      -0.807
+      -0.334,
+      1.709,
+      -1.197
      ],
-     "reachR": 1.023
+     "reachR": 1.242
     },
     {
      "t": 0.26667,
      "R": [
-      -0.604,
-      1.901,
-      -0.823
+      -0.276,
+      1.703,
+      -1.224
      ],
-     "reachR": 1.021
+     "reachR": 1.255
     },
     {
      "t": 0.3,
      "R": [
-      -0.733,
-      1.93,
-      -0.695
+      -0.481,
+      1.722,
+      -1.121
      ],
-     "reachR": 1.01
+     "reachR": 1.22
     },
     {
      "t": 0.33333,
      "R": [
-      -0.972,
-      2.033,
-      0.025
+      -1.062,
+      1.773,
+      -0.32
      ],
-     "reachR": 0.972
+     "reachR": 1.109
     },
     {
      "t": 0.36667,
      "R": [
-      -0.678,
-      1.775,
-      0.905
+      -0.841,
+      1.595,
+      0.887
      ],
-     "reachR": 1.131
+     "reachR": 1.223
     },
     {
      "t": 0.4,
      "R": [
-      0.05,
-      1.332,
-      1.197
+      0.023,
+      1.399,
+      1.451
      ],
-     "reachR": 1.198
+     "reachR": 1.451
     },
     {
      "t": 0.43333,
      "R": [
-      0.12,
-      1.299,
-      1.195
+      0.091,
+      1.379,
+      1.447
      ],
-     "reachR": 1.201
+     "reachR": 1.45
     },
     {
      "t": 0.46667,
      "R": [
-      0.296,
-      1.095,
-      1.028
+      0.159,
+      1.361,
+      1.439
      ],
-     "reachR": 1.069
+     "reachR": 1.447
     },
     {
      "t": 0.5,
      "R": [
-      0.357,
-      0.961,
-      0.845
+      0.566,
+      1.178,
+      1.178
      ],
-     "reachR": 0.918
+     "reachR": 1.307
     },
     {
      "t": 0.53333,
      "R": [
-      0.369,
-      0.904,
-      0.727
+      0.726,
+      1.088,
+      0.906
      ],
-     "reachR": 0.815
+     "reachR": 1.161
     },
     {
      "t": 0.56667,
      "R": [
-      0.369,
-      0.886,
-      0.677
+      0.768,
+      1.054,
+      0.749
      ],
-     "reachR": 0.771
+     "reachR": 1.073
     },
     {
      "t": 0.6,
      "R": [
-      0.355,
-      0.887,
-      0.676
+      0.776,
+      1.047,
+      0.701
      ],
-     "reachR": 0.763
+     "reachR": 1.046
     },
     {
      "t": 0.63333,
      "R": [
-      0.279,
-      0.903,
-      0.686
+      0.717,
+      1.036,
+      0.733
      ],
-     "reachR": 0.741
+     "reachR": 1.025
     },
     {
      "t": 0.66667,
      "R": [
-      0.158,
-      0.93,
-      0.682
+      0.545,
+      1.011,
+      0.79
      ],
-     "reachR": 0.7
+     "reachR": 0.96
     },
     {
      "t": 0.7,
      "R": [
-      -0.007,
+      0.286,
       0.988,
-      0.651
+      0.799
      ],
-     "reachR": 0.651
+     "reachR": 0.848
     },
     {
      "t": 0.73333,
      "R": [
-      -0.128,
-      1.019,
-      0.591
+      -0.005,
+      1.015,
+      0.733
      ],
-     "reachR": 0.605
+     "reachR": 0.733
     },
     {
      "t": 0.76667,
      "R": [
-      -0.212,
-      1.043,
-      0.533
+      -0.188,
+      1.032,
+      0.628
      ],
-     "reachR": 0.574
+     "reachR": 0.655
     },
     {
      "t": 0.8,
      "R": [
-      -0.242,
-      1.052,
-      0.508
+      -0.254,
+      1.043,
+      0.577
      ],
-     "reachR": 0.563
+     "reachR": 0.63
     },
     {
      "t": 0.83333,
      "R": [
-      -0.244,
-      1.046,
-      0.486
+      -0.255,
+      1.038,
+      0.55
      ],
-     "reachR": 0.544
+     "reachR": 0.606
     },
     {
      "t": 0.86667,
      "R": [
-      -0.27,
-      1.025,
-      0.417
+      -0.281,
+      1.02,
+      0.469
      ],
-     "reachR": 0.497
+     "reachR": 0.547
     },
     {
      "t": 0.9,
      "R": [
-      -0.288,
-      1.069,
-      0.336
+      -0.297,
+      1.066,
+      0.371
      ],
-     "reachR": 0.443
+     "reachR": 0.475
     },
     {
      "t": 0.93333,
      "R": [
-      -0.29,
-      1.067,
-      0.264
+      -0.296,
+      1.066,
+      0.282
      ],
-     "reachR": 0.393
+     "reachR": 0.409
     },
     {
      "t": 0.96667,
      "R": [
-      -0.303,
-      1.061,
-      0.193
+      -0.305,
+      1.06,
+      0.198
      ],
-     "reachR": 0.359
+     "reachR": 0.363
     },
     {
      "t": 1,
@@ -2386,18 +2396,17 @@
   },
   "motionStretch": {
    "triangles": 19847,
-   "p50": 1.024,
-   "p99": 1.785,
-   "max": 3.84,
-   "over2x": 87,
-   "over3x": 12,
-   "fractionOver": 0.0006,
+   "p50": 1.025,
+   "p99": 1.839,
+   "max": 4.07,
+   "over2x": 109,
+   "over3x": 16,
+   "fractionOver": 0.0008,
    "worstClips": {
-    "Scream": 22,
-    "Death": 80,
-    "Attack": 64,
-    "Run": 33,
-    "Idle": 2
+    "Attack": 114,
+    "Death": 63,
+    "Run": 20,
+    "Scream": 4
    },
    "poses": 110,
    "method": "per triangle: worst edge length ratio posed / bind over every 3rd frame of all seven clips (CPU skinning)"
@@ -2468,7 +2477,7 @@
   "Sleeves, jackets and trouser legs are skinned shells without cloth simulation: where a sleeve hangs against the flank it shears between arm and chest when the arm lifts.",
   "Procedural (not mocap) clips; the knee height is the family proportion (trousers hide the knees of three variants).",
   "Hidden-side geometry and texture of the source are AI-generated (Meshy); the open neck stump shows the generated inside faces.",
-  "The long hanging arms swing outside the motor collider (visual brushing of door jambs, no collision change).",
+  "The long hanging arms swing outside the motor collider (visual brushing of door jambs, no collision change); the wide Attack sweep can pass through a wall the body stands close to (visual only: the game lands the claw only with a clear line to the player).",
   "Unapproved prototype: appearance, anatomy, deformation, performance and licensing not certified; gameReady false."
  ],
  "rebuild": "node --max-old-space-size=3500 tools/asset-pipeline/enemy/build-screacher.mjs [--only <variant>] (needs the private raw masters: SCREACHER_RAW_DIR); QA sheets: node tools/asset-pipeline/enemy/qa/screacher-sheets.mjs"
