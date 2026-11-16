@@ -331,7 +331,7 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng): CreviceCarve | 
   (['bunks', 'storage', 'tea'] as CrevUse[]).forEach((u, i) => { if (lower[i]) uses.set(lower[i], u); });
   for (const fl of fillers) {
     const len = fl.y1 - fl.y0, use = uses.get(fl) ?? 'home';
-    const open = use !== 'home' || fl.L === 0 || rng.chance(fl.L === 3 ? 0.55 : 0.68);
+    const open = use !== 'home' || fl.L === 0 || rng.chance(fl.L === 3 ? 0.62 : 0.72);
     const wide = use === 'tea' || use === 'repair' || use === 'laundry';
     const back = use === 'home' && open && rng.chance(0.45) ? 'room' as const : use === 'bunks' ? 'room' as const : null;
     container(fl.s, fl.L, fl.y0, fl.y1, use, {open, back, width: wide ? Math.min(len - 2, 8) : use === 'bunks' ? 3 : 2, wide, shift: rng.int(-2, 2), label: use === 'home' ? undefined : labelOf(use)});
