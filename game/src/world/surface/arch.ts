@@ -229,13 +229,17 @@ export class SurfaceArch {
       const ci = (x: number, z: number) => { const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL); return cx < 0 || cz < 0 || cx >= W || cz >= P.H ? -1 : cz * W + cx; };
       const bi = ci(bx, bz), fi = ci(fx, fz);
       const own = bi >= 0 ? P.owner[bi] : OWNER.cordon;
+      // the floor in front of the face: low walls (cordon, tent canvas, debris) cap at base + their height (the builder splits a
+      // tall face into bands, so a band's own y0 is not the floor)
+      const lv = this.levels.find(l => l.id === f.level) ?? this.levels[0];
+      const base = fi >= 0 ? lv.grid.floor[fi] : lv.baseY;
       const air = this.airCuts.get(`${alongX ? 'z' : 'x'}${Math.round(plane * 100)}`)?.filter(c => c.sign === sign) ?? [];
       const inside = P.areaBuilding.get(f.area);
       const doorway = fi >= 0 && P.doorCells.has(fi);
       if (P.tentAreas.has(f.area) && !doorway) {
         // the tent's canvas walls, seen from inside, up to the eave (the pitched roof above is the tent build's)
         this.count('surface-canvas');
-        out.push(...cutFace({...f, finish: 'surface-canvas'}, [], null, f.y0 + (P.tent?.eave ?? LOOK_TUNE.tentEave)));
+        out.push(...cutFace({...f, finish: 'surface-canvas'}, [], null, base + (P.tent?.eave ?? LOOK_TUNE.tentEave)));
         continue;
       }
       if (inside !== undefined && !doorway) {
@@ -258,7 +262,7 @@ export class SurfaceArch {
         continue;
       }
       // not a building: the cordon ring, the tent's carved walls, debris / barricade blocks, kerb risers
-      const y0 = f.y0;
+      const y0 = base;
       if (own === OWNER.cordon) {
         // where a street would run on through the cordon, the wall is a steel-plate barricade (the street reads closed, not cut):
         // the face splits at those stretches (a ring side is one long face)

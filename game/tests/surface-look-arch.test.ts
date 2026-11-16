@@ -134,7 +134,9 @@ describe('Surface Run look: the district architecture', () => {
     const cordon = faces.filter(f => f.finish === 'surface-cordon'), bar = faces.filter(f => f.finish === 'surface-barricade');
     expect(cordon.length).toBeGreaterThan(8);
     expect(bar.length).toBeGreaterThan(0);
-    for (const f of [...cordon, ...bar]) expect(f.y1).toBeLessThanOrEqual(f.y0 + LOOK_TUNE.cordonH + 1e-3);
+    // capped from the floor (district ground at y 0), every band of the builder's face included
+    for (const f of [...cordon, ...bar]) expect(f.y1, `${f.finish} ${f.y0}-${f.y1}`).toBeLessThanOrEqual(LOOK_TUNE.cordonH + 1e-3);
+    expect(Math.max(...cordon.map(f => f.y1))).toBeCloseTo(LOOK_TUNE.cordonH, 3);
     expect(w.surfaceArch!.meshes.some(m => m.userData.surfaceArch === 'surface-coping')).toBe(true);
   });
 
