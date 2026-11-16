@@ -3,7 +3,7 @@
 // clearance disc over open, unblocked, near-flat street-level ground, pending props counted as obstacles: the depot yard and loading
 // door, the perimeter roads and nearly every street; blocked spans stop it while their foot gaps stay walkable).
 import {beforeAll, describe, expect, it} from 'vitest';
-import {CELL} from '../src/gen/grid';
+import {CELL, FLOOR} from '../src/gen/grid';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {generateSurfaceDistrict, setSurfaceGenDebug, surfaceGenDebug} from '../src/gen/surface/index';
 import type {SurfaceHost} from '../src/gen/surface/surfaceRun';
@@ -48,9 +48,18 @@ describe('Surface district on foot', () => {
       }
       expect(at(s.checkpoint.mapTable.read.x, s.checkpoint.mapTable.read.z)).toBe(true);
       expect(at(s.truck.x + 3, s.truck.z) || at(s.truck.x - 3, s.truck.z) || at(s.truck.x, s.truck.z + 3) || at(s.truck.x, s.truck.z - 3)).toBe(true);
+      // the tent: its free floor (not under the tables / the crate — the map table now stands on the area's centre) is reached on foot
       for (const id of s.buildings.find(b => b.host === 'tent')!.areas) {
         const a = L.areas[id];
-        expect(at((a.x + a.w / 2) * CELL, (a.y + a.h / 2) * CELL)).toBe(true);
+        let free = 0, reached = 0;
+        for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) {
+          const i = g.idx(x, y);
+          if (g.area[i] !== id || g.cells[i] !== FLOOR || g.blocked[i]) continue;
+          free++;
+          if (foot[0][i] >= 0) reached++;
+        }
+        expect(free, `seed ${seed}: tent free floor`).toBeGreaterThan(40);
+        expect(reached / free, `seed ${seed}: tent floor reached`).toBeGreaterThan(0.95);
       }
       // the subway headhouse's grille (the way back down) is reachable at the foot of its stair
       if (s.host === 'subway') {
