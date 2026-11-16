@@ -32,7 +32,8 @@ export function truckSpawnOf(layout: StationLayout | null): {x: number; y: numbe
  */
 export const TRUCK_ATTACH: readonly VehicleAttach[] = TRUCK_ANCHORS.attach.map(a => ({...a, y: TRUCK_BED_FLOOR_Y, h: Math.round((a.h - (TRUCK_BED_FLOOR_Y - a.y)) * 1000) / 1000}));
 
-export const TRUCK_CARGO_TEXT = {label: 'the truck', seated: 'Get out of the truck first', moving: 'Stop the truck first'} as const;
+/** The cargo prompt's words (CARGO shows `<the unit's line> · <reason>`: the same wording as its own fallback, world/surface/cargo.ts CARGO_TEXT). */
+export const TRUCK_CARGO_TEXT = {label: 'the truck', seated: 'not from the truck seat', moving: 'not while the truck is moving'} as const;
 
 export const TRUCK_DEF: VehicleDef = {
   id: 'truck',
@@ -42,6 +43,7 @@ export const TRUCK_DEF: VehicleDef = {
   rt: TRUCK_RT,
   text: TRUCK_TEXT,
   enclosed: true,
+  stopsShots: true,
   spawnOf: truckSpawnOf,
   model: {
     load: spec => loadTruckModel(spec),

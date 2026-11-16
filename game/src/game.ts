@@ -4176,6 +4176,7 @@ export class Game {
       // Lane B (iteration 08): through every level's bands — a slab between shooter and target stops the bullet
       // (lane MERCH: struck open shelving -> the first resting shelf piece on the line inside it: physics/merchOnHost.ts)
       const wh = raycastShot(this.levels, this.layout.props, o, d, def.range, this.layout.trench.floorY);
+      this.skywaysCar?.shotStop(o, d, wh); // (lane TRUCK follow-up) the truck's body stops the shot (wh ends there): nothing behind it is hit
       let bestT = wh.t, bestZ: EnemyActor | null = null, bestPart = 'torso';
       // Lane COMBAT (reactor-playtest-round2): every live enemy's volumes along the full 3D ray, any storey, culled or not (combat/
       // enemyRay.ts: the old cheap reject mis-projected pitched rays and skipped enemies up / down stairs, atria and the pit)
