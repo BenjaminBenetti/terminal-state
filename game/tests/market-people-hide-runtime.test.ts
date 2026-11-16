@@ -128,9 +128,20 @@ describe('half fight, half flee; the fleers run home and hide — alive and pres
   it('a hider seen up close flinches and screams but stays; shot, it stays in its refuge (still a target); killed, its body stays', () => {
     const audio = {screams: [] as string[], grunts: [] as string[]};
     const w = provokedAway(808, {marketAudio: {scream: id => { audio.screams.push(id); }, grunt: id => { audio.grunts.push(id); }}});
-    const p = fleers(w)[0], book = w.combat.refugeBook(), c = book.claimOf(p.id)!;
-    // the player walks into the refuge's doorway, in sight
-    const m = c.refuge.mouths[0];
+    const book = w.combat.refugeBook();
+    // the player walks into a refuge's doorway, in sight of its hider (the first hider a doorway of its refuge sees: a slot round a corner
+    // of its room is out of sight from some doorways — the room's layout, not the rule under test; task
+    // studio-market-irregular-envelope-20261116-210503-01: the default market's new layout version moved seed 808's first hider there)
+    let pick: {p: MarketCombatant; c: NonNullable<ReturnType<typeof book.claimOf>>; m: {x: number; z: number}} | null = null;
+    for (const q of fleers(w)) {
+      const cq = book.claimOf(q.id);
+      if (!cq) continue;
+      const y = cq.refuge.slots[0].y, eye = q.body.eyeWorld();
+      const mq = cq.refuge.mouths.find(o => Math.hypot(o.x - q.actor.x, o.z - q.actor.z) < MARKET_COMBAT.reflee - 0.5 && w.host.levels.lineOfSight(eye, {x: o.x, y: y + 1.62, z: o.z}));
+      if (mq) { pick = {p: q, c: cq, m: mq}; break; }
+    }
+    expect(pick, 'a hider in sight of a doorway of its refuge').not.toBeNull();
+    const {p, c, m} = pick!;
     Object.assign(w.player, {alive: true, x: m.x, y: c.refuge.slots[0].y, z: m.z, eye: c.refuge.slots[0].y + 1.62});
     // (keep the fighters out of it: far away, never seeing)
     for (const f of w.combat.people) if (f.role === 'fight') { f.actor.x += 300; }
@@ -321,8 +332,10 @@ describe('old saves: version-1 records with FLED people', () => {
 
 describe('voices and detection (the seams: Game.marketAudio, Game.beerEffects)', () => {
   it('screams when fleers panic and run, grunts when fighters draw and are hit; nothing from a hider nobody sees', () => {
-    const calls: {kind: 'scream' | 'grunt'; id: string; y: number}[] = [];
-    const w = combatWorld(A, 808, {marketAudio: {scream: (id, _x, y) => { calls.push({kind: 'scream', id, y}); }, grunt: (id, _x, y) => { calls.push({kind: 'grunt', id, y}); }}});
+    // (each call with the caller's feet at that moment: a runner may be up a stair by the time the calls are checked)
+    const calls: {kind: 'scream' | 'grunt'; id: string; y: number; feet: number}[] = [];
+    const feet = (id: string) => w.combat.people.find(q => q.id === id)!.actor.y;
+    const w = combatWorld(A, 808, {marketAudio: {scream: (id, _x, y) => { calls.push({kind: 'scream', id, y, feet: feet(id)}); }, grunt: (id, _x, y) => { calls.push({kind: 'grunt', id, y, feet: feet(id)}); }}});
     w.build();
     w.player.alive = false;
     const st = w.layout.market!.stalls[0];
@@ -335,7 +348,7 @@ describe('voices and detection (the seams: Game.marketAudio, Game.beerEffects)',
     for (const p of Fi) expect(calls.some(c => c.kind === 'grunt' && c.id === p.id), `${p.id} grunts`).toBe(true);
     expect(calls.every(c => (c.kind === 'scream') === F.some(p => p.id === c.id))).toBe(true); // fleers scream, fighters grunt
     // at the head, not the feet
-    for (const c of calls) { const p = w.combat.people.find(q => q.id === c.id)!; expect(c.y - p.actor.y).toBeGreaterThan(1.3); }
+    for (const c of calls) expect(c.y - c.feet, c.id).toBeGreaterThan(1.3);
     // running: more screams now and then, never every frame
     w.player.x += 400;
     const n0 = calls.length;
