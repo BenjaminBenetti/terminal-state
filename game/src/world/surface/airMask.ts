@@ -28,9 +28,11 @@
 
 import {CELL, FLOOR} from '../../gen/grid';
 import type {StationLayout} from '../../gen/stationTypes';
-import type {SurfaceInfo} from '../../gen/surface/surfaceTypes';
+import type {SurfaceBoundary, SurfaceInfo} from '../../gen/surface/surfaceTypes';
 import {GAS} from '../gas/field';
 import {ROOF_GAS_LOOK, type OutdoorGas} from '../gaslightRules';
+import {fogPressureAt} from './fogPressure';
+import {fogBank, fogConcentration} from './fogAir';
 
 export const SURFACE_AIR = {
   /** Outdoor toxic air concentration: the Office roof's / the Reactor sky's surface atmosphere (see the header). */
@@ -65,6 +67,12 @@ export interface SurfaceOutdoorMap {
   /** Outdoor / indoor column counts (QA). */
   outdoorCells: number;
   indoorCells: number;
+  /**
+   * (task studio-surface-run-field-followup-20261116-211729-01, lane FOG) A version-2 district's FOG-PRESSURE boundary (surface.boundary;
+   * null = v1: no pressure anywhere): the outdoor air thickens with it (world/surface/fogAir.ts) — the exposure here, the march's
+   * outdoor term (render/volumetric.ts: the same rect / ramp as plain uniforms) and the fallback scene fog alike.
+   */
+  boundary: SurfaceBoundary | null;
 }
 
 const cache = new WeakMap<object, SurfaceOutdoorMap | null>();
@@ -119,7 +127,7 @@ function buildOutdoorMap(s: SurfaceInfo, g: {w: number; h: number; cells: ArrayL
     if (top[i] === 0) outdoorCells++;
   }
   const gas: OutdoorGas = {rect: {x0: -1e4, z0: -1e4, x1: W * CELL + 1e4, z1: H * CELL + 1e4}, y0: SURFACE_AIR.Y0, y1: SURFACE_AIR.Y1, c: SURFACE_AIR.C, vis: SURFACE_GAS_LOOK.vis};
-  return {w: W, h: H, top, gas, outdoorCells, indoorCells: W * H - outdoorCells};
+  return {w: W, h: H, top, gas, outdoorCells, indoorCells: W * H - outdoorCells, boundary: s.boundary ?? null};
 }
 
 const sstep = (a: number, b: number, v: number): number => {
@@ -139,10 +147,26 @@ export function outdoorWeight(m: SurfaceOutdoorMap, x: number, y: number, z: num
   return sstep(t - SURFACE_AIR.EDGE, t, y) * sstep(m.gas.y0, m.gas.y1, y);
 }
 
-/** THE outdoor toxic air concentration at a world point (exposure and render): C x the outdoor weight. */
+/**
+ * THE outdoor toxic air concentration at a world point (exposure and render): C x the outdoor weight — (lane FOG) in a version-2 district
+ * raised by the fog pressure there (world/surface/fogAir.ts fogConcentration: C .. 1 at pressure 1; exactly C without a boundary).
+ */
 export function surfaceOutdoorGasAt(m: SurfaceOutdoorMap | null, x: number, y: number, z: number): number {
   if (!m || m.gas.c <= 0) return 0;
-  return m.gas.c * outdoorWeight(m, x, y, z);
+  const w = outdoorWeight(m, x, y, z);
+  if (!(w > 0)) return 0;
+  return (m.boundary ? fogConcentration(m.gas.c, fogPressureAt(m.boundary, x, z), y) : m.gas.c) * w;
+}
+
+/**
+ * (lane FOG) The FOG PRESSURE acting at a world point: the field (world/surface/fogPressure.ts) x the outdoor weight (a sealed interior
+ * keeps it out with the air) x the fog bank (world/surface/fogAir.ts) — 0 everywhere in a v1 district. The on-foot pressure damage and
+ * the HUD read it (world/surface/air.ts -> the gas system's outdoor source).
+ */
+export function surfacePressureAt(m: SurfaceOutdoorMap | null, x: number, y: number, z: number): number {
+  if (!m || !m.boundary || m.gas.c <= 0) return 0;
+  const p = fogPressureAt(m.boundary, x, z);
+  return p > 0 ? p * outdoorWeight(m, x, y, z) * fogBank(y) : 0;
 }
 
 /** Is the column at (x, z) an outdoor column (no indoor top)? */
@@ -221,4 +245,9 @@ export function cabRaySpan(v: CabVolume | null, o: {x: number; y: number; z: num
 /** THE district's outdoor air with the sealed cab (exposure and render): 0 inside the cab, the outdoor air everywhere else. */
 export function surfaceAirAt(m: SurfaceOutdoorMap | null, cab: CabVolume | null, x: number, y: number, z: number): number {
   return inCab(cab, x, y, z) ? 0 : surfaceOutdoorGasAt(m, x, y, z);
+}
+
+/** (lane FOG) The fog pressure with the sealed cab: 0 inside it (the truck's own pressure effects are the vehicle's), as surfaceAirAt. */
+export function surfaceAirPressureAt(m: SurfaceOutdoorMap | null, cab: CabVolume | null, x: number, y: number, z: number): number {
+  return inCab(cab, x, y, z) ? 0 : surfacePressureAt(m, x, y, z);
 }

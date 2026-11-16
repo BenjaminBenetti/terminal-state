@@ -13,6 +13,7 @@ import type {PropPlacement} from '../../src/gen/props';
 import {SkywaysCar} from '../../src/world/skywaysCar';
 import {SurfaceCargo} from '../../src/world/surface/cargo';
 import {installSurfaceTruck, type TruckStorageSystem} from '../../src/world/surface/truckStorage';
+import {seedRecoverables} from '../../src/world/surface/cargoSeed';
 import {flatRoom} from './fuelCartsHost';
 import {equipRoom, type EquipTestHost} from './trainEquipmentHost';
 import {DISTRICT, STATION} from './surfaceCargoHost';
@@ -29,8 +30,13 @@ function move<T>(list: T[], item: T, first = false): void {
   if (first) list.unshift(item); else list.push(item);
 }
 
-/** The generated district `D` with the real truck at its generated pose and the depot's recoverables seeded (the district entered). */
-export function truckCargoWorld(D: District) {
+/**
+ * The generated district `D` with the real truck at its generated pose and the depot's recoverables seeded (the district entered).
+ * `legacyDepot` (task studio-surface-run-field-followup-20261116-211729-01, lane FIXES): the district's depot was seeded BEFORE the
+ * one-upgrade rule — its whole collection (the chest with its salvage among it) already in the district's lane, behind the version-1
+ * marker, so the entry seeds nothing more; without it the first entry seeds the rule's one train upgrade.
+ */
+export function truckCargoWorld(D: District, o: {legacyDepot?: boolean} = {}) {
   const s = equipRoom(D.levels);
   const h = s.h as unknown as TruckCargoHost, eq = s.eq;
   // the equipment's own entries (installed last of all in Game): remembered by reference before the others go in
@@ -71,6 +77,11 @@ export function truckCargoWorld(D: District) {
   const w = {h, eq, car, cargo, storage, D, propIndex: new PropIndex(D.levels, D.L.props)};
   // equipRoom built the flat room as "the station": leave it and enter the district
   leave(w);
+  if (o.legacyDepot) {
+    const here = seedRecoverables(D.S.depot.recoverables, {seed: D.S.seed, nextUid: () => h.playerTrain.equipment.nextUid(), makeStack: (id, n) => h.inv.makeStack(id, n)}, 48);
+    h.run.setLaneStore('train-equipment.here', {v: 1, here}, DISTRICT);
+    h.run.setLaneStore('surface.cargo', {v: 1, seeded: 1}, DISTRICT);
+  }
   enterDistrict(w);
   return w;
 }

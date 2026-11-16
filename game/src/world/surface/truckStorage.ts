@@ -35,6 +35,11 @@ import {TRUCK_COMPARTMENTS} from './truckStore';
 import {TRUCK_RT} from './truckSpec';
 import {TRUCK_DEF} from './truckVehicle';
 import {stepLockerDoors, type TruckView} from './truckModel';
+import {surfaceMapOf} from './mapRuntime';
+import type {PlanningMap} from './mapModel';
+import {TruckConditionSystem, truckConditionOf, type TruckConditionHost} from './truckConditionRuntime';
+import {TruckRepairAccess, type TruckRepairHost} from './truckRepair';
+import {TruckBoardSystem, type TruckBoardHost} from './truckBoard';
 
 export const TRUCK_STORAGE_RT = {
   /** Aim reach (eye -> the compartment's door, m). */
@@ -352,7 +357,27 @@ export class TruckStorageSystem {
  */
 export function installSurfaceTruck(game: Game): TruckStorageSystem {
   game.skywaysCar.addVehicle(TRUCK_DEF);
-  return new TruckStorageSystem(game as unknown as TruckStorageHost, game.skywaysCar).install();
+  const storage = new TruckStorageSystem(game as unknown as TruckStorageHost, game.skywaysCar).install();
+  installTruckCondition(game as unknown as TruckFieldHost, game.skywaysCar, {
+    model: () => surfaceMapOf(game)?.model() ?? null,
+    open: () => surfaceMapOf(game)?.open() ?? false,
+  });
+  return storage;
+}
+
+/** What the condition / repair / board need from Game together (structural: the tests' Node host provides it). */
+export type TruckFieldHost = TruckConditionHost & TruckRepairHost & TruckBoardHost;
+
+/**
+ * Task studio-surface-run-field-followup-20261116-211729-01 (lane TRUCK): the truck's condition (hits, fog pressure, smoke / fire, the
+ * dash lamp), its repair at the nose and the planning-map board on its side — after the compartments, so their [E] targets come first
+ * (SkywaysCar.access order) and the condition's section hook runs after the controller's build (the record read). Inert without the truck.
+ */
+export function installTruckCondition(host: TruckFieldHost, car: SkywaysCar, map: {model: () => PlanningMap | null; open: () => boolean}): {condition: TruckConditionSystem; repair: TruckRepairAccess; board: TruckBoardSystem} {
+  const condition = new TruckConditionSystem(host, car).install();
+  const repair = new TruckRepairAccess(host, car, () => condition.restore()).install();
+  const board = new TruckBoardSystem(host, car, map.model, map.open).install();
+  return {condition, repair, board};
 }
 
 const qaRef = (spec: string): StoreSideRef => {
@@ -364,6 +389,8 @@ const qaRef = (spec: string): StoreSideRef => {
 export function truckQaApi(game: Game) {
   const car = () => game.skywaysCar ?? null;
   const sys = () => (car()?.access.find(a => a instanceof TruckStorageSystem) as TruckStorageSystem | undefined) ?? null;
+  const repairOf = () => (car()?.access.find(a => a instanceof TruckRepairAccess) as TruckRepairAccess | undefined) ?? null;
+  const boardOf = () => (car()?.access.find(a => a instanceof TruckBoardSystem) as TruckBoardSystem | undefined) ?? null;
   return {
     /** The truck: the controller's state (vehicle, pose, driving, enclosed, lamps), the compartments, the attachment points. */
     truck: () => {
@@ -378,5 +405,23 @@ export function truckQaApi(game: Game) {
     truckQuick: (spec: string): number => sys()?.view?.quick(qaRef(spec)) ?? 0,
     /** Drag-move in the open view; returns the move result. */
     truckMove: (from: string, to: string, count?: number): string => sys()?.view?.move(qaRef(from), qaRef(to), count) ?? 'none',
+    // (field follow-up) the condition, the repair, the planning-map board
+    /** The truck's condition: the number (0..1), its stage, fire, breakdown, the fog pressure at it, the dash lamp, the repair / board state. */
+    truckCondition: () => {
+      const c = car(), cond = truckConditionOf(game);
+      if (!c || c.vehicle !== 'truck' || !cond) return null;
+      return {...cond.qa(), repair: repairOf()?.qa() ?? null, board: boardOf()?.qa() ?? null};
+    },
+    /** Set the condition (0..1; the stage's cues and notes as for a real change). */
+    truckSetCondition: (v: number): number | null => {
+      const cond = truckConditionOf(game);
+      if (!cond || car()?.vehicle !== 'truck') return null;
+      cond.setCondition(v);
+      return cond.condition;
+    },
+    /** Repair now as a completed hold would (the 5 scrap drawn from the carried / worn-bag materials; refused: its reason). */
+    truckRepair: () => repairOf()?.repair() ?? null,
+    /** Open the planning map as [E] on the truck's board would (false: refused). */
+    truckBoardOpen: (): boolean => boardOf()?.open() ?? false,
   };
 }

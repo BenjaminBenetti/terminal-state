@@ -84,7 +84,8 @@ export function surfaceDaylightDigest(layout: StationLayout): string {
   const S = layout.surface;
   if (!S) return '';
   const G = S as typeof S & {lots?: unknown; rail?: unknown; depot: {features?: unknown}};
-  const read = [S.seed, S.extent, S.blocks, S.streets, S.buildings, S.windows, S.outdoorAreas, S.checkpoint, S.depot.building, G.depot.features ?? null, G.lots ?? null, G.rail ?? null, S.storeys];
+  const read = [S.seed, S.extent, S.blocks, S.streets, S.buildings, S.windows, S.outdoorAreas, S.checkpoint, S.depot.building, G.depot.features ?? null, G.lots ?? null, G.rail ?? null, S.storeys,
+    ...(S.boundary ? [S.boundary] : [])]; // (lane FOG: a v2 district's boundary — no wall to obstruct; a v1 digest unchanged)
   return JSON.stringify(['surface-daylight-2', DAYLIGHT, LOOK_TUNE, new ContentHasher().str(JSON.stringify(read)).digest()]);
 }
 
@@ -113,7 +114,7 @@ export function obstructionTops(layout: StationLayout, plan: SurfaceLookPlan): F
         const B = ra.bulkhead;
         out[i] = x > B.x0 && x < B.x1 && z > B.z0 && z < B.z1 ? ra.y + B.h + ROOF_CAP : ra.y;
       }
-    } else if (o === OWNER.cordon) out[i] = LOOK_TUNE.cordonH + 0.2;
+    } else if (o === OWNER.cordon) out[i] = plan.wall ? LOOK_TUNE.cordonH + 0.2 : 0; // (lane FOG: a v2 district's undrawn last-resort ring casts nothing)
     else if (o === OWNER.tent) out[i] = tent ? tent.eave : LOOK_TUNE.tentEave;
     else if (o === OWNER.debris) out[i] = LOOK_TUNE.debrisH;
     else if (tent && plan.ground[i] === GROUND.tent) out[i] = tent.ridge;

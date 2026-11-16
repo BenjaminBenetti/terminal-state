@@ -454,7 +454,8 @@ describe('the calm market, trade gating, not an enemy', () => {
     // the player's ENEMY pipeline: Game.gunshotPlayer -> blastPlayer -> applyPlayerHit; the round is attributed enemy: true
     const game = fs.readFileSync(new URL('../src/game.ts', import.meta.url), 'utf8');
     expect(game).toMatch(/gunshotPlayer\(hit: PlayerHit, fromX: number, fromZ: number\): ResolvedHit \{\s*return this\.blastPlayer\(hit, fromX, fromZ\);/);
-    expect(game).toMatch(/blastPlayer\(hit: PlayerHit, fromX: number, fromZ: number\): ResolvedHit \{\s*const p = this\.player, resolved = this\.applyPlayerHit\(hit\);/);
+    // (re-pin, field follow-up: the seated truck cab's shield comes first — inert out of the truck, tests/surface-truck-hits.test.ts)
+    expect(game).toMatch(/blastPlayer\(hit: PlayerHit, fromX: number, fromZ: number\): ResolvedHit \{(?:\s*\/\/[^\n]*)*\s*if \(shieldTruckHit\(this, hit\.amount, fromX, fromZ, 'blast'\)\) \{[^\n]*\}\s*const p = this\.player, resolved = this\.applyPlayerHit\(hit\);/);
     expect(src('marketCombat.ts')).toMatch(/this\.host\.gunshotPlayer\(\{amount: raw, source: 'other', enemy: true,/);
     // Game.fire: the person test per ray after the enemy test, aggregated per trigger pull; the knife too
     expect(game).toMatch(/const mh = this\.marketCombat\.rayHit\(o, d, bestT\);/);

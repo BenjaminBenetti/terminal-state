@@ -10,10 +10,19 @@
 // and TENANT_SUPPLY (water, cells, flares, dressings, tins), rolled exactly (no scarcity cut) on the district seed, stack sizes by
 // BOX_COUNT (small). Devices and kits are recovered EMPTY (a recovered sentry's feed holds no rounds: ammo only by deliberate rule).
 // Pure (no three.js / DOM).
+//
+// Task studio-surface-run-field-followup-20261116-211729-01 (lane FIXES), user: "A newly seeded depot gets exactly ONE randomly selected
+// existing recoverable train upgrade, not the whole collection. Seed once, allocate exactly the actual unit, preserve physical UID/cargo/
+// normal once-only train installation with no second material charge. Never delete existing saved kits or reroll/refill an
+// already-seeded depot." / "Keep already-seeded legacy depot contents." — seedDepot: ONE of the generated recoverables, picked on the
+// district seed's own salt (depotPick: Retry / reload pick the same) among the TRAIN UPGRADES (by trait: a device that plugs into the
+// train — radar, sentry, scanner — or an upgrade kit; a storage chest is storage, not an upgrade), at its generated pose, with exactly
+// one uid from the train's counter. The layout's list stays as generated; a depot seeded before this rule keeps every unit it got
+// (world/surface/cargo.ts: the marker decides, nothing is rerolled; depotRecoverables says what a depot holds for the map).
 
 import {Rng, hashString} from '../../core/rng';
 import {EQUIPMENT, freshEquipment, recoverableKind, type EquipmentJSON} from '../../craft/equipment';
-import type {SurfaceRecoverable} from '../../gen/surface/surfaceTypes';
+import type {SurfaceInfo, SurfaceRecoverable} from '../../gen/surface/surfaceTypes';
 import {BASE_WORKSHOP_SALVAGE, BOX_COUNT, TENANT_SUPPLY, type LootSpec} from '../../items/lootTables';
 import {stackToJSON, type ItemStack, type StackJSON} from '../../items/inventory';
 import {itemDef} from '../../items/items';
@@ -73,14 +82,65 @@ export function seedRecoverables(list: readonly SurfaceRecoverable[], deps: Seed
   const out: EquipmentJSON[] = [];
   list.forEach((r, i) => {
     if (out.length >= room) return;
-    const kind = recoverableKind(r.kind);
-    if (!kind) return;
-    const def = EQUIPMENT[kind], p = r.pose;
-    const rec = freshEquipment(kind, deps.nextUid(), {x: r4(p.x), y: r4(p.y), z: r4(p.z), yaw: r4(p.yaw)});
-    rec.level = Math.max(0, Math.min(63, Math.floor(p.level)));
-    // a storage chest holds the depot's salvage; a feed / a device / a kit is recovered empty
-    if (def.slots && !def.slotItem) rec.slots = depotChestSlots(new Rng(hashString(`surface-cargo-depot:${i}:${kind}`, deps.seed)), def.slots, deps.makeStack);
-    out.push(rec);
+    const rec = recoverableRecord(r, i, deps);
+    if (rec) out.push(rec);
   });
   return out;
+}
+
+/** One recoverable (index i of the depot's list) as a station record with a fresh run uid, or null (an unknown kind: no uid taken). */
+function recoverableRecord(r: SurfaceRecoverable, i: number, deps: SeedDeps): EquipmentJSON | null {
+  const kind = recoverableKind(r.kind);
+  if (!kind) return null;
+  const def = EQUIPMENT[kind], p = r.pose;
+  const rec = freshEquipment(kind, deps.nextUid(), {x: r4(p.x), y: r4(p.y), z: r4(p.z), yaw: r4(p.yaw)});
+  rec.level = Math.max(0, Math.min(63, Math.floor(p.level)));
+  // a storage chest holds the depot's salvage; a feed / a device / a kit is recovered empty
+  if (def.slots && !def.slotItem) rec.slots = depotChestSlots(new Rng(hashString(`surface-cargo-depot:${i}:${kind}`, deps.seed)), def.slots, deps.makeStack);
+  return rec;
+}
+
+/** (lane FIXES) Is a recoverable a TRAIN UPGRADE: a device that plugs into the train, or an upgrade kit (never storage)? */
+export function isTrainUpgrade(id: string): boolean {
+  const kind = recoverableKind(id);
+  if (!kind) return false;
+  const def = EQUIPMENT[kind];
+  return def.plug || !!def.upgrade;
+}
+
+/** (lane FIXES) The pick's own stream: the district seed, this salt. */
+export const DEPOT_PICK_SALT = 'surface-cargo-depot-one';
+
+/**
+ * (lane FIXES) The index (in the depot's generated list) of the ONE train upgrade a newly seeded depot gets: uniform among the list's
+ * train upgrades on the district seed's own stream (deterministic: Retry / reload / a revisit pick the same), -1 when there is none.
+ */
+export function depotPick(list: readonly SurfaceRecoverable[], seed: number): number {
+  const ups: number[] = [];
+  list.forEach((r, i) => { if (isTrainUpgrade(r.kind)) ups.push(i); });
+  if (!ups.length) return -1;
+  return ups[new Rng(hashString(DEPOT_PICK_SALT, seed)).int(0, ups.length - 1)];
+}
+
+/**
+ * (lane FIXES) A newly seeded depot (world/surface/cargo.ts, marker absent): the one picked train upgrade as a station record (exactly
+ * one uid from the train's counter), at most `room` (0: none), and the indices seeded (the cargo record's `depot` list).
+ */
+export function seedDepot(list: readonly SurfaceRecoverable[], deps: SeedDeps, room: number): {units: EquipmentJSON[]; depot: number[]} {
+  const i = depotPick(list, deps.seed);
+  if (i < 0 || room < 1) return {units: [], depot: []};
+  const rec = recoverableRecord(list[i], i, deps);
+  return rec ? {units: [rec], depot: [i]} : {units: [], depot: []};
+}
+
+/**
+ * (lane FIXES) What a district's depot holds as recoverables (the planning map's line): not seeded yet -> the one train upgrade a first
+ * entry seeds; seeded under this rule (the record's `depot` indices) -> those; seeded before it (a marker without the list) -> every
+ * recoverable of a known kind (the old rule seeded them all).
+ */
+export function depotRecoverables(S: Pick<SurfaceInfo, 'seed' | 'depot'>, seeded: boolean, depot?: readonly number[] | null): SurfaceRecoverable[] {
+  const list = S.depot?.recoverables ?? [];
+  if (seeded && !depot) return list.filter(r => recoverableKind(r.kind));
+  const idx = seeded ? depot! : [depotPick(list, S.seed)];
+  return idx.filter(i => i >= 0 && i < list.length && recoverableKind(list[i].kind)).map(i => list[i]);
 }
