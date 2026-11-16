@@ -182,7 +182,7 @@ describe('loading, fallback and warm-up', () => {
   it('the costume files are fetched with the section (prepareSection awaits them) BEFORE it is built and warmed up', () => {
     const src = fs.readFileSync(path.join(ROOT, 'game/src/game.ts'), 'utf8');
     expect(src).toMatch(/sectionModelKeys[^\n]*=\s*\[[^\]]*cosplayModelKeysFor[^\]]*\]/);
-    expect(src).toMatch(/const lazyKeys = this\.modelKeysFor\(layout, key\.level\);\s*\n\s*await this\.propModels\.ensure\(lazyKeys, onProgress\);/);
+    expect(src).toMatch(/const lazyKeys = this\.modelKeysFor\(layout, sectionAssetLevel\(key\)\);[^\n]*\n\s*await this\.propModels\.ensure\(lazyKeys, onProgress\);/); // (Surface Run: a section's asset family — its level, or 'surface' for a district)
     // a section is prepared (lazy files fetched), then built (enemies spawned: the cosplay actors), then warmed up
     const flow = /layout = await this\.prepareSection\([^;]*;[\s\S]{0,900}?await this\.buildSectionSliced\(key, layout[\s\S]{0,600}?await this\.prepareGraphics\(ui\)/g;
     expect((src.match(flow) ?? []).length).toBeGreaterThanOrEqual(2);
