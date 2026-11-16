@@ -11,7 +11,6 @@
 import {describe, expect, it} from 'vitest';
 import {LEVELS} from '../src/levels/registry';
 import type {StationLayout} from '../src/gen/stationTypes';
-import type {PropPlacement} from '../src/gen/props';
 import {PROP_DEFS} from '../src/gen/props';
 import {CELL, FLOOR} from '../src/gen/grid';
 import {Rng} from '../src/core/rng';
