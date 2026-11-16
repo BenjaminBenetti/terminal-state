@@ -7,7 +7,8 @@
 //  - SEALED: intact buildings / the tent hold zero gas (exposure, the field, every layer cell, the march's outdoor term inside);
 //  - OPENINGS: a pane shot from the street, an opened door, a smashed doorway, GEN's broken pane column -> the room behind fills (exposure
 //    == concentrationAt == the uploaded layer); shutting the door thins it visibly as the hazard drops (never a vanish);
-//  - THE TRUCK CAB (gas.shelter): exposure 0, the drawn gas unchanged; THE MASK: dps 0, nothing drawn changes;
+//  - THE TRUCK CAB (gas.shelter + the cab volume, follow-up 1): seated, exposure 0 AND no gas drawn inside the cab; beyond its glass the
+//    drawn fog == the hazard there == what standing there breathes; THE MASK: dps 0, nothing drawn changes;
 //  - the in-engine fallback (pass off): the outdoor murk in the scene fog, the interior field through the existing fallback;
 //  - doors (state, collision boxes, [E], enemy push, auto-close, never on a body), persistence per district memory;
 //  - the surface variant's binding budget (WebGPU 12 uniform buffers: none added) on both backends.
@@ -30,11 +31,14 @@ import {PANE_MAX_HP} from '../src/world/windowBreach';
 import {GAS, gasProfile} from '../src/world/gas/field';
 import {ATMOSPHERE_QUALITY} from '../src/render/atmosphere';
 import {VolumetricAtmosphere} from '../src/render/volumetric';
-import {VF_DEPTH_MARK, VF_SURFACE_MARK, createFogUniforms, createMarchMaterial, outdoorMapTexture} from '../src/render/volumetricShaders';
+import {VF_CAB_MARK, VF_DEPTH_MARK, VF_SURFACE_MARK, createFogUniforms, createMarchMaterial, outdoorMapTexture} from '../src/render/volumetricShaders';
 import {gasOpacity, greenness} from '../src/world/gaslightRules';
 import {ROOF_FOG} from '../src/world/roofAir';
-import {SURFACE_AIR, SURFACE_GAS_LOOK, columnTop, outdoorWeight, surfaceOutdoorGasAt, surfaceOutdoorMap} from '../src/world/surface/airMask';
+import {SURFACE_AIR, SURFACE_GAS_LOOK, cabRaySpan, columnTop, inCab, outdoorColumn, outdoorWeight, surfaceOutdoorGasAt, surfaceOutdoorMap} from '../src/world/surface/airMask';
 import {SurfaceGasField} from '../src/world/surface/airField';
+import {TRUCK_SPEC} from '../src/world/surface/truckSpec';
+import {TRUCK_ANCHORS} from '../src/world/surface/truckAnchors.generated';
+import {carToWorld} from '../src/world/skywaysCarSpec';
 import {SURFACE_WINDOWS_LANE} from '../src/world/surface/airPanes';
 import {DOOR_RT, SURFACE_DOORS_LANE, restoredDoor, type SurfaceDoorState} from '../src/world/surface/airDoors';
 import {SURFACE_FOG, surfaceFogAt} from '../src/world/surface/airFog';
@@ -302,26 +306,100 @@ describe('surface gas: sealed interiors stay clean; openings let the outdoor air
 });
 
 describe('surface gas: the truck cab, the mask, the in-engine fallback', () => {
-  it('the enclosed cab (gas.shelter): exposure 0 — every drawn thing unchanged; stepping out exposes again', () => {
+  it('the enclosed cab (follow-up 1): seated — exposure 0 AND no gas drawn inside the cab volume; beyond its glass the fog = the hazard there', () => {
     const L = fresh();
     const g = surfaceAirGame(L, mats, {at: {x: 41, z: 23}});
-    const x = 28, z = 30;
-    const out = {...g.eyeAt(x, z)};
-    const drawn = {march: marchOutdoor(g.atmo, x, 1.6, z), fog: g.air.fog.k, fogColor: (g.h.scene.fog as THREE.FogExp2).color.clone(), layer: layerMax(g.atmo, 0, {x0: 32, z0: 6, x1: 50, z1: 38})};
-    expect(out.c).toBeCloseTo(SURFACE_AIR.C, 9);
-    g.sys.shelter = () => true;
-    const inCab = g.eyeAt(x, z);
-    expect([inCab.c, inCab.dps, inCab.source, inCab.outdoor]).toEqual([0, 0, null, 0]);
-    expect(marchOutdoor(g.atmo, x, 1.6, z)).toBe(drawn.march);
-    expect(g.air.fog.k).toBe(drawn.fog);
-    expect((g.h.scene.fog as THREE.FogExp2).color.equals(drawn.fogColor)).toBe(true);
-    expect(layerMax(g.atmo, 0, {x0: 32, z0: 6, x1: 50, z1: 38})).toBe(drawn.layer);
-    g.sys.shelter = () => false;
-    expect(g.eyeAt(x, z).c).toBeCloseTo(SURFACE_AIR.C, 9);
-    // game.ts: only an ENCLOSED vehicle seat shelters (the vehicle controller's optional `enclosed`, set by the truck)
+    const map = surfaceOutdoorMap(L)!;
+    // the REAL truck's cab (world/surface/truckSpec.ts = the measured anchors): its interior volume and seated eye, the vehicle's frame
+    const I = TRUCK_SPEC.interior, E = TRUCK_SPEC.eye;
+    expect(g.car.spec.interior).toBe(I);
+    const mid = {x: (I.x0 + I.x1) / 2, y: (I.y0 + I.y1) / 2, z: (I.z0 + I.z1) / 2};
+    const hx = (I.x1 - I.x0) / 2, hy = (I.y1 - I.y0) / 2, hz = (I.z1 - I.z0) / 2;
+    expect(E.x > I.x0 && E.x < I.x1 && E.y > I.y0 && E.y < I.y1 && E.z > I.z0 && E.z < I.z1).toBe(true); // (the seated eye is in its cab)
+    // game.ts: only an ENCLOSED vehicle seat shelters (the vehicle controller's `enclosed`: seated, in a vehicle whose def is enclosed)
     const src = fs.readFileSync(path.join(GAME, 'src/game.ts'), 'utf8');
-    // (the hook's shape only: the merge with the truck's typed `enclosed` getter may drop the structural cast)
-    expect(src).toMatch(/this\.gas\.shelter = \(\) =>[^\n]*\.enclosed === true/);
+    expect(src).toMatch(/this\.gas\.shelter = \(\) => this\.skywaysCar\?\.enclosed === true;/);
+    g.sys.shelter = () => g.car.driving && g.car.enclosed === true; // (the same, on the stand-in: its `enclosed` is the def's flag)
+    // the truck on the street between B0 / B1 / B2, turned (the vehicle frame: -z forward); level, and pitched as a seat on a flight is
+    for (const pitch of [0, 0.3]) {
+      const body = {x: 28, y: 0, z: 31.5, yaw: 0.6, pitch};
+      // the seat's own convention (world/skywaysCar.ts writePlayer; the body group's 'YXZ' turn): the pitch about the lateral axis, then the yaw
+      const toWorld = (lx: number, ly: number, lz: number) => {
+        const cp = Math.cos(pitch), sp = Math.sin(pitch), w = carToWorld(body.x, body.z, body.yaw, lx, ly * sp + lz * cp);
+        return {x: w.x, y: body.y + ly * cp - lz * sp, z: w.z};
+      };
+      const eye = toWorld(E.x, E.y, E.z);
+      expect(outdoorColumn(map, eye.x, eye.z)).toBe(true);
+      g.car.driving = false;
+      g.atmo.syncCab();
+      const out = {...g.eyeAt(eye.x, eye.z, 0, eye.y)};
+      expect(out.c).toBeCloseTo(SURFACE_AIR.C, 9); // standing there: the outdoor air
+      // seated in the ENCLOSED cab
+      Object.assign(g.car, {driving: true, enclosed: true, body});
+      g.atmo.syncCab(); // (each frame's uniform sync)
+      const cab = g.air.cab()!;
+      expect(cab).not.toBe(null);
+      expect(cab.pitch).toBe(pitch);
+      expect(inCab(cab, eye.x, eye.y, eye.z)).toBe(true);
+      const seated = g.eyeAt(eye.x, eye.z, 0, eye.y);
+      expect([seated.c, seated.dps, seated.source, seated.outdoor], `seated, pitch ${pitch}`).toEqual([0, 0, null, 0]);
+      // the march's cab uniforms are THIS cab; the CPU mirror of the march along each camera ray (the cab span cut x the outdoor term)
+      const U = g.atmo.surfaceDebug().cabUniforms;
+      expect(U).toEqual([cab.x, cab.y, cab.z, cab.yaw, cab.hx, cab.hy, cab.hz, cab.pitch]);
+      const uCab = {x: U[0], y: U[1], z: U[2], yaw: U[3], hx: U[4], hy: U[5], hz: U[6], pitch: U[7]};
+      const drawnAlongRay = (p: {x: number; y: number; z: number}) => {
+        const dx = p.x - eye.x, dy = p.y - eye.y, dz = p.z - eye.z, t = Math.hypot(dx, dy, dz);
+        const span = cabRaySpan(uCab, eye, {x: dx / t, y: dy / t, z: dz / t});
+        return (span && t >= span[0] && t <= span[1] ? 0 : 1) * marchOutdoor(g.atmo, p.x, p.y, p.z);
+      };
+      let inside = 0;
+      for (const fx of [-0.95, -0.5, 0, 0.5, 0.95]) for (const fy of [-0.95, 0, 0.95]) for (const fz of [-0.95, -0.5, 0, 0.5, 0.95]) {
+        const p = toWorld(mid.x + fx * hx, mid.y + fy * hy, mid.z + fz * hz), at = `${fx},${fy},${fz} (pitch ${pitch})`;
+        expect(inCab(cab, p.x, p.y, p.z), at).toBe(true);
+        // what the eye would breathe there (the ONE outdoor source) and what the march draws there: both clean
+        expect(g.sys.outdoorAir!.gasAt(p.x, p.y, p.z), `breathed in the cab at ${at}`).toBe(0);
+        expect(drawnAlongRay(p), `drawn in the cab at ${at}`).toBe(0);
+        expect(marchOutdoor(g.atmo, p.x, p.y, p.z)).toBeGreaterThan(0); // (without the cut it would be gassy: the cut does the work)
+        inside++;
+      }
+      expect(inside).toBe(75);
+      // beyond the glass (0.3 m and 2 m out of every side and the roof): the fog drawn == the hazard there == what standing there breathes
+      let outside = 0;
+      for (const [ax, ay, az] of [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]] as const) for (const gap of [0.3, 2]) {
+        const p = toWorld(mid.x + ax * (hx + gap), mid.y + ay * (hy + gap), mid.z + az * (hz + gap)), at = `${ax},${ay},${az} +${gap} (pitch ${pitch})`;
+        expect(inCab(cab, p.x, p.y, p.z), at).toBe(false);
+        const hazard = surfaceOutdoorGasAt(map, p.x, p.y, p.z);
+        expect(hazard, `street air at ${at}`).toBeCloseTo(SURFACE_AIR.C, 6);
+        expect(drawnAlongRay(p), `drawn at ${at}`).toBeCloseTo(hazard, 6);
+        expect(g.sys.outdoorAir!.gasAt(p.x, p.y, p.z)).toBeCloseTo(hazard, 9);
+        outside++;
+      }
+      expect(outside).toBe(10);
+      // the glass panes sit on the cab box's faces (within a few cm): no gassy sliver is left between the cut and the glass
+      for (const gl of TRUCK_ANCHORS.glass) {
+        const n = Math.abs(gl.n[0]) > Math.abs(gl.n[2]) ? 'x' : 'z', face = n === 'x' ? (gl.n[0] < 0 ? I.x0 : I.x1) : (gl.n[2] < 0 ? I.z0 : I.z1);
+        const lo = n === 'x' ? gl.x0 : gl.z0, hi = n === 'x' ? gl.x1 : gl.z1;
+        expect(Math.min(Math.abs(lo - face), Math.abs(hi - face), lo <= face && face <= hi ? 0 : Infinity), gl.name).toBeLessThan(0.05);
+      }
+    }
+    // the scene fog is distance fog: over the cab's few metres it is nothing (the outdoor murk is what is seen through the glass)
+    const fog = g.h.scene.fog as THREE.FogExp2, far = 2 * Math.hypot(hx, hy, hz);
+    expect(1 - Math.exp(-((fog.density * far) ** 2))).toBeLessThan(0.01);
+    expect(g.air.fog.k).toBeGreaterThan(0.99);
+    // stepping out: exposed again, the cut gone
+    const eye = {x: g.h.player.x, y: g.h.player.eye, z: g.h.player.z};
+    g.car.driving = false;
+    g.atmo.syncCab();
+    expect(g.air.cab()).toBe(null);
+    expect(g.atmo.surfaceDebug().cabUniforms.slice(4)).toEqual([0, 0, 0, 0]); // (off: hx = 0)
+    expect(g.eyeAt(eye.x, eye.z, 0, eye.y).c).toBeCloseTo(SURFACE_AIR.C, 9);
+    // an OPEN vehicle seat (not enclosed) never shelters
+    Object.assign(g.car, {driving: true, enclosed: undefined});
+    g.atmo.syncCab();
+    expect(g.air.cab()).toBe(null);
+    expect(g.eyeAt(eye.x, eye.z, 0, eye.y).c).toBeCloseTo(SURFACE_AIR.C, 9);
+    g.teardown();
+    expect(g.atmo.surfaceDebug().cab).toBe(null);
   });
 
   it('a worn mask with a filter: dps 0, protected — the exposure value, the march, the layer and the scene fog unchanged', () => {
@@ -549,8 +627,10 @@ describe('surface gas: the march surface variant fits WebGPU\'s default per-stag
         const depth = compileQuad(createMarchMaterial(createFogUniforms(), textures(shadow, false), {steps, depth: true}), backend);
         const surf = compileQuad(createMarchMaterial(createFogUniforms(), textures(shadow, true), {steps, depth: true, surface: true}), backend);
         expect(surf.fragment).toContain(VF_SURFACE_MARK);
+        expect(surf.fragment).toContain(VF_CAB_MARK); // (follow-up 1: the sealed cab's span, two plain uniforms of the shared group)
         expect(surf.fragment).toContain(VF_DEPTH_MARK);
         expect(depth.fragment).not.toContain(VF_SURFACE_MARK);
+        expect(depth.fragment).not.toContain(VF_CAB_MARK);
         const a = count(depth.fragment), b = count(surf.fragment), tag = `${backend} shadow=${shadow} steps=${steps}`;
         expect(b.uniformBuffers, `${tag}: no new uniform buffer`).toBe(a.uniformBuffers);
         expect(b.textures, `${tag}: + the column map`).toBe(a.textures + 1);
@@ -565,6 +645,7 @@ describe('surface gas: the march surface variant fits WebGPU\'s default per-stag
     const base = compileQuad(createMarchMaterial(createFogUniforms(), textures(false, true), {steps: 24}), 'wgsl').fragment;
     const flag = compileQuad(createMarchMaterial(createFogUniforms(), textures(false, true), {steps: 24, surface: true}), 'wgsl').fragment;
     expect(flag).not.toContain(VF_SURFACE_MARK);
+    expect(flag).not.toContain(VF_CAB_MARK);
     expect(wgsl(flag)).toEqual(wgsl(base));
   });
 });

@@ -67,7 +67,7 @@ import {REACTOR_GAS_LOOK, type DepthGasTable} from '../world/reactor/air'; // ta
 import {PIT_SHAFTS, ROOF_GAS_LOOK, fallbackFog, officeRoofGas, type OutdoorGas, type ShaftSpec} from '../world/gaslightRules';
 import {ROOF_FOG, roofAirOf} from '../world/roofAir';
 // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): the Surface Run district's outdoor toxic air (one column map: exposure + march)
-import {SURFACE_GAS_LOOK, surfaceOutdoorMap, type SurfaceOutdoorMap} from '../world/surface/airMask';
+import {SURFACE_GAS_LOOK, surfaceOutdoorMap, type CabVolume, type SurfaceOutdoorMap} from '../world/surface/airMask';
 import {RIDE_MASK} from '../world/rideMask'; // task studio-perf-ao-train-continuity-20261110-022206-01: the ride tunnel's medium (the CPU mirror)
 // task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO): screen-space ambient occlusion inside this pipeline
 import {AO_MARK, AmbientOcclusionPass, type AoDebug} from './ambientOcclusion';
@@ -269,6 +269,9 @@ export class VolumetricAtmosphere {
   // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): the surface variant (the district's column map texture; null elsewhere)
   private surfaceMap: SurfaceOutdoorMap | null = null;
   private surfaceTex: THREE.DataTexture | null = null;
+  // (lane AIR, follow-up 1) the sealed cab the eye sits in, asked at every frame's uniform sync (the body's pose of THIS frame); null = none
+  private cabSource: (() => CabVolume | null) | null = null;
+  private cabLast: CabVolume | null = null;
   // task reactor-expansion-20261101 (lane GASLIGHT): the regional term's outdoor part / the pit's shafts of this station (QA), the shaft
   // look (gain tunable live), the fallback's eye concentration and the scene fog it borrowed for one direct() frame
   private depthOutdoor: OutdoorGas | null = null;
@@ -791,8 +794,30 @@ export class VolumetricAtmosphere {
    * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR, QA / tests): the surface variant's state — the column map the march
    * samples (its texture's own bytes: the exposure's map) and whether this station's program carries the term.
    */
-  surfaceDebug(): {compiled: boolean; map: SurfaceOutdoorMap | null; texture: THREE.DataTexture | null; key: string} {
-    return {compiled: !!this.surfaceTex && this.depthCompiled, map: this.surfaceMap, texture: this.surfaceTex, key: this.marchKey};
+  surfaceDebug(): {compiled: boolean; map: SurfaceOutdoorMap | null; texture: THREE.DataTexture | null; key: string; cab: CabVolume | null; cabUniforms: number[]} {
+    const c = this.u.cabC.value as THREE.Vector4, h = this.u.cabH.value as THREE.Vector4;
+    return {compiled: !!this.surfaceTex && this.depthCompiled, map: this.surfaceMap, texture: this.surfaceTex, key: this.marchKey,
+      cab: this.cabLast, cabUniforms: [c.x, c.y, c.z, c.w, h.x, h.y, h.z, h.w]};
+  }
+
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR, follow-up 1): where the SEALED CAB the eye sits in is (world/surface/
+   * air.ts: the enclosed vehicle seat; null = none). Asked at each frame's uniform sync, so the box rides this frame's body pose; the
+   * surface variant then draws no gas inside it (the exposure there is 0: world/surface/airMask.ts surfaceAirAt).
+   */
+  setCabSource(source: (() => CabVolume | null) | null): void {
+    this.cabSource = source;
+    this.syncCab();
+  }
+
+  /** (lane AIR, follow-up 1) The cab uniforms from the source now (also every frame's sync). */
+  syncCab(): void {
+    let cab: CabVolume | null = null;
+    try { cab = this.cabSource?.() ?? null; } catch (err) { console.warn('volumetric: the cab source failed', err); this.cabSource = null; }
+    this.cabLast = cab;
+    const u = this.u;
+    if (cab) { (u.cabC.value as THREE.Vector4).set(cab.x, cab.y, cab.z, cab.yaw); (u.cabH.value as THREE.Vector4).set(cab.hx, cab.hy, cab.hz, cab.pitch); }
+    else (u.cabH.value as THREE.Vector4).set(0, 0, 0, 0); // (off: hx = 0)
   }
 
   /** Task reactor-build-20261101 (lane AIR, QA): the depth gas term's state. */
@@ -1199,6 +1224,7 @@ export class VolumetricAtmosphere {
     const fog = scene.fog as THREE.FogExp2 | null;
     u.fogDensity.value = fog && fog.isFogExp2 ? fog.density : 0;
     u.nearFade.value.set(p.nearFade[0], p.nearFade[1]);
+    if (this.surfaceTex) this.syncCab(); // (lane AIR, follow-up 1: the sealed cab of this frame — the district only)
     // the medium: base, height profile, patch / wisp scales, the moving field offsets at the fog clock, coverage
     u.density.value = p.density;
     u.heightFalloff.value = p.heightFalloff;

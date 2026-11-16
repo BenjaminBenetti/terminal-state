@@ -37,6 +37,7 @@ import {FlashBounce, flashBounceIrradiance} from './flashBounce';
 import {addNodeHook} from '../render/nodeHooks';
 import {stationLevels} from './levelGeometry';
 import {mallSkyField} from './mallSkylight'; // Task track3-eaton-centre-20261031 (lane ARCH): daylight through the mall's glass roof
+import {surfaceDaylightDigest, surfaceSkyField} from './surface/lookDaylight'; // Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): the district's overcast daylight
 // Task studio-baked-lighting-reflections-20261114-050258-01: cached reflection probes on metal and glass (a station built with them)
 import {ReflectionProbeVolume, activeReflectionProbes, bindReflectionProbes, installReflectNode, stationReflectLight} from './reflectionNode';
 import type {BakedProbes} from './reflectionProbes';
@@ -138,7 +139,8 @@ export interface StationLightingOptions {
 export function stationFieldSource(layout: StationLayout): FieldSource {
   // Iteration 08: one level slot per station level (upper deck / main / lower crossing).
   // Task track3-eaton-centre-20261031 (lane ARCH): + the mall's daylight through the glass roof ({} for every other level).
-  return {grid: layout.grid, lights: layout.lights, trenchFloorY: layout.trench.floorY, levels: stationLevels(layout), ...mallSkyField(layout, CELL)};
+  // Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): + the Surface Run district's sky ({} for every other layout).
+  return {grid: layout.grid, lights: layout.lights, trenchFloorY: layout.trench.floorY, levels: stationLevels(layout), ...mallSkyField(layout, CELL), ...surfaceSkyField(layout)};
 }
 
 /**
@@ -149,7 +151,8 @@ export function stationBakeInput(layout: StationLayout, opts: StationLightingOpt
   const roof = layout.mall?.roof;
   return {
     source: stationFieldSource(layout), params: StationLighting.fieldParams(opts), reactor: !!layout.reactor,
-    extra: roof ? JSON.stringify([roof.springY, roof.outline, roof.polygon ?? null]) : '',
+    // + the district's daylight inputs (lane LOOK, Surface Run; '' elsewhere)
+    extra: (roof ? JSON.stringify([roof.springY, roof.outline, roof.polygon ?? null]) : '') + surfaceDaylightDigest(layout),
   };
 }
 

@@ -13,7 +13,11 @@
 //    stops and what came in thins away). The field's storeys are the volumetric layers: what shows indoors is what hurts.
 //  - DOORS: physical leaves (world/surface/airDoorView.ts) + 'column' collision boxes, [E] open / shut, enemies push shut doors open, a
 //    door opened in play swings shut by itself once its doorway is clear, never on a body; state per district memory (SURFACE_DOORS_LANE).
-//  - THE TRUCK CAB: game.ts sets gas.shelter (the enclosed truck seat): exposure 0 inside it, the gas still drawn round it.
+//  - THE TRUCK CAB: game.ts sets gas.shelter (the enclosed truck seat): exposure 0 inside it, the gas still drawn round it. Follow-up 1:
+//    the cab's interior volume (world/surface/airMask.ts cabVolumeOf: the vehicle spec's `interior` on this frame's body pose) is clean
+//    air for the outdoor source (surfaceAirAt) AND for the march (render/volumetric.ts setCabSource: no gas drawn inside the cab, the
+//    outdoor air unchanged beyond its glass). The scene fog is distance fog (negligible over the cab's few metres) and stays the outdoor
+//    murk seen through the glass.
 
 import * as THREE from 'three';
 import {PropIndex, type CollisionWorld} from '../../core/physics';
@@ -28,7 +32,7 @@ import {buildWindows, type WindowPlan, type WindowView} from '../officeWindows';
 import {towerCue} from '../towerShared';
 import type {GasField} from '../gas/field';
 import type {GasWindowSource, OutdoorAirSource} from '../gas/system';
-import {columnTop, outdoorWeight, surfaceOutdoorGasAt, surfaceOutdoorMap, type SurfaceOutdoorMap} from './airMask';
+import {cabVolumeOf, columnTop, outdoorWeight, surfaceAirAt, surfaceOutdoorGasAt, surfaceOutdoorMap, type CabVehicle, type CabVolume, type SurfaceOutdoorMap} from './airMask';
 import {SurfaceGasField, surfaceGasZones} from './airField';
 import {SURFACE_WINDOWS_LANE, planSurfaceWindows, surfacePrebreached} from './airPanes';
 import {DOOR_RT, SURFACE_DOORS_LANE, doorBoxes, doorBreachId, fitDoorBoxes, inDoorway, planSurfaceDoors, restoredDoor, saveDoors, shutLeafDistance, type SurfaceDoorState} from './airDoors';
@@ -60,7 +64,9 @@ export interface SurfaceAirHost {
   sectionPreloads?: ((layout: StationLayout) => Promise<void>)[];
   sfx?: unknown;
   hud?: {toast(text: string, warn?: boolean): void};
-  atmosphere?: {markShadows(root: THREE.Object3D, structure: boolean): void};
+  atmosphere?: {markShadows(root: THREE.Object3D, structure: boolean): void; setCabSource?(source: (() => CabVolume | null) | null): void};
+  /** (follow-up 1) The vehicle controller (world/skywaysCar.ts): its seat, `enclosed`, body pose and spec interior give the sealed cab. */
+  skywaysCar?: CabVehicle | null;
   world?: {culler?: unknown} | null;
 }
 
@@ -101,7 +107,9 @@ export class SurfaceAirRuntime {
   private glassTex: THREE.Texture | null | undefined = undefined;
   private loading: Promise<void> | null = null;
   private readonly eye = new THREE.Vector3();
-  private readonly outdoor: OutdoorAirSource = {gasAt: (x, y, z) => (this.air ? surfaceOutdoorGasAt(this.air.map, x, y, z) : 0)};
+  // (follow-up 1) the outdoor air minus the sealed cab the player sits in (surfaceAirAt: the same cab the march leaves clean)
+  private readonly outdoor: OutdoorAirSource = {gasAt: (x, y, z) => (this.air ? surfaceAirAt(this.air.map, this.cab(), x, y, z) : 0)};
+  private readonly cabSource = (): CabVolume | null => this.cab();
 
   constructor(readonly host: SurfaceAirHost) {
     this.fog = new SurfaceAirFog(host.scene);
@@ -126,6 +134,11 @@ export class SurfaceAirRuntime {
       const cracked = this.air?.view.cracked;
       if (t && cracked && cracked.map !== t) cracked.map = t;
     }, () => { this.glassTex = null; }));
+  }
+
+  /** (follow-up 1) The sealed cab the player sits in right now (the body's current pose), or null — the district only. */
+  cab(): CabVolume | null {
+    return this.air ? cabVolumeOf(this.host.skywaysCar ?? null) : null;
   }
 
   // -------------------------------------------------------------------------------------------
@@ -181,6 +194,7 @@ export class SurfaceAirRuntime {
     // the gas system built (or not: a test host) its field from our source; adopt it
     if (!a.field && h.gas.field instanceof SurfaceGasField) a.field = h.gas.field;
     h.gas.outdoorAir = this.outdoor;
+    h.atmosphere?.setCabSource?.(this.cabSource); // (follow-up 1) the march leaves the sealed cab clean
     // doors: plan, restore (district memory), boxes, leaves, the open ones' gas (aged)
     const g0 = (layout.levels?.find(l => l.id === 0)?.grid ?? layout.grid);
     const plans = planSurfaceDoors(a.info, g0, layout.levels);
@@ -229,6 +243,7 @@ export class SurfaceAirRuntime {
     for (let i = props.length - 1; i >= 0; i--) if (mine.has(props[i])) props.splice(i, 1);
     if (a.prevIndex && h.layout === a.layout) h.propIndex = a.prevIndex;
     if (h.gas.outdoorAir === this.outdoor) h.gas.outdoorAir = null;
+    h.atmosphere?.setCabSource?.(null); // (follow-up 1)
     if (a.doorView) disposeDoorView(a.doorView);
     a.root.removeFromParent();
     for (const g of a.view.geometries) g.dispose();
@@ -401,6 +416,7 @@ export class SurfaceAirRuntime {
       outdoorCells: a.map.outdoorCells, indoorCells: a.map.indoorCells, panes: a.plans.reduce((n, q) => n + q.panes.length, 0), prebreached: a.prebreached.length,
       doors: a.doors.map(d => ({id: d.plan.id, gen: d.plan.gen, t: Math.round(d.t * 100) / 100, target: d.target, gas: d.gas, blocked: d.blocked})),
       field: a.field?.stats() ?? null, target: this.target?.plan.id ?? null, counts: {...this.counts},
+      cab: this.cab(), airAtEye: surfaceAirAt(a.map, this.cab(), p.x, p.eye, p.z), // (follow-up 1: the sealed cab, the air the eye breathes)
     };
   }
 }

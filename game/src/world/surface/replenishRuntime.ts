@@ -24,7 +24,7 @@ import {ENEMY_ARCHETYPES} from '../../ai/creatureArchetypes';
 import {ENEMY_MODEL_FILES} from '../../ai/enemyModels';
 import {spawnProfile, type EnemyFamilyId} from '../../ai/spawnTables';
 import {mulberry32} from '../../core/rng';
-import {OutdoorReplenisher, REPLENISH, outdoorFamilyPool, outdoorRulesOf, standableOn, viewerOf, type ReplenishHost, type Standable} from './replenish';
+import {OutdoorReplenisher, REPLENISH, outdoorFamilyPool, outdoorRulesOf, standableOn, truckCircleOf, viewerOf, type ReplenishHost, type Standable} from './replenish';
 
 const runtimes = new WeakMap<object, SurfaceReplenishRuntime>();
 /** The replenisher runtime installed into a game (QA / tests). */
@@ -159,10 +159,7 @@ export class SurfaceReplenishRuntime {
       },
       lineOfSight: (a, b) => g.levels.lineOfSight(a, b),
       standable: (x, z, r) => this.standable(x, z, r),
-      truck: () => {
-        const car = g.skywaysCar, b = car?.worldLive ? car.body : null;
-        return b ? {x: b.x, z: b.z, r: Math.hypot(car.spec.length, car.spec.width) / 2} : null;
-      },
+      truck: () => truckCircleOf(g.skywaysCar), // (lane TRUCK's truck: its transform + spec dims)
       active: () => g.state === 'playing' && !g.warming && !!this.layout && g.layout === this.layout,
     };
   }

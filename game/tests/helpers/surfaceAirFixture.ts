@@ -19,6 +19,7 @@ import type {WorldMaterials} from '../../src/world/materials';
 import {installGas, type GasHost, type GasSystem} from '../../src/world/gas/system';
 import {installSurfaceAir, type SurfaceAirRuntime} from '../../src/world/surface/air';
 import {VolumetricAtmosphere} from '../../src/render/volumetric';
+import {TRUCK_SPEC} from '../../src/world/surface/truckSpec';
 
 export const SA_W = 120, SA_H = 84;
 export const SA_Y = {street: 0, upper: 3.5, ceil0: 3.2, ceil1: 6.6, sky: 40} as const;
@@ -114,6 +115,10 @@ export function surfaceAirGame(L: StationLayout, mats: WorldMaterials, o: {activ
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x050607, 0.03);
   const camera = new THREE.PerspectiveCamera();
+  // (follow-up 1) the vehicle controller's seat / enclosure / body / spec (the REAL truck spec: its measured cab interior and seated eye,
+  // world/surface/truckAnchors.generated.ts, in the vehicle's own frame)
+  const car = {driving: false, enclosed: true as boolean | undefined,
+    body: null as {x: number; y: number; z: number; yaw: number; pitch?: number} | null, spec: TRUCK_SPEC};
   const h = {
     scene, camera, mats, layout: L, levels, world: {culler: {register: vi.fn()}},
     player: {x: at.x, z: at.z, y: 0, eye: 1.6, yaw: 0, radius: 0.3, alive: true, takeDamage: vi.fn()},
@@ -123,7 +128,9 @@ export function surfaceAirGame(L: StationLayout, mats: WorldMaterials, o: {activ
       active: o.active ?? true, markShadows: vi.fn(),
       setGasLayer: (s: number, f: ArrayLike<number>, r: {x0: number; y0: number; w: number; h: number}) => atmo.setGasLayer(s, f, r),
       setGasFallback: (c: number) => atmo.setGasFallback(c),
+      setCabSource: (src: Parameters<VolumetricAtmosphere['setCabSource']>[0]) => atmo.setCabSource(src),
     },
+    skywaysCar: car,
     sfx: {impact: vi.fn(), breakage: vi.fn()}, fx: {impact: vi.fn()}, damage: {burst: vi.fn(() => 3)}, hud: {toast: vi.fn()}, physics: {propsChanged: vi.fn()},
     propIndex: new PropIndex(levels, L.props),
     run: {laneStore: (k: string) => store.get(k), setLaneStore: (k: string, v: unknown) => { if (v === undefined) store.delete(k); else store.set(k, structuredClone(v)); }},
@@ -156,5 +163,5 @@ export function surfaceAirGame(L: StationLayout, mats: WorldMaterials, o: {activ
     return sys.exposure;
   };
   build();
-  return {h, sys, air, atmo, store, build, teardown, step, eyeAt, place, levels};
+  return {h, sys, air, atmo, store, build, teardown, step, eyeAt, place, levels, car};
 }

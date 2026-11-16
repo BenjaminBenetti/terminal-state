@@ -4,6 +4,8 @@
 
 import {fuelQaApi} from './fuel/fuelQa'; // task train-fuel-system
 import {surfaceAccessQaApi} from './world/surface/accessQa'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ACCESS)
+import {surfaceMapOf} from './world/surface/mapRuntime'; // (Surface Run, lane LIFE: the planning map)
+import {surfaceReplenishOf} from './world/surface/replenishRuntime'; // (Surface Run, lane LIFE: the outdoor replenisher)
 import {isP7Kind, p7ModelKeysFor} from './gen/props07';
 import * as THREE from 'three';
 import type {Game} from './game';
@@ -37,6 +39,7 @@ import {reactorArchQaApi} from './world/reactor/archInstall'; // task reactor-bu
 import {reactorSurfaceOf, type ReactorSurface} from './world/reactor/surface'; // task studio-reactor-surface-ending-20261102 (lane SURFACE)
 import {reactorEndingQaApi} from './world/reactor/endingQa'; // task studio-reactor-surface-ending-20261102 (lane ENDING)
 import {reactorCreditsOf, type ReactorCredits} from './world/reactor/credits'; // task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01 (lane CREDITS)
+import {surfaceLookQaApi} from './world/surface/look'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): the district's look summary / tune / poses
 import {gaslightQaApi} from './world/gaslightQa'; // task reactor-expansion-20261101 (lane GASLIGHT): gas visibility / pit lamps / open sky state, shaft tune
 import {blightbellyQaApi} from './ai/blightbellyQa'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): Blightbelly burst / blast / gas puff spot-check hooks
 import {sirenQaApi} from './ai/sirenQa'; // Task track1-siren-blightbelly-20261031 (lane SIREN): Siren state / wake / veins spot-check hooks
@@ -56,6 +59,7 @@ import {lockboxQaApi} from './ui/lockboxView'; // task train-lockbox-windows-202
 import {trunkQaApi} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): trunk(), trunkOpen(), trunkClose(), trunkQuick / Move / Stow
 import {truckQaApi} from './world/surface/truckStorage'; // task surface-run-opus-rebuild-20261116 (lane TRUCK): truck(), truckOpen(id), truckClose(), truckQuick / Move
 import {scannerQaApi} from './world/itemScanner'; // task train-crafting (lane SCANNER): scanner(), DEBUG scannerSweep()
+import {surfaceAirQaApi} from './world/surface/air'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): Surface Run air / doors spot-check hooks
 import {floorPlanPose, roofLadderPose, roofRewardPose, transitPose} from './gen/office'; // Task office-overhaul-20261030 (lane STRUCT) / office-interactions-layout-20261030: roof ladder / transit / roof cache / floor-plan poses
 import {mallShopPose} from './gen/mall/shopsWeapons'; // Task track3-eaton-centre-20261031 (primary): goShop
 import {MALL_POSE_NAMES, mallQaPose, type MallPoseName} from './gen/mall/qa'; // Task track3-eaton-centre-20261031 (lane GEN): mall QA poses
@@ -401,6 +405,8 @@ export function installQaHooks(game: Game): void {
     // task studio-reactor-surface-ending-20261102 (lane SURFACE): reactorSurface({sky, ground, horizon, zenith, clouds, mist}) — the
     // city plan census, eye gate / rain / wet / fog state, draws and triangles; the outdoor look's uniforms (tune)
     reactorSurface: (tune?: Parameters<ReactorSurface['qa']>[0]): object => reactorSurfaceOf(game)?.qa(tune) ?? {installed: false},
+    // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): surfaceLook(), surfaceLookTune({...}), surfaceLookPoses(), surfaceLookPose(name)
+    ...surfaceLookQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     // task studio-reactor-surface-ending-20261102 (lane ENDING): reactorEnding({online, open, skipMessage, go: 'door' | 'stairs' | 'top' |
     // 'exit' | 'hole'}) — the exterior door's phase / seal / the centre message / the objective stage; force the clear-complete state, poses
     ...reactorEndingQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
@@ -422,6 +428,10 @@ export function installQaHooks(game: Game): void {
     ...fuelQaApi(game), // task train-fuel-system: fuel(), fuelSetTank(units)
     // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ACCESS): surface.access() / go() / cross('up' | 'down') / refusal() / state() / find(level)
     surface: surfaceAccessQaApi(game, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
+    // (Surface Run, lane LIFE) surfaceMap() — the planning map's state; surfaceMapOpen() — open it like [E] at the table; surfaceReplenish() — the outdoor population / counters
+    surfaceMap: (): object => surfaceMapOf(game)?.qa() ?? {installed: false},
+    surfaceMapOpen: (): boolean => surfaceMapOf(game)?.open() ?? false,
+    surfaceReplenish: (): object => surfaceReplenishOf(game)?.qa() ?? {installed: false},
     ...trainQaApi(game), // Task player-train-shell-20261101-202805 (lane TRAIN): train(), trainDoor(i, open), trainFaceDoor(i?), trainLights(); train-shell-followup: trainGo('cab' | 'rear' | 'spawn'); train-lockbox: trainGo('lockbox')
     ...chipperQaApi(game), // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER): chipper() — state / progress / credit / pools; chipperGo() — stand at the hopper
     ...trainEquipmentQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane EQUIP): equipment() — units / plugs / grab / carry / counters; equipmentCraft(kind) — a unit on the car floor; equipmentToPlug(uid, i) — stand it beside a plug
@@ -435,6 +445,7 @@ export function installQaHooks(game: Game): void {
     ...trunkQaApi(game), // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): trunk(), trunkOpen(), trunkClose(), trunkQuick(spec), trunkMove(from, to, n?), trunkStow()
     ...truckQaApi(game), // task surface-run-opus-rebuild-20261116 (lane TRUCK): truck() (state, transform, attachment points, compartments), truckOpen(id), truckClose(), truckQuick(spec), truckMove(from, to, n?)
     ...scannerQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane SCANNER): scanner() — active / scope open / seconds to the next sweep / blip counts; DEBUG scannerSweep() — a sweep now
+    ...surfaceAirQaApi(), // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): surfaceAir() — outdoor air / cab / panes / doors / zones; surfaceDoor(id, 'open' | 'close'); DEBUG surfaceSettle()
     // Task office-overhaul-20261030 (lane STRUCT): stand at the roof access ladder (then the game's own "[E] Climb ladder") or on a transit-hall lane (0 / 2 escalators, 1 stair)
     goRoofLadder: (end: 'bottom' | 'top' = 'bottom') => {
       const q = roofLadderPose(game.layout, end);
