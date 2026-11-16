@@ -12,6 +12,7 @@ import {WorldMaterials} from '../src/world/materials';
 import {buildWorld, type BuiltWorld} from '../src/world/builder';
 import type {BuiltFace} from '../src/world/levelGeometry';
 import {SurfaceArch, coarsenSurfaceArch, cutFace} from '../src/world/surface/arch';
+import {facadeDetailMembers} from '../src/world/surface/facadeDetail';
 import {LOOK_TUNE, SIDE_NORMAL, entranceFloor, surfaceLookPlan, type FacadeSide} from '../src/world/surface/archPlan';
 import {CELL, FLOOR, SOLID} from '../src/gen/grid';
 import type {StationLayout} from '../src/gen/stationTypes';
@@ -179,7 +180,11 @@ describe('Surface Run look: the district architecture', () => {
     };
     const members = new Set<string>();
     for (const f of w.drawn!.faces as BuiltFace[]) if (surfaceTintFamily(f.finish)) members.add(f.finish);
-    for (const bl of surfaceLookPlan(lookFixture().layout)!.buildings) { if (surfaceTintFamily(bl.key)) members.add(bl.key); members.add(bl.trimKey); }
+    for (const bl of surfaceLookPlan(lookFixture().layout)!.buildings) {
+      if (surfaceTintFamily(bl.key)) members.add(bl.key);
+      members.add(bl.trimKey);
+      for (const k of facadeDetailMembers(bl.detail)) members.add(k); // (the facade detail's darker finishes and awnings: facadeDetail.ts)
+    }
     for (const k of ['surface-trim-2f3133', 'surface-trim-3a3a2c']) members.add(k); // (door frames outside a building; the tent's ropes)
     expect(members.size).toBeGreaterThan(20);
     for (const k of members) check(m, k);
