@@ -15,7 +15,8 @@
 //    drawn = what three draws: the index (or not), the draw range, the groups (material arrays only), interleaved positions;
 //    degenerate triangles (zero area, non-finite) are dropped.
 //
-// THE BUILDER (BvhBuilder): binned SAH (BVH_BINS bins on all three axes, traversal cost = intersection cost = 1), iterative over an
+// THE BUILDER (BvhBuilder): binned SAH (BVH_BINS bins on all three axes, traversal cost = intersection cost = 1; nodes of at most
+// BVH_SMALL primitives: an exact sweep of the primitives sorted along the widest centroid axis instead), iterative over an
 // explicit task stack, typed arrays only (no per-node allocation; a reused builder allocates nothing once its arrays are large
 // enough), resumable: run(work) stops after about `work` primitive visits so a big tree is built across frames. A node splits when
 // it holds more than maxLeaf primitives or when the SAH says a split is cheaper; the depth never exceeds BVH_MAX_DEPTH (a split that
@@ -36,6 +37,8 @@ export const BLAS_MAX_LEAF = 4;
 export const TLAS_MAX_LEAF = 2;
 /** SAH bins per axis. */
 export const BVH_BINS = 12;
+/** Nodes of at most this many primitives use an exact SAH sweep along their widest centroid axis instead of the bins. */
+export const BVH_SMALL = 12;
 /** The deepest a leaf may lie (root = depth 0): a traversal stack of this many entries never overflows. */
 export const BVH_MAX_DEPTH = 48;
 /** The colour word of a triangle whose geometry has no vertex colours (opaque white). */
@@ -102,16 +105,17 @@ export class BvhBuilder {
   private readonly stackC: Float32Array;
   private sp = 0;
   private readonly binN: Int32Array;
-  private readonly binB: Float32Array;
+  private readonly binB: Float64Array;
   private readonly rArea: Float64Array;
   private readonly rCount: Int32Array;
+  private readonly smallArea = new Float64Array(BVH_SMALL + 1);
 
   constructor(readonly maxLeaf: number, readonly bins = BVH_BINS, readonly depthLimit = BVH_MAX_DEPTH) {
     if (!(maxLeaf >= 1) || !(bins >= 2) || !(depthLimit >= 1)) throw new Error('BvhBuilder: bad parameters');
     this.stackI = new Int32Array((depthLimit + 2) * 4);
     this.stackC = new Float32Array((depthLimit + 2) * 6);
     this.binN = new Int32Array(3 * bins);
-    this.binB = new Float32Array(3 * bins * 6);
+    this.binB = new Float64Array(3 * bins * 6);
     this.rArea = new Float64Array(bins);
     this.rCount = new Int32Array(bins);
   }
@@ -179,24 +183,29 @@ export class BvhBuilder {
       if (depth > this.depth) this.depth = depth;
       const N = this.nodes, NU = this.nodesU32, no = node * BVH_NODE_FLOATS;
       if (n === 1) { NU[no + 3] = start; NU[no + 7] = 1; continue; }
+      if (n <= BVH_SMALL) { this.small(node, start, end, depth, cmax0 - cmin0, cmax1 - cmin1, cmax2 - cmin2); continue; }
+      // (bins in use: a small node needs no more bins than primitives — its setup cost dominates otherwise)
+      const nb = n >= NB ? NB : n > 4 ? n : NB < 4 ? NB : 4;
 
       // ---- binning (all axes with a centroid extent)
       const e0 = cmax0 - cmin0, e1 = cmax1 - cmin1, e2 = cmax2 - cmin2;
-      const k0 = e0 > 0 ? (NB * (1 - 1e-6)) / e0 : 0, k1 = e1 > 0 ? (NB * (1 - 1e-6)) / e1 : 0, k2 = e2 > 0 ? (NB * (1 - 1e-6)) / e2 : 0;
+      const k0 = e0 > 0 ? (nb * (1 - 1e-6)) / e0 : 0, k1 = e1 > 0 ? (nb * (1 - 1e-6)) / e1 : 0, k2 = e2 > 0 ? (nb * (1 - 1e-6)) / e2 : 0;
       let bestAxis = -1, bestSplit = 0, bestCost = Infinity, bestNL = 0;
       if (k0 > 0 || k1 > 0 || k2 > 0) {
-        binN.fill(0);
-        for (let q = 0; q < 3 * NB; q++) {
-          const o = q * 6;
-          binB[o] = binB[o + 1] = binB[o + 2] = Infinity;
-          binB[o + 3] = binB[o + 4] = binB[o + 5] = -Infinity;
+        for (let k = 0; k < 3; k++) {
+          for (let b = 0; b < nb; b++) {
+            const q = k * NB + b, o = q * 6;
+            binN[q] = 0;
+            binB[o] = binB[o + 1] = binB[o + 2] = Infinity;
+            binB[o + 3] = binB[o + 4] = binB[o + 5] = -Infinity;
+          }
         }
         for (let i = start; i < end; i++) {
           const p = O[i], c = p * 3, b = p * 6;
           const ax = Bd[b], ay = Bd[b + 1], az = Bd[b + 2], bx = Bd[b + 3], by = Bd[b + 4], bz = Bd[b + 5];
           if (k0 !== 0) {
             let bin = ((C[c] - cmin0) * k0) | 0;
-            if (bin < 0) bin = 0; else if (bin >= NB) bin = NB - 1;
+            if (bin < 0) bin = 0; else if (bin >= nb) bin = nb - 1;
             const o = bin * 6;
             binN[bin]++;
             if (ax < binB[o]) binB[o] = ax; if (ay < binB[o + 1]) binB[o + 1] = ay; if (az < binB[o + 2]) binB[o + 2] = az;
@@ -204,7 +213,7 @@ export class BvhBuilder {
           }
           if (k1 !== 0) {
             let bin = ((C[c + 1] - cmin1) * k1) | 0;
-            if (bin < 0) bin = 0; else if (bin >= NB) bin = NB - 1;
+            if (bin < 0) bin = 0; else if (bin >= nb) bin = nb - 1;
             const q = NB + bin, o = q * 6;
             binN[q]++;
             if (ax < binB[o]) binB[o] = ax; if (ay < binB[o + 1]) binB[o + 1] = ay; if (az < binB[o + 2]) binB[o + 2] = az;
@@ -212,7 +221,7 @@ export class BvhBuilder {
           }
           if (k2 !== 0) {
             let bin = ((C[c + 2] - cmin2) * k2) | 0;
-            if (bin < 0) bin = 0; else if (bin >= NB) bin = NB - 1;
+            if (bin < 0) bin = 0; else if (bin >= nb) bin = nb - 1;
             const q = 2 * NB + bin, o = q * 6;
             binN[q]++;
             if (ax < binB[o]) binB[o] = ax; if (ay < binB[o + 1]) binB[o + 1] = ay; if (az < binB[o + 2]) binB[o + 2] = az;
@@ -223,7 +232,7 @@ export class BvhBuilder {
         for (let k = 0; k < 3; k++) {
           if ((k === 0 ? k0 : k === 1 ? k1 : k2) === 0) continue;
           let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity, cnt = 0;
-          for (let b = NB - 1; b >= 1; b--) {
+          for (let b = nb - 1; b >= 1; b--) {
             const q = k * NB + b, o = q * 6;
             if (binN[q] > 0) {
               if (binB[o] < x0) x0 = binB[o]; if (binB[o + 1] < y0) y0 = binB[o + 1]; if (binB[o + 2] < z0) z0 = binB[o + 2];
@@ -234,7 +243,7 @@ export class BvhBuilder {
             rArea[b] = cnt > 0 ? halfArea(x0, y0, z0, x1, y1, z1) : 0;
           }
           x0 = y0 = z0 = Infinity; x1 = y1 = z1 = -Infinity; cnt = 0;
-          for (let b = 1; b < NB; b++) {
+          for (let b = 1; b < nb; b++) {
             const q = k * NB + b - 1, o = q * 6;
             if (binN[q] > 0) {
               if (binB[o] < x0) x0 = binB[o]; if (binB[o + 1] < y0) y0 = binB[o + 1]; if (binB[o + 2] < z0) z0 = binB[o + 2];
@@ -254,72 +263,128 @@ export class BvhBuilder {
       // that cannot split within the limit is a leaf; one above maxLeaf always can: every node keeps depth + medianDepth(n) <= limit)
       const sahOk = bestAxis >= 0 && depth + 1 + medianDepth(Math.max(bestNL, n - bestNL), ML) <= this.depthLimit;
       if (n <= ML && (n <= splitCost || !sahOk)) { NU[no + 3] = start; NU[no + 7] = n; continue; }
-      const L = this.nodeCount, R = L + 1, lo = L * BVH_NODE_FLOATS, ro = R * BVH_NODE_FLOATS;
-      this.nodeCount += 2;
-      NU[no + 3] = L; NU[no + 7] = 0;
-      NU[lo + 3] = 0; NU[lo + 7] = 0; NU[ro + 3] = 0; NU[ro + 7] = 0;
-      let mid: number;
-      let lc0 = Infinity, lc1 = Infinity, lc2 = Infinity, lc3 = -Infinity, lc4 = -Infinity, lc5 = -Infinity;
-      let rc0 = Infinity, rc1 = Infinity, rc2 = Infinity, rc3 = -Infinity, rc4 = -Infinity, rc5 = -Infinity;
-      if (sahOk) {
-        const k = bestAxis, sc = k === 0 ? k0 : k === 1 ? k1 : k2, cm = k === 0 ? cmin0 : k === 1 ? cmin1 : cmin2;
-        // children's boxes: the unions of their bins
-        for (let side = 0; side < 2; side++) {
-          let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
-          const b0 = side === 0 ? 0 : bestSplit, b1 = side === 0 ? bestSplit : NB;
-          for (let b = b0; b < b1; b++) {
-            const q = k * NB + b, o = q * 6;
-            if (binN[q] === 0) continue;
-            if (binB[o] < x0) x0 = binB[o]; if (binB[o + 1] < y0) y0 = binB[o + 1]; if (binB[o + 2] < z0) z0 = binB[o + 2];
-            if (binB[o + 3] > x1) x1 = binB[o + 3]; if (binB[o + 4] > y1) y1 = binB[o + 4]; if (binB[o + 5] > z1) z1 = binB[o + 5];
-          }
-          const co = side === 0 ? lo : ro;
-          N[co] = x0; N[co + 1] = y0; N[co + 2] = z0; N[co + 4] = x1; N[co + 5] = y1; N[co + 6] = z1;
-        }
-        // in-place partition by the same bin rule, tracking each side's centroid box
-        let i = start, j = end - 1;
-        while (i <= j) {
-          const p = O[i], c = p * 3;
-          let bin = ((C[c + k] - cm) * sc) | 0;
-          if (bin < 0) bin = 0; else if (bin >= NB) bin = NB - 1;
-          const x = C[c], y = C[c + 1], z = C[c + 2];
-          if (bin < bestSplit) {
-            if (x < lc0) lc0 = x; if (y < lc1) lc1 = y; if (z < lc2) lc2 = z; if (x > lc3) lc3 = x; if (y > lc4) lc4 = y; if (z > lc5) lc5 = z;
-            i++;
-          } else {
-            if (x < rc0) rc0 = x; if (y < rc1) rc1 = y; if (z < rc2) rc2 = z; if (x > rc3) rc3 = x; if (y > rc4) rc4 = y; if (z > rc5) rc5 = z;
-            O[i] = O[j]; O[j] = p; j--;
-          }
-        }
-        mid = i;
-      } else {
+      if (!sahOk) {
         // balanced: sort the range by centroid along the widest centroid axis (rare: depth limit or identical centroids)
         this.forcedMedians++;
         const k = e0 >= e1 && e0 >= e2 ? 0 : e1 >= e2 ? 1 : 2;
         if (k === 0 ? e0 > 0 : k === 1 ? e1 > 0 : e2 > 0) O.subarray(start, end).sort((a, b) => C[a * 3 + k] - C[b * 3 + k]);
-        mid = start + (n >> 1);
-        for (let side = 0; side < 2; side++) {
-          let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
-          let c0 = Infinity, c1 = Infinity, c2 = Infinity, c3 = -Infinity, c4 = -Infinity, c5 = -Infinity;
-          const i0 = side === 0 ? start : mid, i1 = side === 0 ? mid : end;
-          for (let i = i0; i < i1; i++) {
-            const p = O[i], b = p * 6, c = p * 3;
-            if (Bd[b] < x0) x0 = Bd[b]; if (Bd[b + 1] < y0) y0 = Bd[b + 1]; if (Bd[b + 2] < z0) z0 = Bd[b + 2];
-            if (Bd[b + 3] > x1) x1 = Bd[b + 3]; if (Bd[b + 4] > y1) y1 = Bd[b + 4]; if (Bd[b + 5] > z1) z1 = Bd[b + 5];
-            const x = C[c], y = C[c + 1], z = C[c + 2];
-            if (x < c0) c0 = x; if (y < c1) c1 = y; if (z < c2) c2 = z; if (x > c3) c3 = x; if (y > c4) c4 = y; if (z > c5) c5 = z;
-          }
-          const co = side === 0 ? lo : ro;
-          N[co] = x0; N[co + 1] = y0; N[co + 2] = z0; N[co + 4] = x1; N[co + 5] = y1; N[co + 6] = z1;
-          if (side === 0) { lc0 = c0; lc1 = c1; lc2 = c2; lc3 = c3; lc4 = c4; lc5 = c5; }
-          else { rc0 = c0; rc1 = c1; rc2 = c2; rc3 = c3; rc4 = c4; rc5 = c5; }
+        this.split(node, start, start + (n >> 1), end, depth);
+        continue;
+      }
+      const L = this.nodeCount, R = L + 1, lo = L * BVH_NODE_FLOATS, ro = R * BVH_NODE_FLOATS;
+      this.nodeCount += 2;
+      NU[no + 3] = L; NU[no + 7] = 0;
+      NU[lo + 3] = 0; NU[lo + 7] = 0; NU[ro + 3] = 0; NU[ro + 7] = 0;
+      let lc0 = Infinity, lc1 = Infinity, lc2 = Infinity, lc3 = -Infinity, lc4 = -Infinity, lc5 = -Infinity;
+      let rc0 = Infinity, rc1 = Infinity, rc2 = Infinity, rc3 = -Infinity, rc4 = -Infinity, rc5 = -Infinity;
+      const k = bestAxis, sc = k === 0 ? k0 : k === 1 ? k1 : k2, cm = k === 0 ? cmin0 : k === 1 ? cmin1 : cmin2;
+      // children's boxes: the unions of their bins
+      for (let side = 0; side < 2; side++) {
+        let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+        const b0 = side === 0 ? 0 : bestSplit, b1 = side === 0 ? bestSplit : nb;
+        for (let b = b0; b < b1; b++) {
+          const q = k * NB + b, o = q * 6;
+          if (binN[q] === 0) continue;
+          if (binB[o] < x0) x0 = binB[o]; if (binB[o + 1] < y0) y0 = binB[o + 1]; if (binB[o + 2] < z0) z0 = binB[o + 2];
+          if (binB[o + 3] > x1) x1 = binB[o + 3]; if (binB[o + 4] > y1) y1 = binB[o + 4]; if (binB[o + 5] > z1) z1 = binB[o + 5];
+        }
+        const co = side === 0 ? lo : ro;
+        N[co] = x0; N[co + 1] = y0; N[co + 2] = z0; N[co + 4] = x1; N[co + 5] = y1; N[co + 6] = z1;
+      }
+      // in-place partition by the same bin rule, tracking each side's centroid box
+      let i = start, j = end - 1;
+      while (i <= j) {
+        const p = O[i], c = p * 3;
+        let bin = ((C[c + k] - cm) * sc) | 0;
+        if (bin < 0) bin = 0; else if (bin >= nb) bin = nb - 1;
+        const x = C[c], y = C[c + 1], z = C[c + 2];
+        if (bin < bestSplit) {
+          if (x < lc0) lc0 = x; if (y < lc1) lc1 = y; if (z < lc2) lc2 = z; if (x > lc3) lc3 = x; if (y > lc4) lc4 = y; if (z > lc5) lc5 = z;
+          i++;
+        } else {
+          if (x < rc0) rc0 = x; if (y < rc1) rc1 = y; if (z < rc2) rc2 = z; if (x > rc3) rc3 = x; if (y > rc4) rc4 = y; if (z > rc5) rc5 = z;
+          O[i] = O[j]; O[j] = p; j--;
         }
       }
+      const mid = i;
       // right first, so the left child is built next (depth-first; the stack holds at most one entry per level)
       this.push(R, mid, end, depth + 1, rc0, rc1, rc2, rc3, rc4, rc5);
       this.push(L, start, mid, depth + 1, lc0, lc1, lc2, lc3, lc4, lc5);
     }
     return true;
+  }
+
+  /**
+   * A small node (2..BVH_SMALL primitives): an exact SAH sweep over the primitives sorted along the widest centroid axis (the
+   * binned sweep's per-node setup dominates at this size), with the same leaf / depth-limit / median rules as a binned node.
+   */
+  private small(node: number, start: number, end: number, depth: number, e0: number, e1: number, e2: number): void {
+    const ML = this.maxLeaf, O = this.order, C = this.cent, Bd = this.bounds, N = this.nodes, NU = this.nodesU32;
+    const no = node * BVH_NODE_FLOATS, n = end - start;
+    const k = e0 >= e1 && e0 >= e2 ? 0 : e1 >= e2 ? 1 : 2;
+    if ((k === 0 ? e0 : k === 1 ? e1 : e2) <= 0) {
+      // identical centroids: a leaf when it fits, else a balanced split
+      if (n <= ML) { NU[no + 3] = start; NU[no + 7] = n; return; }
+      this.forcedMedians++;
+      this.split(node, start, start + (n >> 1), end, depth);
+      return;
+    }
+    for (let i = start + 1; i < end; i++) {
+      const p = O[i], v = C[p * 3 + k];
+      let j = i - 1;
+      while (j >= start && C[O[j] * 3 + k] > v) { O[j + 1] = O[j]; j--; }
+      O[j + 1] = p;
+    }
+    const SA = this.smallArea;
+    let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+    for (let i = n - 1; i >= 1; i--) {
+      const b = O[start + i] * 6;
+      if (Bd[b] < x0) x0 = Bd[b]; if (Bd[b + 1] < y0) y0 = Bd[b + 1]; if (Bd[b + 2] < z0) z0 = Bd[b + 2];
+      if (Bd[b + 3] > x1) x1 = Bd[b + 3]; if (Bd[b + 4] > y1) y1 = Bd[b + 4]; if (Bd[b + 5] > z1) z1 = Bd[b + 5];
+      SA[i] = halfArea(x0, y0, z0, x1, y1, z1);
+    }
+    x0 = y0 = z0 = Infinity; x1 = y1 = z1 = -Infinity;
+    let bestCost = Infinity, bestI = 1;
+    for (let i = 1; i < n; i++) {
+      const b = O[start + i - 1] * 6;
+      if (Bd[b] < x0) x0 = Bd[b]; if (Bd[b + 1] < y0) y0 = Bd[b + 1]; if (Bd[b + 2] < z0) z0 = Bd[b + 2];
+      if (Bd[b + 3] > x1) x1 = Bd[b + 3]; if (Bd[b + 4] > y1) y1 = Bd[b + 4]; if (Bd[b + 5] > z1) z1 = Bd[b + 5];
+      const cost = halfArea(x0, y0, z0, x1, y1, z1) * i + SA[i] * (n - i);
+      if (cost < bestCost) { bestCost = cost; bestI = i; }
+    }
+    const area = halfArea(N[no], N[no + 1], N[no + 2], N[no + 4], N[no + 5], N[no + 6]);
+    const splitCost = 1 + bestCost / (area > 0 ? area : 1e-30);
+    const sahOk = depth + 1 + medianDepth(Math.max(bestI, n - bestI), ML) <= this.depthLimit;
+    if (n <= ML && (n <= splitCost || !sahOk)) { NU[no + 3] = start; NU[no + 7] = n; return; }
+    if (!sahOk) this.forcedMedians++;
+    // (the range is sorted along the widest axis, so the balanced split is its middle)
+    this.split(node, start, sahOk ? start + bestI : start + (n >> 1), end, depth);
+  }
+
+  /** Makes `node` an interior node over [start, mid) / [mid, end): children boxes + centroid boxes by a pass, both pushed. */
+  private split(node: number, start: number, mid: number, end: number, depth: number): void {
+    const O = this.order, C = this.cent, Bd = this.bounds, N = this.nodes, NU = this.nodesU32;
+    const no = node * BVH_NODE_FLOATS;
+    const L = this.nodeCount, R = L + 1, lo = L * BVH_NODE_FLOATS, ro = R * BVH_NODE_FLOATS;
+    this.nodeCount += 2;
+    NU[no + 3] = L; NU[no + 7] = 0;
+    NU[lo + 3] = 0; NU[lo + 7] = 0; NU[ro + 3] = 0; NU[ro + 7] = 0;
+    // right child first on the stack, so the left one is built next (depth-first)
+    for (let side = 1; side >= 0; side--) {
+      let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+      let c0 = Infinity, c1 = Infinity, c2 = Infinity, c3 = -Infinity, c4 = -Infinity, c5 = -Infinity;
+      const i0 = side === 0 ? start : mid, i1 = side === 0 ? mid : end;
+      for (let i = i0; i < i1; i++) {
+        const p = O[i], b = p * 6, c = p * 3;
+        if (Bd[b] < x0) x0 = Bd[b]; if (Bd[b + 1] < y0) y0 = Bd[b + 1]; if (Bd[b + 2] < z0) z0 = Bd[b + 2];
+        if (Bd[b + 3] > x1) x1 = Bd[b + 3]; if (Bd[b + 4] > y1) y1 = Bd[b + 4]; if (Bd[b + 5] > z1) z1 = Bd[b + 5];
+        const x = C[c], y = C[c + 1], z = C[c + 2];
+        if (x < c0) c0 = x; if (y < c1) c1 = y; if (z < c2) c2 = z; if (x > c3) c3 = x; if (y > c4) c4 = y; if (z > c5) c5 = z;
+      }
+      const co = side === 0 ? lo : ro;
+      N[co] = x0; N[co + 1] = y0; N[co + 2] = z0; N[co + 4] = x1; N[co + 5] = y1; N[co + 6] = z1;
+      this.push(side === 0 ? L : R, i0, i1, depth + 1, c0, c1, c2, c3, c4, c5);
+    }
   }
 }
 

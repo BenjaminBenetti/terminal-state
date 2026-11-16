@@ -215,6 +215,108 @@ describe('rt scene per frame', () => {
     expect(rt.debugEntries(b)).toBeNull();
   });
 
+  it('builds the static rebuild across frames over a snapshot: what moves or goes meanwhile stays traced right', () => {
+    const scene = new THREE.Scene(), box = new THREE.BoxGeometry(1, 1, 1), ms: THREE.Mesh[] = [];
+    for (let i = 0; i < 600; i++) { const m = mesh(box, std(), (i % 30) * 3, 0, Math.floor(i / 30) * 3); ms.push(m); scene.add(m); }
+    scene.updateMatrixWorld(true);
+    const rt = new RtScene({staticBudgetMs: 0}), B = rt.buffers;
+    rt.prepare([scene]);
+    const [a, c, d, f] = [ms[0], ms[1], ms[2], ms[599]];
+    a.position.z = -6; // (a: moves, then rests into the pending rebuild)
+    scene.updateMatrixWorld(true);
+    rt.sync(0.1, null, 0, 5);
+    expect(rt.debugEntries(a)![0].state).toBe('moving');
+    let t = 1.2;
+    rt.sync(t, null, 0, 5); // (a has rested: a rebuild starts, one chunk a frame)
+    expect(rt.stats().staticBuildPending).toBe(true);
+    expect(rt.debugEntries(a)![0].state).toBe('moving'); // (still traced from the dynamic tree until the commit)
+    // meanwhile c and f (one end of the recs is listed by the first chunk, the other later) move and d is removed
+    c.position.z = -9;
+    f.position.z = -12;
+    scene.remove(d);
+    scene.updateMatrixWorld(true);
+    const rebuilds = rt.stats().staticRebuilds;
+    let frames = 0;
+    const check = (): void => {
+      expect(down(B, 0, -6)?.t).toBeCloseTo(9.5, 6);
+      expect(down(B, 3, -9)?.t).toBeCloseTo(9.5, 6);
+      expect(down(B, 3, 0)).toBeNull();
+      expect(down(B, 6, 0)).toBeNull();
+      expect(down(B, 9, 0)?.t).toBeCloseTo(9.5, 6);
+      expect(down(B, 87, -12)?.t).toBeCloseTo(9.5, 6);
+      expect(down(B, 87, 57)).toBeNull();
+    };
+    while (rt.stats().staticBuildPending) { t += 0.01; rt.sync(t, null, 0, 5); check(); frames++; expect(frames).toBeLessThan(500); }
+    expect(frames).toBeGreaterThan(2);
+    expect(rt.stats().staticRebuilds).toBe(rebuilds + 1);
+    expect(rt.debugEntries(a)![0].state).toBe('static');
+    expect(rt.debugEntries(c)![0].state).toBe('moving');
+    expect(rt.debugEntries(c)![0].staticSlot).toBe(-1);
+    // (c, d, f: listed before they changed -> written DISABLED; listed after -> not taken. Live slots: the 597 others)
+    const disabledSlots = (): number => {
+      let k = 0;
+      for (let i = 0; i < B.layout.staticInstanceCount; i++) if (B.tlasU32[(B.layout.instances + RT_INSTANCE_VEC4 * i) * 4 + 14] & RT_INST_DISABLED) k++;
+      return k;
+    };
+    expect(B.layout.staticInstanceCount - disabledSlots()).toBe(597);
+    expect(disabledSlots()).toBeGreaterThan(0);
+    // c rests: the next rebuild takes it and drops the disabled slots
+    for (t += 0.5; t < 4; t += 0.05) { rt.sync(t, null, 0, 5); check(); }
+    expect(rt.stats().staticBuildPending).toBe(false);
+    expect(rt.debugEntries(c)![0].state).toBe('static');
+    expect(rt.debugEntries(f)![0].state).toBe('static');
+    expect(B.layout.staticInstanceCount).toBe(599);
+    expect(B.layout.dynamicInstanceCount).toBe(0);
+    expect(disabledSlots()).toBe(0);
+  });
+
+  it('keeps tint / material changes made while a static rebuild is pending, and every write inside a dirty span', () => {
+    const scene = new THREE.Scene(), n = 700, im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), std(0xffffff), n);
+    const d = new THREE.Object3D(), white = new THREE.Color(1, 1, 1);
+    for (let i = 0; i < n; i++) { d.position.set((i % 35) * 3, 0, Math.floor(i / 35) * 3); d.updateMatrix(); im.setMatrixAt(i, d.matrix); im.setColorAt(i, white); }
+    const p = mesh(new THREE.BoxGeometry(1, 1, 1), std(0x808080), -20, 0, 0);
+    scene.add(im, p);
+    scene.updateMatrixWorld(true);
+    const rt = new RtScene({staticBudgetMs: 0}), B = rt.buffers;
+    rt.prepare([scene]);
+    rt.sync(0, null, 0, 5);
+    d.position.set(0, 0, -6); d.updateMatrix();
+    im.setMatrixAt(0, d.matrix);
+    im.instanceMatrix.needsUpdate = true;
+    rt.sync(0.1, null, 0, 5);
+    let t = 1.2;
+    rt.sync(t, null, 0, 5);
+    expect(rt.stats().staticBuildPending).toBe(true);
+    // while it is pending: instance 5 gets a tint, p a new (red) material
+    im.setColorAt(5, new THREE.Color(0.5, 0.25, 1));
+    im.instanceColor!.needsUpdate = true;
+    p.material = std(0xff0000);
+    const rgb = (x: number, z: number): number[] => { const h = down(B, x, z)!; return [h.r, h.g, h.b].map(v => +v.toFixed(4)); };
+    let frames = 0;
+    while (rt.stats().staticBuildPending || frames === 0) {
+      t += 0.01;
+      B.markUploaded();
+      const before = B.tlasU32.slice(), lv = B.layoutVersion;
+      rt.sync(t, null, 0, 5);
+      expectDirtyCovers(B, before, lv);
+      expect(rgb(15, 0)).toEqual([0.4, 0.2, 0.8]);
+      expect(rgb(-20, 0)).toEqual([0.8, 0, 0]);
+      expect(down(B, 0, -6)?.t).toBeCloseTo(9.5, 6);
+      expect(down(B, 0, 0)).toBeNull();
+      expect(++frames).toBeLessThan(500);
+    }
+    expect(frames).toBeGreaterThan(2);
+    expect(rt.debugEntries(im)![0].state).toBe('static');
+    expect(rt.debugEntries(im)![5].state).toBe('static');
+    expect(rgb(15, 0)).toEqual([0.4, 0.2, 0.8]);
+    expect(rgb(-20, 0)).toEqual([0.8, 0, 0]);
+    expect(down(B, 15, 0)!.instance).toBeLessThan(B.layout.staticInstanceCount);
+    // slots are unique and every static entry has one
+    const slots = new Set<number>();
+    for (const e of [...rt.debugEntries(im)!, ...rt.debugEntries(p)!]) { expect(e.staticSlot).toBeGreaterThanOrEqual(0); slots.add(e.staticSlot); }
+    expect(slots.size).toBe(n + 1);
+  });
+
   it('traces the bodies as PROXY capsules from the dynamic tree, frame by frame', () => {
     const rt = new RtScene({bodyAlbedo: [0.1, 0.2, 0.3]}), B = rt.buffers;
     rt.prepare([new THREE.Scene()]);
@@ -328,6 +430,25 @@ describe('rt scene caps, dirty spans, cost', () => {
     expect(rt.stats().staticRebuilds).toBeGreaterThan(2);
     expect(expectDirtyCovers(B, snap, lvs)).toBeGreaterThan(0);
     expect(rt.stats().instances.dynamic).toBe(0);
+  });
+
+  it('compacts the BLAS streams once removed geometry wastes a quarter of them, still tracing what is left', () => {
+    const scene = new THREE.Scene(), ms: THREE.Mesh[] = [];
+    for (let i = 0; i < 30; i++) { const m = mesh(new THREE.SphereGeometry(0.5, 48, 28), std(), i * 2, 0, 0); ms.push(m); scene.add(m); }
+    scene.updateMatrixWorld(true);
+    const rt = new RtScene(), B = rt.buffers;
+    rt.prepare([scene]);
+    const per = rt.stats().triangles / 30;
+    for (let i = 0; i < 26; i++) scene.remove(ms[i]);
+    B.markUploaded();
+    rt.sync(0, null, 0, 5); // (inventory: 26 gone, their BLAS dead; the static rebuild compacts)
+    const st = rt.stats();
+    expect(st.compactions).toBe(1);
+    expect(st.triangles).toBe(4 * per);
+    expect(st.deadTriangles).toBe(0);
+    expect(B.blasDirtyTriStart).toBe(0);
+    expect(B.blasDirtyTriEnd).toBe(4 * per);
+    for (let i = 0; i < 30; i++) expect(down(B, i * 2, 0) !== null).toBe(i >= 26);
   });
 
   it('prepares as labelled paced steps and clears', () => {
