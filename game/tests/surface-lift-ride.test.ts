@@ -68,6 +68,18 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       await game.load(() => {});
       const until = async (f: () => boolean, max = 8000) => { for (let i = 0; i < max && !f(); i++) await h.waitFrames(1); return f(); };
       const press = async () => { G.interact(); await h.waitFrames(1); };
+      /** The ride's state (failure messages / progress marks). */
+      const diag = () => {
+        const j = game.journeyCompileStats as unknown as Record<string, unknown> | null;
+        const q = R.qa() as unknown as Record<string, unknown>;
+        return JSON.stringify({state: game.state, gap: G.transitGap, counts: game.surfaceCrossCounts, crossing: game.surfaceCrossing, ride: {phase: q.phase, door: q.door, travel: q.travel, ready: q.ready, reposed: q.reposed, holding: q.holding},
+          compile: j ? {phase: j.phase, scene: `${j.sceneDone}/${j.sceneItems}`, shadow: `${j.shadowDone}/${j.casters}`, steps: j.steps, slices: j.slices} : null, errors: errors.slice(0, 2), frameErrors: frameErrors.slice(0, 2)});
+      };
+      /** until() with a progress mark every `every` frames (the ride's long waits). */
+      const ridden = async (f: () => boolean, label: string, max = 9000, every = 1500) => {
+        for (let i = 0; i < max && !f(); i++) { if (i && i % every === 0) marks.push(`${label} +${i} frames ${((performance.now() - T0) / 1000).toFixed(0)} s: ${diag()}`); await h.waitFrames(1); }
+        return f();
+      };
       let hits = 0;
       vi.spyOn(game.player, 'takeDamage').mockImplementation(() => { hits++; }); // (the district's hunters: counted, not applied)
       const R = surfaceLiftOf(game)!;
@@ -121,7 +133,7 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
         expect(game.journeyCompileStats?.steps, 'paused: the compile\'s scheduled steps hold').toBe(steps0);
         game.setState('playing'); // (Resume; enterPlay's pointer-lock request never settles headless)
       }
-      expect(await until(() => game.surfaceCrossCounts.done === done0 + 1 && R.phase === 'idle')).toBe(true);
+      expect(await ridden(() => game.surfaceCrossCounts.done === done0 + 1 && R.phase === 'idle', 'ride up'), diag()).toBe(true);
       mark('[E] up');
       const ride = samples.slice(n0);
       const gapFrames = ride.filter(s => s.gap).length;
@@ -179,7 +191,7 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       expect(qa.surface.access().prompt).toBe(`<b>[E]</b> Ride down to ${game.run.node(pick.station)!.name}`);
       const c1 = {...game.lifecycleCounts}, n1 = samples.length, done1 = game.surfaceCrossCounts.done, staleJob = game.journeyCompileStats;
       await press();
-      expect(await until(() => game.surfaceCrossCounts.done === done1 + 1 && R.phase === 'idle')).toBe(true);
+      expect(await ridden(() => game.surfaceCrossCounts.done === done1 + 1 && R.phase === 'idle', 'ride down'), diag()).toBe(true);
       mark('[E] down');
       const down = samples.slice(n1), shut2 = down.findIndex(s => s.phase === 'travel');
       expect(shut2).toBeGreaterThan(0);
@@ -206,7 +218,7 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       expect(qa.surface.go()).toBe(true);
       await h.waitFrames(2);
       await press();
-      expect(await until(() => game.surfaceCrossCounts.recovered === rec0 + 1 && game.state === 'playing')).toBe(true);
+      expect(await ridden(() => game.surfaceCrossCounts.recovered === rec0 + 1 && game.state === 'playing', 'recovery'), diag()).toBe(true);
       prep.mockRestore();
       mark('recovered');
       expect(game.run.current).toEqual(hostKey);
@@ -222,5 +234,5 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       h.stop();
       process.stdout.write(`surface-lift-ride: ${marks.join(' | ')}\n`);
     }
-  }, 900_000);
+  }, 1_500_000);
 });

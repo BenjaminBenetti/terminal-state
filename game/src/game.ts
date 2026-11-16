@@ -11,7 +11,7 @@ import {PropModelLibrary, loadAssets, type AssetBundle} from './assets/loader';
 import {foreignTo, levelWorkingSet, selectLevelKeys} from './assets/levelAssets';
 import {SURFACE_LANE, hostKeyOf, isSurfaceHost, isSurfaceKey, sectionAssetLevel, surfaceKeyOf, surfaceVersionFor} from './gen/surface/surfaceRun';
 import {abortCrossers, arriveCrossers, departCrossers, surfaceCrossRefusal, surfaceCrossers, type SurfaceCrosser, type SurfaceCrossGate, type SurfaceCrossRefusal, type SurfaceCrossResult} from './world/surface/crossing'; // (lane ACCESS: Game.crossSurface)
-import {liftOfLayout, type SurfaceLiftRuntime} from './world/surface/liftRuntime'; // (lane ACCESS follow-up: the v2 crossing is a cargo-lift ride)
+import {LIFT_RIDE_COMPILE, liftOfLayout, type SurfaceLiftRuntime} from './world/surface/liftRuntime'; // (lane ACCESS follow-up: the v2 crossing is a cargo-lift ride)
 import {installSurfaceRun} from './world/surface/install'; // task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN // Task track3-eaton-centre-20261031 (lane PACKAGE): level-scoped lazy assets
 import {adoptStationName} from './campaign/stationName';
 import {LevelResources} from './assets/levelResources'; // lane PACKAGE (track3): level textures / GPU resources released with their level
@@ -2237,6 +2237,11 @@ export class Game {
 
   /** True while no station world exists during a journey (the old one torn down, the next not built yet). */
   private transitGap = false;
+  /**
+   * (version 2, lane ACCESS follow-up) The cargo lift ride's destination is BUILT (still in the transit gap while it compiles — no world
+   * system runs, the player held in the car): its level culler runs again, so the frames drawn meanwhile cull as in play.
+   */
+  private liftBuilt = false;
 
   /** The transit gap's update: look, the riding car + the player in it, the camera. Nothing touches a station world. */
   private updateTransitGap(dt: number): void {
@@ -2461,8 +2466,9 @@ export class Game {
       const casters = mode === 'full' && this.flashlight.castShadow ? runtimeVariantsFirst(byNear([...plan.items, ...plan.others].filter(i => i.caster))) : [];
       const receiver = plan.items.find(i => i.object.receiveShadow && !i.flips.length) ?? null;
       // (task journey-compile-pacing-20261104: paced to real frames — frameNo = the scheduler's frame callbacks begun)
+      // (lane ACCESS follow-up) the lift ride waits for it with only the sealed car drawn: a step every frame, bigger chunks / slices
       const job = (this.journeyCompile = new JourneyCompile({renderer: this.renderer as unknown as JourneyCompileOptions['renderer'], scheduler: this.frameBudget,
-        scene: this.scene, camera: this.camera, target, depth, items, casters, receiver, frameNo: () => this.frameBudget.frame}).start());
+        scene: this.scene, camera: this.camera, target, depth, items, casters, receiver, frameNo: () => this.frameBudget.frame, ...(full ? LIFT_RIDE_COMPILE : {})}).start());
       if (full) {
         await job.done;
         console.info(`Terminal State: lift ride compile ${job.stats.phase} — scene ${job.stats.sceneDone}/${job.stats.sceneItems}, shadows ${job.stats.shadowDone}/${job.stats.casters}, ${((performance.now() - t0) / 1000).toFixed(1)} s`);
@@ -2837,14 +2843,15 @@ export class Game {
       if (!dest || !R.repose(dest)) throw new Error('the destination has no lift');
       await this.warmRun;
       await this.buildSectionPaced(to, layout, {kind: 'surface'}, false);
+      this.liftBuilt = true;
       this.surfaceCrossing.phase = 'arrive';
       const failed = arriveCrossers(departed, to);
       departed = [];
       this.surfaceCrossing.phase = 'warmup';
       this.glassMirror?.prime();
       const c = await this.backgroundCompile(true);
-      if (c === 'cancelled') { R.reset(); this.transitGap = false; return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'}; }
-      this.transitGap = false;
+      if (c === 'cancelled') { R.reset(); this.transitGap = this.liftBuilt = false; return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'}; }
+      this.transitGap = this.liftBuilt = false;
       this.settleRtScene();
       if (!(await R.markReady())) return {ok: false, reason: 'cancelled', error: 'The ride was interrupted.'};
       this.flushRetired(); // the left section's queued releases (its programs are re-used by now)
@@ -2853,7 +2860,7 @@ export class Game {
       this.surfaceCrossCounts.done++;
       return {ok: true, to};
     } catch (err) {
-      this.transitGap = false;
+      this.transitGap = this.liftBuilt = false;
       R.reset();
       if (err instanceof PacedBuildCancelled) return {ok: false, reason: 'cancelled', error: 'The crossing was interrupted.'};
       console.error('Surface Run: the lift ride failed', err);
@@ -3533,7 +3540,7 @@ export class Game {
   render(): boolean {
     if (this.gpu?.deviceLost || !this.renderer.initialized) return false; // Iteration 13 (CORE): lost device / not initialized: nothing to draw with
     this.prof.lap(SPAN.cull); // lane MEASURE
-    if (!this.transitGap) this.world?.culler.update(this.camera); // Iteration 08 (Lane G): level / fog culling (cheap; skipped while still); (lane BUILD) never in the transit gap: no station is live (a paced build is in progress)
+    if (!this.transitGap || this.liftBuilt) this.world?.culler.update(this.camera); // Iteration 08 (Lane G): level / fog culling (cheap; skipped while still); (lane BUILD) never in the transit gap: no station is live (a paced build is in progress)
     this.prof.lap(SPAN.draw); // lane MEASURE
     this.rtTraceFrame = true; // (RT Flashlight: this frame traces the bounce; the warm-up's hidden frames do not)
     this.drawFrame();

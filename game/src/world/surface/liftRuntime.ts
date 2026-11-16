@@ -44,6 +44,13 @@ export const LIFT_RIDE = {
   lamp: {w: 0.9, d: 0.5, gap: 0.02},
 } as const;
 
+/**
+ * The destination's compile while the ride waits for it (Game.backgroundCompile(true); render/journeyCompile.ts options): only the sealed
+ * car is drawn, so the job steps every frame (maxStaleMs 0: the scheduler's bounded overdue rule, never a held frame) with bigger scene
+ * chunks and slices than a train journey's play-time pacing. Coverage is the journey's 'full' plan, uncapped.
+ */
+export const LIFT_RIDE_COMPILE = {chunk: 8, shadowChunk: 16, maxStaleMs: 0, sliceMs: 8, shadowTargetMs: 6} as const;
+
 /** One end's drawn lift. */
 interface LiftEnd {
   lift: SurfaceLift;
