@@ -204,6 +204,11 @@ describe('the device resources: only while a station is traced', () => {
     const placeholderE = (RTB.E as unknown as {value: THREE.Texture}).value, placeholderN = (RTB.N as unknown as {value: THREE.Texture}).value;
     expect(rt.gpu.allocated).toBe(false); // (made at boot: nothing on the device until a station is traced)
     const bumps = bindingRefreshStats.bumps;
+    // (the cone table's uploads, by the buffer they go to: every allocation needs its own — a new uniform buffer is zeros)
+    const coneWrites: unknown[] = [];
+    const queue = rt.gpu.device.queue as unknown as {writeBuffer(dst: {label?: string}, ...a: unknown[]): void};
+    const writeBuffer = queue.writeBuffer.bind(queue);
+    queue.writeBuffer = (dst, ...a) => { if (dst.label === 'rt-cone') coneWrites.push(dst); writeBuffer(dst, ...a); };
     rt.setScene(stubScene());
     expect(rt.gpu.allocated).toBe(true);
     expect((RTB.E as unknown as {value: THREE.Texture}).value).not.toBe(placeholderE);
@@ -217,6 +222,7 @@ describe('the device resources: only while a station is traced', () => {
     expect(RTB.grid.value.toArray().slice(0, 2)).toEqual([640, 360]);
     expect(rt.frame(0.016, spot, camera, 1280, 720, null, 0)).toBe(true);
     expect(log.submits).toBe(2);
+    expect(coneWrites.length, 'the cone table is written once to the allocation').toBe(1);
     spot.intensity = 0;
     expect(rt.frame(0.033, spot, camera, 1280, 720, null, 0)).toBe(false);
     expect([RTB.cam.value.w, rt.stats.historyReset]).toEqual([0, 'flashlight off']);
@@ -232,6 +238,11 @@ describe('the device resources: only while a station is traced', () => {
     rt.setScene(stubScene());
     expect(rt.frame(0.066, spot, camera, 1280, 720, null, 0)).toBe(true);
     expect(rt.gpu.lifecycle).toEqual({allocs: 2, frees: 1});
+    // the same spot (the runtime keeps its table), yet the NEW allocation's buffer got it: no frame traces with a zero cone
+    expect(coneWrites.length, 'the new allocation got the cone table').toBe(2);
+    expect(coneWrites[1]).not.toBe(coneWrites[0]);
+    expect(rt.frame(0.083, spot, camera, 1280, 720, null, 0)).toBe(true);
+    expect(coneWrites.length, 'and only once').toBe(2);
     expect(log.issues).toEqual([]);
     rt.dispose();
     expect(rt.gpu.allocated).toBe(false);

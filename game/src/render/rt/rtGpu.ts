@@ -223,13 +223,22 @@ export class RtGpu {
     (RTB.E as unknown as {value: THREE.Texture}).value = texE;
     (RTB.N as unknown as {value: THREE.Texture}).value = texN;
     refreshTextureBindings();
+    this.coneHeld = null;
     this.lifecycle.allocs++;
   }
 
-  /** Upload the cone table (when the spot's angle / penumbra changed). */
+  /**
+   * The cone table this allocation's uniform holds (null: none yet — a fresh allocation's buffer is zeros, every light ray would
+   * have no direction). Kept per allocation, so a table is written again after every free + alloc.
+   */
+  get coneTable(): Float32Array | null { return this.buf ? this.coneHeld : null; }
+  private coneHeld: Float32Array | null = null;
+
+  /** Upload the cone table (a new allocation, or the spot's angle / penumbra changed). */
   writeCone(dirs: Float32Array): void {
     if (!this.buf) return;
     this.device.queue.writeBuffer(this.buf.cone, 0, dirs.buffer, dirs.byteOffset, dirs.byteLength);
+    this.coneHeld = dirs;
   }
 
   /**

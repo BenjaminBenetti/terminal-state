@@ -124,9 +124,10 @@ describe('RT Flashlight in the real Game (WebGPU path, validating device)', () =
     const withRt = (name: string): string[] => [...drawn.get(name)!.values()].filter(ro => /\brtCam\b/.test(fragmentOf(ro))).map(ro => ro.object.name);
     /** Drawn render objects whose bindings hold the traced result's textures (the runtime's, while a station is traced). */
     const rtBound = (name: string): RenderObject[] => [...drawn.get(name)!.values()].filter(ro => ro.getBindings().flatMap(b => b.bindings).some(b => b.isSampledTexture && (b.textureNode?.value === RTB.E.value || b.textureNode?.value === RTB.N.value)));
-    const lighting = () => ({lights: fieldLights(), rt: g.lightPool.rt, bounce: FLASH_BOUNCE.debug().bound, traced: rt.hasScene, allocated: rt.gpu.allocated});
-    const RT_LIT = {lights: [stationReflectLight(true, true, true).name], rt: true, bounce: false, traced: true, allocated: true};
-    const STANDARD = {lights: [stationReflectLight(true, true).name], rt: false, bounce: true, traced: false, allocated: false};
+    // (`cone`: the allocation holds the light rays' cone table — a fresh one after a free is zeros until it is written)
+    const lighting = () => ({lights: fieldLights(), rt: g.lightPool.rt, bounce: FLASH_BOUNCE.debug().bound, traced: rt.hasScene, allocated: rt.gpu.allocated, cone: rt.gpu.coneTable !== null});
+    const RT_LIT = {lights: [stationReflectLight(true, true, true).name], rt: true, bounce: false, traced: true, allocated: true, cone: true};
+    const STANDARD = {lights: [stationReflectLight(true, true).name], rt: false, bounce: true, traced: false, allocated: false, cone: false};
     const stationPrint = () => fnv(JSON.stringify([
       fnv(Buffer.from(g.layout.grid.cells).toString('latin1')), g.layout.props.map(p => [p.kind, Math.round(p.x * 100), Math.round(p.z * 100)]), g.layout.lights,
       g.containers.all.map(x => x.state.lots.map(l => [l.itemId, l.count ?? 1])),

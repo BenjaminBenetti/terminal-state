@@ -136,10 +136,9 @@ export class RtFlashlight {
     const checked = this.checks > 0;
     if (checked) { this.checks--; this.gpu.device.pushErrorScope('validation'); this.gpu.device.pushErrorScope('out-of-memory'); }
     this.gpu.upload(scene.buffers);
-    if (!this.cone || this.cone.angle !== spot.angle || this.cone.penumbra !== spot.penumbra) {
-      this.cone = makeRtCone(spot.angle, spot.penumbra);
-      this.gpu.writeCone(this.cone.dirs);
-    }
+    if (!this.cone || this.cone.angle !== spot.angle || this.cone.penumbra !== spot.penumbra) this.cone = makeRtCone(spot.angle, spot.penumbra);
+    // (written to every allocation: one made after a free — the next station, a relight back to RT — starts as zeros)
+    if (this.gpu.coneTable !== this.cone.dirs) this.gpu.writeCone(this.cone.dirs);
 
     const f = this.block.f32, u = this.block.u32;
     // the camera: eye, the ray basis (x tan of the half fields, the projection's shift folded into the forward), the reach
