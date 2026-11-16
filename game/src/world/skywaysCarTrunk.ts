@@ -154,7 +154,8 @@ export class TrunkSystem {
   onBuild(): void {
     this.close('travel');
     const car = this.car;
-    if (!car.worldLive || !car.body) { this.store.clear(); this.loadedFor = -1; return; }
+    // (task surface-run-opus-rebuild-20261116, lane TRUCK: the controller's other vehicle has no trunk — its compartments are its own)
+    if (!car.worldLive || !car.body || car.vehicle !== 'car') { this.store.clear(); this.loadedFor = -1; return; }
     this.store.load({v: 1, slots: car.trunkJSON});
     this.loadedFor = car.counts.builds;
     this.counts.loads++;

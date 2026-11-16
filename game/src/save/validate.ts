@@ -27,6 +27,7 @@ import {PLAYER_TRAIN_PARTICIPANT} from '../run/playerTrain';
 import {BAG_LANE} from '../run/bagStore';
 import {FUEL, FUEL_LANE, debitProblem, debitUnits, stationFuelProblem, trainFuelProblem, type FuelDebit} from '../fuel/fuel';
 import {SKYWAYS_CAR_LANE, TRUNK_SLOTS, skywaysCarProblem} from '../world/skywaysCarStore'; // task skyways-level-20261106 (lane CAR): the prize car's pose
+import {SURFACE_TRUCK_LANE, TRUCK_COMPARTMENTS, surfaceTruckProblem} from '../world/surface/truckStore'; // task surface-run-opus-rebuild-20261116 (lane TRUCK): the truck's record
 import {chipperProblem} from '../fuel/chipperFuel'; // task studio-corpse-chipper-fuel-20261110-235304-01: the train chipper's record
 import {corpseCarriable, corpseFeedable} from '../ai/corpseTrait';
 import {CORPSE_SHOP_LANE, corpseShopProblem, type CorpseShopJSON} from '../market/corpseShop/shopState'; // task studio-corpse-market-shop-20261114-031614-01
@@ -633,6 +634,12 @@ function lanes(v: unknown, path: string): void {
     if (cp) bad(`${path}.${SKYWAYS_CAR_LANE}`, cp);
     // task skyways-vehicle-20261107 (v2): the trunk's stacks as strictly as the Lockbox's (uids unique within it, bags, mags, filter, air)
     if ((car as {v: number}).v === 2) slotList((car as {trunk: unknown}).trunk, `${path}.${SKYWAYS_CAR_LANE}.trunk`, TRUNK_SLOTS, new Set());
+  }
+  if (has(o, SURFACE_TRUCK_LANE)) { // task surface-run-opus-rebuild-20261116 (lane TRUCK): the Surface Run truck (pose, lamps, compartments)
+    const tr = o[SURFACE_TRUCK_LANE], tp = surfaceTruckProblem(tr);
+    if (tp) bad(`${path}.${SURFACE_TRUCK_LANE}`, tp);
+    // every compartment's stacks as strictly as the Lockbox's, their uids in the run-wide set (one item, one uid)
+    TRUCK_COMPARTMENTS.forEach((c, i) => slotList((tr as {storage: unknown[]}).storage[i], `${path}.${SURFACE_TRUCK_LANE}.storage[${i}]`, c.slots, uidScope));
   }
   if (has(o, MARKET_STOCK_LANE)) marketStock(o[MARKET_STOCK_LANE], `${path}.${MARKET_STOCK_LANE}`); // lane TRADE: a market station's stall stock
   if (has(o, MARKET_HOSTILITY_LANE)) { const hp = marketHostilityProblem(o[MARKET_HOSTILITY_LANE]); if (hp) bad(`${path}.${MARKET_HOSTILITY_LANE}`, hp); } // lane COMBAT: the settlement's hostility (people alive / dead / fled)

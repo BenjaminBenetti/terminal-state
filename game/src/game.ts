@@ -218,6 +218,7 @@ import {installVomit, type VomitAction} from './player/vomit'; // task studio-ma
 import {installMarketWares, type MarketWares} from './market/wares/wares'; // task studio-market-rework-20261108-074144-01 (lane WARES): the stalls' owned stock on display, the red Steal
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {installSkywaysTrunk} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): the Skyways car's 16-slot trunk
+import {installSurfaceTruck} from './world/surface/truckStorage'; // task surface-run-opus-rebuild-20261116 (lane TRUCK): the Surface Run truck (vehicle definition + storage compartments)
 import {installTrainRide, type TrainRide} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): the moving train (ride mode, transit tunnel)
 import {installRidePortals, type RidePortalRuntime} from './world/ridePortalRuntime'; // task studio-perf-ao-train-continuity-20261110-022206-01: the ride portals (gates / breaches) the moving train uses
 import {installTrainCargo, type TrainCargoSystem} from './world/trainCargo'; // task train-loose-cargo: every loose item / bag aboard travels with the train
@@ -985,6 +986,7 @@ export class Game {
     installBeerEffects(this);
     hookName('beerEffects');
     installSkywaysTrunk(this); hookName('skywaysTrunk'); // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): after the car (its section hook follows the car's) and the Lockbox; inert without the car
+    installSurfaceTruck(this); hookName('surfaceTruck'); // task surface-run-opus-rebuild-20261116 (lane TRUCK): the truck joins the vehicle controller + its storage compartments (after the controller / Lockbox / trunk); inert outside a Surface Run district
     // task campaign-foundation-20261102 (lane RIDE): the moving train — no frame hook (update() calls it in the player's slot), the
     // transit tunnel (built on the first section build, warm pool 'train-transit'), the gear's no-set-down-while-moving rule
     // (the jostle intensity = the player's Train sway setting 0..1; 0 = off)
