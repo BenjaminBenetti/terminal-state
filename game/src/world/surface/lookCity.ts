@@ -116,8 +116,9 @@ export function farCityPlan(S: SurfaceInfo, available: (key: string) => boolean 
       for (let s = step * 0.5; s < len; s += step * (0.8 + rng() * 0.4)) {
         const e = berm[Math.floor(rng() * berm.length)];
         const d0 = B.from + rng() * (B.to - B.from), sc = B.scale[0] + rng() * (B.scale[1] - B.scale[0]);
-        // (lane FOG) v2: the pile's near foot at the last-resort ring (no wall hides a pile poking into the walkable apron)
-        const d = v2 ? d0 - B.from + 0.5 * Math.max(e.dims[0], e.dims[2]) * sc : d0;
+        // (lane FOG) v2: the pile's near foot at the last-resort ring, whatever its yaw (its footprint's half diagonal: no wall hides a
+        // pile poking into the walkable apron)
+        const d = v2 ? d0 - B.from + 0.5 * Math.hypot(e.dims[0], e.dims[2]) * sc : d0;
         add(e, 'berm', sx + dx * s + ox * d, -B.sink * e.dims[1] * sc, sz + dz * s + oz * d, rng() * Math.PI * 2, sc, bb);
       }
     }
@@ -149,7 +150,9 @@ export function farCityPlan(S: SurfaceInfo, available: (key: string) => boolean 
       if (!add(e, band, px, -sink * e.dims[1] * sc, pz, yaw, sc, bud)) continue;
       if (band === 'collapsed' && berm.length && rng() < 0.6) {
         const r = berm[0], a = rng() * Math.PI * 2, rr = Math.max(e.dims[0], e.dims[2]) * sc * 0.45;
-        add(r, 'collapsed', px + Math.cos(a) * rr, -0.25 * r.dims[1], pz + Math.sin(a) * rr, rng() * Math.PI * 2, 1.6 + rng() * 1.4, bud);
+        const qx = px + Math.cos(a) * rr, qz = pz + Math.sin(a) * rr, qyaw = rng() * Math.PI * 2, qs = 1.6 + rng() * 1.4;
+        // (lane FOG) v2: a side pile that would reach in over the walkable apron is left out (the same draws: v1 exactly as before)
+        if (!v2 || outside(E, qx, qz) >= 0.5 * Math.hypot(r.dims[0], r.dims[2]) * qs) add(r, 'collapsed', qx, -0.25 * r.dims[1], qz, qyaw, qs, bud);
       }
     }
   };
