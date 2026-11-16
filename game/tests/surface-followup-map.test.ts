@@ -15,9 +15,23 @@ describe('Surface Run planning map: live markers in the outer fog', () => {
     expect(s.boundary).toBeTruthy();
     const B = markerBounds(s), e = s.boundary!.edge;
     expect(B.x0).toBeLessThanOrEqual(Math.min(e.x0, s.extent.x0));
-    const out = {x: (s.extent.x0 + e.x0) / 2 - 0.5, z: (s.extent.z0 + s.extent.z1) / 2, yaw: 0};
-    const m = buildPlanningMap(s, {explore: exploreGridFor(s.extent), entered: new Set(), truck: out, player: {x: e.x0 - 40, z: out.z, yaw: 0}});
-    expect(m.markers.some(k => k.kind === 'truck'), 'truck in the outer fog').toBe(true);
+    // the side where the walkable edge reaches furthest beyond the drawn extent (the padding is only where the edge needs room)
+    const E = s.extent, cz = (E.z0 + E.z1) / 2, cx = (E.x0 + E.x1) / 2;
+    const sides = [
+      {gap: E.x0 - e.x0, at: (d: number) => ({x: E.x0 - d, z: cz}), pinned: {x: E.x0, z: cz}},
+      {gap: e.x1 - E.x1, at: (d: number) => ({x: E.x1 + d, z: cz}), pinned: {x: E.x1, z: cz}},
+      {gap: E.z0 - e.z0, at: (d: number) => ({x: cx, z: E.z0 - d}), pinned: {x: cx, z: E.z0}},
+      {gap: e.z1 - E.z1, at: (d: number) => ({x: cx, z: E.z1 + d}), pinned: {x: cx, z: E.z1}},
+    ].sort((a, b) => b.gap - a.gap);
+    const side = sides[0];
+    expect(side.gap, 'the fog edge lies beyond the drawn extent somewhere').toBeGreaterThan(2);
+    const out = {...side.at(side.gap / 2), yaw: 0}, far = side.at(side.gap + 40);
+    const m = buildPlanningMap(s, {explore: exploreGridFor(s.extent), entered: new Set(), truck: out, player: {...far, yaw: 0}});
+    const t = m.markers.find(k => k.kind === 'truck');
+    expect(t, 'truck in the outer fog').toBeTruthy();
+    // pinned to the drawn sheet's edge, labelled
+    expect({x: t!.x, z: t!.z}).toEqual(side.pinned);
+    expect(t!.label).toBe('Truck (in the fog)');
     expect(m.markers.some(k => k.kind === 'player'), 'beyond the edge').toBe(false);
   }, 120_000);
 

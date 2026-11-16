@@ -327,7 +327,12 @@ export class SurfaceAirRuntime {
    */
   private sweepBlocked(d: SurfaceDoorState): boolean {
     const h = this.host, p = h.player, P = d.plan, from = d.t;
-    const hit = (x: number, y: number, z: number, r: number): boolean => this.sameStorey(d, y) && doorSweeps(P, from, 0, x, z, r);
+    // (lead, integration) a cheap reach cut first: a leaf hinged at a jamb never reaches past 1.5 x the opening from the doorway centre
+    const R = 1.5 * P.width + 0.5;
+    const hit = (x: number, y: number, z: number, r: number): boolean => {
+      const dx = x - P.x, dz = z - P.z, rr = R + r;
+      return dx * dx + dz * dz <= rr * rr && this.sameStorey(d, y) && doorSweeps(P, from, 0, x, z, r);
+    };
     if (p.alive && hit(p.x, p.y, p.z, p.radius)) return true;
     for (const z of h.zombies) {
       const b = z.brain;

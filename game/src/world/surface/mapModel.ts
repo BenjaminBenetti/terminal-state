@@ -272,8 +272,13 @@ export function buildPlanningMap(s: SurfaceInfo, st: MapState): PlanningMap {
   });
   // the live truck and the player
   const inside = (p: MapPose | null | undefined): p is MapPose => !!p && Number.isFinite(p.x) && Number.isFinite(p.z) && inRect(markerBounds(s), p.x, p.z, 2);
-  if (inside(st.truck)) markers.push({id: 'truck', kind: 'truck', x: st.truck.x, z: st.truck.z, yaw: st.truck.yaw, label: 'Truck', symbol: 'truck', grid: ref(st.truck.x, st.truck.z), ref: {type: 'truck'}});
-  if (inside(st.player)) markers.push({id: 'player', kind: 'player', x: st.player.x, z: st.player.z, yaw: st.player.yaw, label: 'You', symbol: 'player', grid: ref(st.player.x, st.player.z), ref: {type: 'player'}});
+  // (lead, integration) beyond the drawn sheet (a v2 district's outer fog, out to its walkable edge): pinned to the sheet's edge, labelled
+  const pin = (p: MapPose, label: string) => {
+    const E = s.extent, x = Math.min(E.x1, Math.max(E.x0, p.x)), z = Math.min(E.z1, Math.max(E.z0, p.z));
+    return {x, z, label: x === p.x && z === p.z ? label : `${label} (in the fog)`};
+  };
+  if (inside(st.truck)) { const q = pin(st.truck, 'Truck'); markers.push({id: 'truck', kind: 'truck', x: q.x, z: q.z, yaw: st.truck.yaw, label: q.label, symbol: 'truck', grid: ref(q.x, q.z), ref: {type: 'truck'}}); }
+  if (inside(st.player)) { const q = pin(st.player, 'You'); markers.push({id: 'player', kind: 'player', x: q.x, z: q.z, yaw: st.player.yaw, label: q.label, symbol: 'player', grid: ref(q.x, q.z), ref: {type: 'player'}}); }
 
   // fog: the unexplored runs per row
   const runs: [number, number, number][] = [];

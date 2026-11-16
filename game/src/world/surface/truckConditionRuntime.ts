@@ -33,7 +33,7 @@ import {carToWorld} from '../skywaysCarSpec';
 import {FOG_PRESSURE, fogPressureAt} from './fogPressure';
 import {TRUCK_CONDITION, TRUCK_CONDITION_TEXT, clampCondition, truckBurning, truckDisabled, truckFireLevel, truckSmokeLevel, truckStage, truckStateOf, type TruckStage} from './truckCondition';
 import {TRUCK_PRESSURE, TRUCK_PRESSURE_TEXT, dashBlinkHz, groanAt, truckPressureLoss} from './truckPressure';
-import {setDashLamp} from './truckPressureDash';
+import {setDashLamp, setDashPressure} from './truckPressureDash';
 import type {TruckView} from './truckModel';
 
 /** Where the damage shows (truck frame, m): the engine's top behind the cab (smoke) and the engine bay's two sides under it (flames). */
@@ -70,6 +70,8 @@ export interface TruckConditionHost {
   sectionHooks: {build?(layout: never): void; teardown?(): void}[];
   atmosphere?: {addSmokeEmitter?(o: SmokeEmitterOptions): SmokeHandle} | null;
   fireFx?: {standing?(key: object, x: number, y: number, z: number, r: number, flames: number, smoke: number, dark: number, dt: number): void} | null;
+  /** (lead, integration) Game.stateListeners: a non-playing state quiets the fire loop (the next play frame sets its level again). */
+  stateListeners?: ((state: never, prev: never) => void)[];
 }
 
 const RANK: Record<TruckStage, number> = {sound: 0, smoking: 1, heavy: 2, burning: 3, disabled: 4};
@@ -122,6 +124,8 @@ export class TruckConditionSystem {
     this.host.frameHooks.push(dt => this.frame(dt));
     // after the controller's section hook (installed earlier): its build has read the record (the condition with it)
     this.host.sectionHooks.push({build: () => this.onBuild(), teardown: () => this.onTeardown()});
+    // (lead, integration) the map, the dead screen, any menu: the burning truck's loop goes quiet like the fog's (world/surface/fogRuntime.ts)
+    (this.host.stateListeners as ((state: string, prev: string) => void)[] | undefined)?.push(state => { if (state !== 'playing') this.fireLoop?.setLevel?.(0, 0.1); });
     // a broken-down truck's engine never starts nor runs (the other vehicle's sound untouched)
     const car = this.car, base: CarAudio = car.audio, dead = () => car.vehicle === 'truck' && truckDisabled(truckStateOf(car).condition);
     car.audio = {
@@ -316,6 +320,7 @@ export class TruckConditionSystem {
     if (on && !this.lampOn) this.counts.blinks++;
     this.lampOn = on;
     setDashLamp((this.car.view as TruckView | null)?.dash, on);
+    setDashPressure((this.car.view as TruckView | null)?.dash, p); // (lead: the plate's live bar)
   }
 
   /** The lamp is lit now (QA / tests). */
