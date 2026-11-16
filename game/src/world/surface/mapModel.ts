@@ -33,6 +33,21 @@ export interface MapReportInput { x: number; z: number; text: string; kind: MapT
 
 export interface MapPose { x: number; z: number; yaw: number }
 
+/** The vehicle controller as the district reads it (game.skywaysCar: lane TRUCK's truck in a district). */
+export interface VehicleLike {
+  truckTransform?(): {x: number; z: number; yaw: number} | null;
+  worldLive?: boolean;
+  driving?: boolean;
+  body?: {x: number; z: number; yaw: number} | null;
+  spec?: {length: number; width: number};
+}
+
+/** Where the district's truck stands (lane TRUCK's truckTransform; else a live vehicle body), or null (no vehicle in this world). */
+export function vehiclePoseOf(car: VehicleLike | null | undefined): MapPose | null {
+  const t = car?.truckTransform ? car.truckTransform() : car?.worldLive ? car.body ?? null : null;
+  return t ? {x: t.x, z: t.z, yaw: t.yaw} : null;
+}
+
 export interface MapState {
   explore: ExploreGrid;
   entered: ReadonlySet<number>;

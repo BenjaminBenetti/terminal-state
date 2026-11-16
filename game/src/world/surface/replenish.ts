@@ -42,6 +42,13 @@ import type {EnemyArchetypeId} from '../../ai/creatureSpawn';
 import {CONTEXT_LOCKED_FAMILIES, ROSTER_ONLY_FAMILIES, spawnProfile, type EnemyFamilyId, type FamilyPool} from '../../ai/spawnTables';
 import {hashString, mulberry32} from '../../core/rng';
 import {FLOOR} from '../../gen/grid';
+import {vehiclePoseOf, type VehicleLike} from './mapModel';
+
+/** The truck's keep-clear circle (its pose; radius = half its plan diagonal from lane TRUCK's spec), or null without a vehicle here. */
+export function truckCircleOf(car: VehicleLike | null | undefined): {x: number; z: number; r: number} | null {
+  const p = vehiclePoseOf(car), S = car?.spec;
+  return p && S ? {x: p.x, z: p.z, r: Math.hypot(S.length, S.width) / 2} : null;
+}
 
 /** The replenisher's tuning (one place; tests read it). */
 export const REPLENISH = {

@@ -22,7 +22,7 @@ import type {PropPlacement} from '../../gen/props';
 import type {SectionKey} from '../../levels/types';
 import type {SBox, SurfaceInfo} from '../../gen/surface/surfaceTypes';
 import {EXPLORE, SURFACE_LIFE_LANE, markDisc, readLifeRecord, writeLifeRecord, type ExploreGrid} from './mapExplore';
-import {buildPlanningMap, mapSignature, rectExplored, type BuildingStats, type MapReportInput, type PlanningMap} from './mapModel';
+import {buildPlanningMap, mapSignature, rectExplored, vehiclePoseOf, type BuildingStats, type MapReportInput, type PlanningMap} from './mapModel';
 import {drawPlanningCanvas, type MapCtx} from './mapDraw';
 import {PlanningMapView} from './mapView';
 
@@ -254,7 +254,7 @@ export class SurfaceMapRuntime {
   model(): PlanningMap | null {
     const s = this.surface, grid = this.grid;
     if (!s || !grid) return null;
-    const g = this.game, p = g.player, car = g.skywaysCar, body = car?.worldLive ? car.body : null;
+    const g = this.game, p = g.player, car = g.skywaysCar, truck = vehiclePoseOf(car); // (lane TRUCK's truck: its transform)
     const reports: MapReportInput[] = [], replace: string[] = [];
     const ctx: MapReportContext = {entered: this.entered, known: b => {
       if (this.entered.has(b)) return true;
@@ -270,7 +270,7 @@ export class SurfaceMapRuntime {
       } catch (err) { console.warn(`planning map: report source ${src.name} failed`, err); }
     }
     return buildPlanningMap(s, {explore: grid, entered: this.entered, stats: this.stats(), reports, replace,
-      player: {x: p.x, z: p.z, yaw: car?.driving && body ? body.yaw : p.yaw}, truck: body ? {x: body.x, z: body.z, yaw: body.yaw} : null});
+      player: {x: p.x, z: p.z, yaw: car?.driving && truck ? truck.yaw : p.yaw}, truck}); // (seated: the player faces the truck's way)
   }
 
   /** Open the full-screen planning map (as E at the table does). */

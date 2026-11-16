@@ -12,7 +12,7 @@
 import type {StationLayout} from '../../gen/stationTypes';
 import type {SRect, SurfaceInfo} from '../../gen/surface/surfaceTypes';
 import {recoverableKind} from '../../craft/equipment';
-import {recoverableName, type MapReportInput} from './mapModel';
+import {recoverableName, vehiclePoseOf, type MapReportInput, type VehicleLike} from './mapModel';
 import {surfaceMapSources, type MapReportContext, type SurfaceMapReportSource} from './mapRuntime';
 import {SURFACE_CARGO_LANE, surfaceCargoOf} from './cargoStore';
 import {surfaceAirRuntime, type SurfaceAirRuntime} from './air';
@@ -104,7 +104,7 @@ export interface MapSourceHost {
   layout: StationLayout;
   run: {laneStore<T = unknown>(lane: string): T | undefined};
   trainEquipment?: {worldLive: boolean; all(): readonly CargoUnitView[]} | null;
-  skywaysCar?: {worldLive?: boolean; body?: {x: number; z: number} | null} | null;
+  skywaysCar?: VehicleLike | null;
   gas?: {windows: {readonly plans: readonly unknown[]; state: ReadonlyMap<string, {broken: boolean}>; refs: ReadonlyMap<string, {plan: {index: number}}>} | null} | null;
 }
 
@@ -114,8 +114,8 @@ export function cargoViewOf(h: MapSourceHost): CargoView | null {
   const rec = surfaceCargoOf(h.run.laneStore(SURFACE_CARGO_LANE));
   const eq = h.trainEquipment, units = eq?.worldLive ? eq.all() : null;
   const secured = units ? units.filter(u => u.owner === 'mount').map(u => u.kind) : (rec.secured ?? []).map(m => m.unit.kind);
-  const car = h.skywaysCar, body = car?.worldLive ? car.body : null;
-  return {seeded: rec.seeded === 1, units, secured, truck: body ? {x: body.x, z: body.z} : null};
+  const t = vehiclePoseOf(h.skywaysCar); // (lane TRUCK's truck: its transform)
+  return {seeded: rec.seeded === 1, units, secured, truck: t ? {x: t.x, z: t.z} : null};
 }
 
 /** The live openings of the district (null while AIR has no built district world for this layout). */
