@@ -13,7 +13,8 @@ import {buildWorld, type BuiltWorld} from '../src/world/builder';
 import {generateCrevice} from '../src/gen/market/v5/index';
 import {generateMarketLevel} from '../src/gen/market/index';
 import {CREVICE_FINISHES, CREVICE_KEYS, MARKET_KEYS, isCreviceKey, marketPaintKey} from '../src/world/marketArch';
-import {CREVICE_TEXTURES, usesCreviceTextures} from '../src/world/marketTextures';
+import {CREVICE_TEXTURES, MarketTextureRuntime, creviceTexture, setCreviceTexture, setMarketTexture, usesCreviceTextures} from '../src/world/marketTextures';
+import {MARKET_TEXTURES} from '../src/assets/marketTextures.generated';
 import {finishClass} from '../src/damage/impactFinish';
 import {isArchFinish} from '../src/world/finishAt';
 import {assetAllowedIn, levelOfAsset} from '../src/assets/levelAssets';
@@ -239,6 +240,30 @@ describe('the Survivor Market crevice architecture (layout version 5)', () => {
     }
     expect(assetAllowedIn('market', 'assets/textures/reactor/grating-color.jpg')).toBe(false);
     expect(assetAllowedIn('market', REACTOR_KIT.generator.url)).toBe(false);
+  });
+
+  it('the texture runtime: a version-5 layout also loads the nine crevice maps (colour sRGB, data linear); versions 1-4 load exactly as before', async () => {
+    const asked: {url: string; srgb: boolean}[] = [];
+    const host = {levelResources: {load: (level: string, url: string, spec: {srgb: boolean}) => {
+      expect(level).toBe('market');
+      expect(assetAllowedIn(level, url), url).toBe(true);
+      asked.push({url, srgb: spec.srgb});
+      return Promise.resolve(new THREE.Texture());
+    }}};
+    const rt = new MarketTextureRuntime(host);
+    await rt.preload(generateMarketLevel({levelSeed: 7, layoutVersion: 4}));
+    const old = asked.map(a => a.url).sort();
+    expect(old).toEqual(Object.values(MARKET_TEXTURES).map(t => t.url).sort());
+    for (const s of ['concrete', 'rock', 'steel'] as const) expect(creviceTexture(s, 'color')).toBeNull();
+    asked.length = 0;
+    await rt.preload(world(SEEDS[0]).L);
+    const crev = Object.values(CREVICE_TEXTURES).flatMap(t => [t.color, t.normal, t.orm]);
+    expect(asked.map(a => a.url).sort()).toEqual([...old, ...crev].sort());
+    for (const a of asked) if (crev.includes(a.url)) expect(a.srgb, a.url).toBe(a.url.endsWith('-color.jpg'));
+    for (const s of ['concrete', 'rock', 'steel'] as const) for (const m of ['color', 'normal', 'orm'] as const) expect(creviceTexture(s, m)).not.toBeNull();
+    // (leave the module's texture slots empty again: the other tests' worlds use the stand-ins)
+    for (const s of ['concrete', 'rock', 'steel'] as const) for (const m of ['color', 'normal', 'orm'] as const) setCreviceTexture(s, m, null);
+    for (const k of Object.keys(MARKET_TEXTURES) as (keyof typeof MARKET_TEXTURES)[]) setMarketTexture(k, null);
   });
 
   it('the culler\'s atrium: the open crevice columns (to the crevice\'s top, two storeys or more), not the platform hall\'s vault', () => {
