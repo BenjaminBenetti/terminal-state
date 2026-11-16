@@ -4,8 +4,11 @@
 // district's lane store (SURFACE_TRUCK_LANE, world/surface/truckStore.ts) wins once saved — the pose, the lamps and the storage
 // compartments' slots. Same controls and rules as the controller's other vehicle: E get in / out, W / S / A / D (or the arrows), Space
 // handbrake, F lamps; collisions, zombie run-over above TRUCK_RT.killSpeed, prop shoves and pane breaks are the controller's.
-// Seated, the player is ENCLOSED (lane AIR reads SkywaysCar.enclosed: the closed cab and its glazing; the truck has no damage model).
+// Seated, the player is ENCLOSED (lane AIR reads SkywaysCar.enclosed: the closed cab and its glazing).
 // Registered by installSurfaceTruck (world/surface/truckStorage.ts) after the controller; inert on every layout without the truck.
+// Task studio-surface-run-field-followup-20261116-211729-01 (lane TRUCK): the truck's CONDITION (world/surface/truckCondition.ts) is in
+// its record (v2; a v1 record upgrades to condition 1) and tunes the controller's physics each step (`tune`: worse mobility as it falls,
+// none once broken down); the hits, smoke, fire and fog pressure: truckConditionRuntime.ts.
 
 import type {StationLayout} from '../../gen/stationTypes';
 import type {StackJSON} from '../../items/inventory';
@@ -13,7 +16,8 @@ import type {SkywaysCar} from '../skywaysCar';
 import type {VehicleAttach, VehicleDef, VehicleRecordPose} from '../skywaysCarVehicle';
 import {TRUCK_GEOM, TRUCK_RT, TRUCK_SPEC, TRUCK_TEXT} from './truckSpec';
 import {TRUCK_BED_FLOOR_Y} from './truckCab';
-import {SURFACE_TRUCK_LANE, emptyTruckStorage, surfaceTruckProblem, surfaceTruckRecord, type SurfaceTruckRecord} from './truckStore';
+import {SURFACE_TRUCK_LANE, emptyTruckStorage, surfaceTruckProblem, surfaceTruckRecord, upgradeTruckRecord, type SurfaceTruckRecord, type SurfaceTruckRecordV1} from './truckStore';
+import {truckStateOf, tuneTruck} from './truckCondition';
 import {buildTruckView, createTruckBeam, loadTruckModel, refreshTruckView, releaseTruckModel, setTruckLamps, syncTruckView, truckModelsGen} from './truckModel';
 import {TRUCK_ANCHORS} from './truckAnchors.generated';
 
@@ -45,6 +49,8 @@ export const TRUCK_DEF: VehicleDef = {
   enclosed: true,
   stopsShots: true,
   spawnOf: truckSpawnOf,
+  // (field follow-up) the condition's mobility, each physics step (the full geometry while sound; no allocation per step)
+  tune: (car, ctl, dt) => tuneTruck(truckStateOf(car), ctl, car.body?.v ?? 0, dt, text => car.host.hud.toast(text, true)),
   model: {
     load: spec => loadTruckModel(spec),
     release: releaseTruckModel,
@@ -56,15 +62,17 @@ export const TRUCK_DEF: VehicleDef = {
   lamps: {createBeam: createTruckBeam, set: setTruckLamps},
   record: {
     lane: SURFACE_TRUCK_LANE,
-    read: (raw: unknown): VehicleRecordPose | null => (raw !== undefined && surfaceTruckProblem(raw) === null ? raw as SurfaceTruckRecord : null),
+    // (field follow-up) a v1 record (an older save) reads as v2 with condition 1 (the pose, lamps and slots exactly as saved)
+    read: (raw: unknown): VehicleRecordPose | null => (raw !== undefined && surfaceTruckProblem(raw) === null ? upgradeTruckRecord(raw as SurfaceTruckRecord | SurfaceTruckRecordV1) : null),
     load(car: SkywaysCar, rec: VehicleRecordPose | null): void {
       const r = rec as SurfaceTruckRecord | null;
       car.lights = r?.lights ?? false;
       car.storageJSON = r ? structuredClone(r.storage) : emptyTruckStorage();
+      truckStateOf(car).condition = r?.condition ?? 1; // (no record: the generated truck, sound)
     },
     write(car: SkywaysCar, b): SurfaceTruckRecord {
       if (car.storageSource) car.storageJSON = car.storageSource();
-      return surfaceTruckRecord(b.x, b.y, b.z, b.yaw, b.level, {lights: car.lights, storage: car.storageJSON as (StackJSON | null)[][]});
+      return surfaceTruckRecord(b.x, b.y, b.z, b.yaw, b.level, {lights: car.lights, storage: car.storageJSON as (StackJSON | null)[][], condition: truckStateOf(car).condition});
     },
   },
   attach: TRUCK_ATTACH,

@@ -158,7 +158,7 @@ describe('surface truck: the truck seat (the same controls as the controller\'s 
     expect(h.player.z).toBeCloseTo(out.z, 6);
     // the record: where it stands now
     const rec = h.store.get(SURFACE_TRUCK_LANE) as SurfaceTruckRecord;
-    expect(rec).toMatchObject({v: 1, level: 0, lights: false});
+    expect(rec).toMatchObject({v: 2, level: 0, lights: false, condition: 1}); // (re-pin: record v2 carries the condition)
     expect(rec.x).toBeCloseTo(nb.x, 3);
     expect(rec.storage).toEqual(emptyTruckStorage());
   });
@@ -379,6 +379,8 @@ describe('surface truck: tuning', () => {
     expect(TRUCK_PHYS.steerRate).toBeLessThan(CAR_PHYS.steerRate); // (a slower rack)
     expect(TRUCK_RT.killSpeed).toBeLessThan(CAR_RT.killSpeed);
     expect(TRUCK_GEOM.phys).toBe(TRUCK_PHYS);
-    expect(JSON.stringify(surfaceTruckRecord(1, 0, 2, 0, 0))).not.toMatch(/fuel|wear|damage|condition/);
+    // (re-pin, field follow-up: the user asked for a persistent truck condition — still no fuel simulation)
+    expect(JSON.stringify(surfaceTruckRecord(1, 0, 2, 0, 0))).not.toMatch(/fuel|wear|damage/);
+    expect(surfaceTruckRecord(1, 0, 2, 0, 0).condition).toBe(1);
   });
 });

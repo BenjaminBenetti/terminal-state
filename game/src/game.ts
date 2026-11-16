@@ -222,6 +222,7 @@ import {installMarketWares, type MarketWares} from './market/wares/wares'; // ta
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {installSkywaysTrunk} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): the Skyways car's 16-slot trunk
 import {installSurfaceTruck} from './world/surface/truckStorage'; // task surface-run-opus-rebuild-20261116 (lane TRUCK): the Surface Run truck (vehicle definition + storage compartments)
+import {shieldTruckHit} from './world/surface/truckConditionRuntime'; // task studio-surface-run-field-followup-20261116-211729-01 (lane TRUCK): the seated truck cab takes the hits
 import {installTrainRide, type TrainRide} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): the moving train (ride mode, transit tunnel)
 import {installRidePortals, type RidePortalRuntime} from './world/ridePortalRuntime'; // task studio-perf-ao-train-continuity-20261110-022206-01: the ride portals (gates / breaches) the moving train uses
 import {installTrainCargo, type TrainCargoSystem} from './world/trainCargo'; // task train-loose-cargo: every loose item / bag aboard travels with the train
@@ -4869,6 +4870,9 @@ export class Game {
   }
 
   private hurtPlayer(z: EnemyActor): void {
+    // Task studio-surface-run-field-followup-20261116-211729-01 (lane TRUCK): seated in the closed truck cab, the hit lands on the truck
+    // (its condition; a metal impact) and never on the player (world/surface/truckConditionRuntime.ts shieldTruckHit); a small jolt only
+    if (shieldTruckHit(this, z.brain.stats.attackDamage, z.brain.x, z.brain.z, 'claw')) { this.shake = Math.min(1, this.shake + 0.2); return; }
     const p = this.player;
     // Iteration 16: one hit pipeline — location -> armor (worn gear) -> HP -> listeners (limb injuries)
     // Iteration 16 (lane INJURY): rat / dog bites are 'creature' hits that land low (legs ~58 %, player/injuries.ts biteHitLocation)
@@ -4902,6 +4906,9 @@ export class Game {
    * used is knocked away like any hit. The gas mask plays no part (it only filters the gas cloud).
    */
   blastPlayer(hit: PlayerHit, fromX: number, fromZ: number): ResolvedHit {
+    // Task studio-surface-run-field-followup-20261116-211729-01 (lane TRUCK): a blast / a survivor's round reaching the closed truck cab
+    // lands on the truck, never on the seated player (nothing applied; world/surface/truckConditionRuntime.ts shieldTruckHit)
+    if (shieldTruckHit(this, hit.amount, fromX, fromZ, 'blast')) { this.shake = Math.min(1, this.shake + 0.25); return {...hit, applied: 0, absorbed: 0}; }
     const p = this.player, resolved = this.applyPlayerHit(hit);
     const dx = fromX - p.x, dz = fromZ - p.z, s = Math.sin(p.yaw), c = Math.cos(p.yaw);
     this.hud.damage(Math.atan2(dx * c - dz * s, -dx * s - dz * c), resolved.applied);
