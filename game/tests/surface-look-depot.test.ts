@@ -68,6 +68,14 @@ describe('Surface Run look: the depot shed gear (lane ROOMS features)', () => {
     // a hook planned too low is lifted above reach; below the runway it stays
     const low = surfaceLookPlan(withFeatures({crane: {...F.crane!, hookY: floor + 0.5}}))!;
     expect(low.depot!.crane!.hookY).toBeCloseTo(floor + 2.2, 5);
+    // a pit planned in whole cells wider than the gauge (ROOMS: 3 cells = 1.5 m) is drawn between the rails, the heads on solid floor
+    const t = F.tracks![0], alongZ = Math.abs(t.x1 - t.x0) < 1e-3, c = alongZ ? t.x0 : t.z0, p0 = F.pits![0];
+    const wide = alongZ ? {...p0, x0: c - 0.75, x1: c + 0.75} : {...p0, z0: c - 0.75, z1: c + 0.75};
+    const wp = surfaceLookPlan(withFeatures({tracks: [t], pits: [wide]}))!.depot!.pits[0];
+    const [a0, a1] = alongZ ? [wp.x0, wp.x1] : [wp.z0, wp.z1];
+    expect(a0).toBeCloseTo(c - (t.gauge / 2 - 0.1), 5);
+    expect(a1).toBeCloseTo(c + (t.gauge / 2 - 0.1), 5);
+    expect(c + t.gauge / 2 - 0.036 - (a1 + 0.06), 'rail head clear of the grating frame').toBeGreaterThan(0);
   });
 
   it('flush rails / grate on the shed floor, the crane above reach and under the roof, all inside the shed', () => {

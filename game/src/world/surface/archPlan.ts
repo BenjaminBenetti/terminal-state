@@ -845,6 +845,13 @@ export function depotGear(S: SurfaceInfo, floorAt: (x: number, z: number) => num
     .map(t => ({x0: t.x0, z0: t.z0, x1: t.x1, z1: t.z1, gauge: t.gauge, y: floorAt((t.x0 + t.x1) / 2, (t.z0 + t.z1) / 2)}));
   const pits = (F.pits ?? []).filter(q => fin(q.x0, q.z0, q.x1, q.z1) && q.x1 - q.x0 > 0.2 && q.z1 - q.z0 > 0.2)
     .map(q => ({x0: q.x0, z0: q.z0, x1: q.x1, z1: q.z1, y: floorAt((q.x0 + q.x1) / 2, (q.z0 + q.z1) / 2)}));
+  // an inspection pit lies BETWEEN its track's rails: one planned wider than the gauge (whole cells) is drawn inside them, so the rail
+  // heads stay on solid floor beside the grating
+  for (const p of pits) for (const t of tracks) {
+    const h = t.gauge / 2 - 0.1;
+    if (Math.abs(t.x1 - t.x0) < 1e-3 && t.x0 > p.x0 && t.x0 < p.x1 && (p.x1 - p.x0) / 2 > h) { p.x0 = t.x0 - h; p.x1 = t.x0 + h; }
+    else if (Math.abs(t.z1 - t.z0) < 1e-3 && t.z0 > p.z0 && t.z0 < p.z1 && (p.z1 - p.z0) / 2 > h) { p.z0 = t.z0 - h; p.z1 = t.z0 + h; }
+  }
   const c = F.crane;
   let crane: DepotGear['crane'] = null;
   if (c && fin(c.x0, c.z0, c.x1, c.z1, c.y, c.at, c.hookY) && (c.axis === 'x' || c.axis === 'z') && c.x1 - c.x0 > 2 && c.z1 - c.z0 > 2) {
