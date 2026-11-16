@@ -56,9 +56,15 @@ export const emptyLayout = (): RtSceneLayout => ({
 
 /**
  * The packed scene. The arrays are replaced when they grow (read them from here each time); their lengths are capacities, the
- * counts say what is used. Upload protocol: blasVersion / layoutVersion bump on any change of the BLAS arrays / of the tlas offsets
- * or size; the dirty ranges say what changed since the last markUploaded() (blas: [start, end) in nodes / triangles; tlas: [start,
- * end) vec4 pairs in tlasDirty, tlasDirtyCount of them). A grown array is wholly dirty.
+ * counts say what is used. UPLOAD PROTOCOL (once per frame, after RtScene.sync):
+ *  - blasArrayVersion changed: the BLAS arrays were replaced — reallocate (their byteLength) and upload [0, count) of each;
+ *    else blasVersion changed: upload the spans [blasDirtyNodeStart, blasDirtyNodeEnd) nodes and [blasDirtyTriStart,
+ *    blasDirtyTriEnd) triangles (a span with start >= end is empty). A compaction / clear marks the whole used range.
+ *  - layoutVersion changed: the tlas array was replaced — reallocate (byteLength) and upload it whole; else upload the tlasDirty
+ *    [start, end) vec4 pairs (tlasDirtyCount of them; a tlas change is always inside one).
+ *  - the layout's counts (staticNodeCount, dynamicNodeCount, ...) change without any array write (e.g. the dynamic tree emptying):
+ *    pass the layout (uniforms) every frame.
+ *  - then markUploaded().
  */
 export class RtSceneBuffers {
   blasNodes = new Float32Array(0);
@@ -71,6 +77,9 @@ export class RtSceneBuffers {
   tlasU32 = new Uint32Array(0);
   readonly layout: RtSceneLayout = emptyLayout();
   blasVersion = 0;
+  /** Bumps when blasNodes or blasTris is replaced by a larger array (reallocate the GPU buffer, upload the used part whole). */
+  blasArrayVersion = 0;
+  /** Bumps when the tlas offsets / size change (the tlas array is replaced then: reallocate, upload it whole). */
   layoutVersion = 0;
   /** Bumps on every tlas write (any region). */
   tlasVersion = 0;

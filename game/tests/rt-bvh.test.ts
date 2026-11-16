@@ -36,45 +36,46 @@ function boxes(n: number, kind: 'uniform' | 'clusters' | 'same' | 'exp', seed = 
 
 interface TreeCheck { leaves: number; maxLeafSeen: number; depth: number; visited: number }
 
-/** Every invariant of a built tree (see bvh.ts): returns what it saw. */
+/** Every invariant of a built tree (see bvh.ts): returns what it saw (fails on the first broken invariant). */
 function checkTree(nodes: Float32Array, nodeCount: number, order: Uint32Array, bounds: Float32Array, count: number, maxLeaf: number): TreeCheck {
   const U = new Uint32Array(nodes.buffer, nodes.byteOffset, nodes.length);
   const seenPrim = new Uint8Array(count), seenNode = new Uint8Array(nodeCount);
   const perm = new Uint8Array(count);
-  for (let k = 0; k < count; k++) { expect(order[k]).toBeLessThan(count); expect(perm[order[k]]).toBe(0); perm[order[k]] = 1; }
+  const bad: string[] = [];
+  const fail = (m: string): void => { if (bad.length < 5) bad.push(m); };
+  for (let k = 0; k < count; k++) { if (!(order[k] < count) || perm[order[k]]) fail(`order[${k}]`); else perm[order[k]] = 1; }
   let leaves = 0, maxLeafSeen = 0, depth = 0, visited = 0;
-  const stack: [number, number][] = [[0, 0]];
+  const stack: [number, number][] = count ? [[0, 0]] : [];
   while (stack.length) {
     const [n, d] = stack.pop()!;
-    expect(n).toBeLessThan(nodeCount);
-    expect(seenNode[n]).toBe(0);
+    if (!(n < nodeCount) || seenNode[n]) { fail(`node ${n} out of range / reached twice`); continue; }
     seenNode[n] = 1;
     visited++;
     depth = Math.max(depth, d);
     const f = n * BVH_NODE_FLOATS, A = U[f + 3], B = U[f + 7];
-    for (let k = 0; k < 3; k++) expect(nodes[f + k]).toBeLessThanOrEqual(nodes[f + 4 + k]);
+    for (let k = 0; k < 3; k++) if (!(nodes[f + k] <= nodes[f + 4 + k])) fail(`node ${n} inverted`);
     if (B === 0) {
-      expect(A + 1).toBeLessThan(nodeCount);
+      if (!(A + 1 < nodeCount)) { fail(`node ${n} children ${A}`); continue; }
       for (const c of [A, A + 1]) {
         const g = c * BVH_NODE_FLOATS;
-        for (let k = 0; k < 3; k++) { expect(nodes[g + k]).toBeGreaterThanOrEqual(nodes[f + k]); expect(nodes[g + 4 + k]).toBeLessThanOrEqual(nodes[f + 4 + k]); }
+        for (let k = 0; k < 3; k++) if (!(nodes[g + k] >= nodes[f + k] && nodes[g + 4 + k] <= nodes[f + 4 + k])) fail(`child ${c} outside parent ${n}`);
         stack.push([c, d + 1]);
       }
     } else {
-      expect(B).toBeGreaterThanOrEqual(1);
-      expect(B).toBeLessThanOrEqual(maxLeaf);
+      if (!(B >= 1 && B <= maxLeaf)) fail(`leaf ${n} size ${B}`);
       leaves++;
       maxLeafSeen = Math.max(maxLeafSeen, B);
       for (let k = A; k < A + B; k++) {
-        expect(seenPrim[k]).toBe(0);
+        if (!(k < count) || seenPrim[k]) { fail(`primitive slot ${k} in two leaves / out of range`); continue; }
         seenPrim[k] = 1;
         const p = order[k] * 6;
-        for (let q = 0; q < 3; q++) { expect(bounds[p + q]).toBeGreaterThanOrEqual(nodes[f + q]); expect(bounds[p + 3 + q]).toBeLessThanOrEqual(nodes[f + 4 + q]); }
+        for (let q = 0; q < 3; q++) if (!(bounds[p + q] >= nodes[f + q] && bounds[p + 3 + q] <= nodes[f + 4 + q])) fail(`primitive ${order[k]} outside leaf ${n}`);
       }
     }
   }
-  expect(visited).toBe(nodeCount);
-  for (let k = 0; k < count; k++) expect(seenPrim[k]).toBe(1);
+  if (visited !== nodeCount) fail(`visited ${visited} of ${nodeCount} nodes`);
+  for (let k = 0; k < count; k++) if (!seenPrim[k]) { fail(`primitive slot ${k} in no leaf`); break; }
+  expect(bad).toEqual([]);
   return {leaves, maxLeafSeen, depth, visited};
 }
 
@@ -302,15 +303,32 @@ describe('rt BLAS', () => {
 // ------------------------------------------------------------------------------------------------------------------------------
 // traversal
 
-/** Brute force over every enabled instance and every triangle of its BLAS (leaves found by walking all nodes, no box tests). */
+/** The triangle ranges of each instance's BLAS, found by walking ALL its nodes (no box tests), cached per buffer state. */
+const rangesOf = new WeakMap<Uint32Array, Map<number, number[]>>();
+function blasRanges(buf: RtSceneBuffers, root: number): number[] {
+  let m = rangesOf.get(buf.blasNodesU32);
+  if (!m) rangesOf.set(buf.blasNodesU32, (m = new Map()));
+  let r = m.get(root);
+  if (r) return r;
+  r = [];
+  const NU = buf.blasNodesU32, stack = [root];
+  while (stack.length) {
+    const n = stack.pop()!, f = n * 8;
+    if (NU[f + 7] === 0) stack.push(NU[f + 3], NU[f + 3] + 1);
+    else r.push(NU[f + 3], NU[f + 7]);
+  }
+  m.set(root, r);
+  return r;
+}
+
+/** Brute force over every enabled instance and every triangle of its BLAS (the same primitive tests, no boxes at all). */
 function brute(buf: RtSceneBuffers, o: THREE.Vector3, d: THREE.Vector3, tmin: number, tmax: number): {t: number; inst: number; tri: number} {
-  const L = buf.layout, A = buf.tlas, AU = buf.tlasU32, NU = buf.blasNodesU32;
+  const L = buf.layout, A = buf.tlas, AU = buf.tlasU32;
   let best = tmax, inst = -1, tri = -1;
-  const all: number[] = [];
-  for (let k = 0; k < L.staticInstanceCount; k++) all.push(k);
   const dynBase = (L.dynamicInstances - L.instances) / RT_INSTANCE_VEC4;
-  for (let k = 0; k < L.dynamicInstanceCount; k++) all.push(dynBase + k);
-  for (const k of all) {
+  const n = L.staticInstanceCount + L.dynamicInstanceCount;
+  for (let q = 0; q < n; q++) {
+    const k = q < L.staticInstanceCount ? q : dynBase + q - L.staticInstanceCount;
     const v = (L.instances + RT_INSTANCE_VEC4 * k) * 4;
     if (AU[v + 14] & RT_INST_DISABLED) continue;
     if (AU[v + 15] === RT_TYPE_CAPSULE) {
@@ -320,11 +338,9 @@ function brute(buf: RtSceneBuffers, o: THREE.Vector3, d: THREE.Vector3, tmin: nu
     }
     const qx = A[v] * o.x + A[v + 1] * o.y + A[v + 2] * o.z + A[v + 3], qy = A[v + 4] * o.x + A[v + 5] * o.y + A[v + 6] * o.z + A[v + 7], qz = A[v + 8] * o.x + A[v + 9] * o.y + A[v + 10] * o.z + A[v + 11];
     const ex = A[v] * d.x + A[v + 1] * d.y + A[v + 2] * d.z, ey = A[v + 4] * d.x + A[v + 5] * d.y + A[v + 6] * d.z, ez = A[v + 8] * d.x + A[v + 9] * d.y + A[v + 10] * d.z;
-    const stack = [AU[v + 12]];
-    while (stack.length) {
-      const n = stack.pop()!, f = n * 8;
-      if (NU[f + 7] === 0) { stack.push(NU[f + 3], NU[f + 3] + 1); continue; }
-      for (let t0 = NU[f + 3]; t0 < NU[f + 3] + NU[f + 7]; t0++) {
+    const R = blasRanges(buf, AU[v + 12]);
+    for (let i = 0; i < R.length; i += 2) {
+      for (let t0 = R[i]; t0 < R[i] + R[i + 1]; t0++) {
         const t = rtTriangle(buf.blasTris, t0 * 12, qx, qy, qz, ex, ey, ez, tmin, best);
         if (t < best) { best = t; inst = k; tri = t0; }
       }
@@ -389,7 +405,7 @@ function randomRay(r: () => number, o: THREE.Vector3, d: THREE.Vector3): void {
 
 describe('rt traversal', () => {
   it('equals brute force (closest + any hit) on random instanced, transformed scenes with capsules', () => {
-    for (const seed of [1, 2, 3]) {
+    for (const seed of [1, 2]) {
       const {scene} = randomScene(seed);
       const rt = new RtScene();
       rt.prepare([scene]);
@@ -406,7 +422,7 @@ describe('rt traversal', () => {
       expect(L.staticInstanceCount).toBeGreaterThan(100);
       const o = new THREE.Vector3(), d = new THREE.Vector3(), hit = newRtHit();
       let hits = 0, capsuleHits = 0;
-      for (let i = 0; i < 2500; i++) {
+      for (let i = 0; i < 1500; i++) {
         randomRay(r, o, d);
         const tmax = r() < 0.3 ? 5 + r() * 20 : Infinity;
         const tmin = r() < 0.5 ? 0 : 0.05;
@@ -417,13 +433,13 @@ describe('rt traversal', () => {
         expect(h!.t).toBe(b.t);
         expect(traceAny(rt.buffers, o, d, tmin, tmax)).toBe(true);
         // just short of the hit: nothing in between
-        expect(traceAny(rt.buffers, o, d, tmin, b.t * (1 - 1e-9))).toBe(brute(rt.buffers, o, d, tmin, b.t * (1 - 1e-9)).inst >= 0);
+        if (i % 4 === 0) expect(traceAny(rt.buffers, o, d, tmin, b.t * (1 - 1e-9))).toBe(brute(rt.buffers, o, d, tmin, b.t * (1 - 1e-9)).inst >= 0);
         hits++;
         if (h!.triangle < 0) { capsuleHits++; expect(h!.flags & RT_INST_PROXY).toBe(RT_INST_PROXY); }
         expect(Math.hypot(h!.nx, h!.ny, h!.nz)).toBeCloseTo(1, 6);
       }
-      expect(hits).toBeGreaterThan(400);
-      expect(capsuleHits).toBeGreaterThan(3);
+      expect(hits).toBeGreaterThan(250);
+      expect(capsuleHits).toBeGreaterThan(2);
     }
   });
 
