@@ -189,6 +189,26 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng): CreviceCarve | 
   const paintOf = () => { let p = rng.int(0, CREVICE_PAINTS - 1); if (p === prevPaint) p = (p + 3) % CREVICE_PAINTS; prevPaint = p; return p; };
   /** The walk (area) in front of band L of side s: the low walk / square / weir (L = 0, by row) or the storey-L walk. */
   const walkOf = (s: 'W' | 'E', L: number, y: number): Area => (L === 0 ? (y < R.chasm0 ? square : y >= R.chasm1 ? weir : low[s]) : walks[s][L - 1]);
+  /** Band L's rows where the walk in front of its fronts is a stair run (band L-1's bays: the run lies along band L's front walls), +- a
+   *  row (the run's rails): no door opens there. */
+  const runRows = (s: 'W' | 'E', L: number) => f.stairs.filter(st => st.side === s && st.from === L - 1).map(st => [R.z0 + st.y + S.stairFoot - 1, R.z0 + st.y + bayLen + 1] as const);
+  /**
+   * The front opening of a box of band L, side s, rows [y0, y1): `want` cells (2 at least) centred (+ shift), clear of the end walls and
+   * of the stair runs in front of the band (narrowed / moved off them: the nearest fitting rows first); null when none fits.
+   */
+  const doorFit = (s: 'W' | 'E', L: number, y0: number, y1: number, want: number, shift: number): {dy: number; w: number} | null => {
+    const len = y1 - y0, runs = runRows(s, L);
+    for (let w = Math.max(2, Math.min(want, len - 2)); w >= 2; w--) {
+      const ideal = Math.max(y0 + 1, Math.min(y1 - 1 - w, y0 + Math.floor((len - w) / 2) + shift));
+      const cands: number[] = [];
+      for (let dy = y0 + 1; dy <= y1 - 1 - w; dy++) cands.push(dy);
+      cands.sort((p, q) => Math.abs(p - ideal) - Math.abs(q - ideal) || p - q);
+      const dy = cands.find(d => !runs.some(([a, b]) => d < b && d + w > a));
+      if (dy !== undefined) return {dy, w};
+      if (!runs.length) break;
+    }
+    return null;
+  };
   /**
    * A container of band L, side s, rows [y0, y1) (its interior; the end walls at y0 - 1 and y1). `open`: a room (else CLOSED: solid);
    * `back`: a backroom behind it ('merge': one room with it — the walk-in shops); its door in the front wall: `width` cells (centred +
@@ -198,7 +218,8 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng): CreviceCarve | 
     const b = xb(L);
     const boxC: Rect = {...span(s, b, b + S.pitch + 1), y: y0 - 1, h: y1 - y0 + 2};
     const inner: Rect = {...span(s, b + 1, b + 1 + S.inner), y: y0, h: y1 - y0};
-    const open = opts.open !== false;
+    const fit = doorFit(s, L, y0, y1, opts.width ?? 2, opts.shift ?? 0);
+    const open = opts.open !== false && fit !== null; // (a box whose whole front stands over a stair run below stays closed)
     const c: CrevContainer = {id: containers.length, area: -1, level: L, box: M(boxC), rect: M(inner), face: faceOf(s), door: null, wide: opts.wide ?? false, use, side: s, paint: paintOf(), ...(opts.stall ? {stall: opts.stall} : {})};
     containers.push(c);
     if (!open) return c;
@@ -210,9 +231,8 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng): CreviceCarve | 
     if (use === 'workshop') a.purpose = 'workshop';
     c.area = a.id;
     c.rect = M(roomC);
-    // the opening in the front wall (column b + 6), `width` cells centred (+ shift), clear of the end walls
-    const len = y1 - y0, w = Math.max(2, Math.min(opts.width ?? 2, len - 2));
-    const dy = Math.max(y0 + 1, Math.min(y1 - 1 - w, y0 + Math.floor((len - w) / 2) + (opts.shift ?? 0)));
+    // the opening in the front wall (column b + 6): doorFit's rows
+    const len = y1 - y0, {dy, w} = fit!;
     c.door = M({...span(s, b + S.pitch, b + S.pitch + 1), y: dy, h: w});
     const door = c.door;
     pendingDoors.push(() => { k.carveDoor(door, onto, a, S.doorH, false); });
@@ -266,6 +286,7 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng): CreviceCarve | 
     for (let t = 0; t < 10; t++) {
       const y0 = rng.int(R.chasm0 + 2, R.chasm1 - n - 2);
       if (reserved[s][L].some(([a, b]) => y0 < b + 3 && y0 + n > a - 3)) continue;
+      if (runRows(s, L).some(([a, b]) => y0 < b && y0 + n > a)) continue; // (its mouth would open onto a stair run below)
       reserved[s][L].push([y0, y0 + n, 'pocket']);
       break;
     }
@@ -288,7 +309,13 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng): CreviceCarve | 
     if (R.z1 - 1 > y) runs.push([y, R.z1 - 1]);
     for (const [a, b] of runs) {
       const ws = b - a >= S.contLen[0] ? fillRun(a, b, S.contLen[0], S.contLen[1], S.contAvg, rng) : null;
-      if (!ws) { if (b - a >= 3) reserved[s][L].push([a, b, 'pocket']); continue; }
+      if (!ws) {
+        // too short for a box: a pocket, when enough of its mouth (2 rows) opens onto the walk clear of the stair runs below
+        let mouth = 0;
+        for (let y = a; y < b; y++) if (!runRows(s, L).some(([p, q]) => y >= p && y < q)) mouth++;
+        if (b - a >= 3 && mouth >= 2) reserved[s][L].push([a, b, 'pocket']);
+        continue;
+      }
       let yy = a;
       for (const w of ws) { fillers.push({s, L, y0: yy, y1: yy + w}); yy += w + 1; }
     }
@@ -297,9 +324,10 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng): CreviceCarve | 
   // gets the essentials), then homes; the lower terrace holds the bunk room, a store and a tea counter; the terraces are homes, about a
   // third of them closed (boxes nobody opens), more of them up top
   const uses = new Map<typeof fillers[number], CrevUse>();
+  const canOpen = (q: typeof fillers[number]) => doorFit(q.s, q.L, q.y0, q.y1, 2, 0) !== null;
   const ground = rng.shuffle(fillers.filter(q => q.L === 0));
   (['water', 'storage', 'latrine', 'tea', 'repair', 'generator', 'laundry'] as CrevUse[]).forEach((u, i) => { if (ground[i]) uses.set(ground[i], u); });
-  const lower = rng.shuffle(fillers.filter(q => q.L === 1));
+  const lower = rng.shuffle(fillers.filter(q => q.L === 1 && canOpen(q)));
   (['bunks', 'storage', 'tea'] as CrevUse[]).forEach((u, i) => { if (lower[i]) uses.set(lower[i], u); });
   for (const fl of fillers) {
     const len = fl.y1 - fl.y0, use = uses.get(fl) ?? 'home';
