@@ -68,6 +68,7 @@ import {PIT_SHAFTS, ROOF_GAS_LOOK, fallbackFog, officeRoofGas, type OutdoorGas, 
 import {ROOF_FOG, roofAirOf} from '../world/roofAir';
 // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): the Surface Run district's outdoor toxic air (one column map: exposure + march)
 import {SURFACE_GAS_LOOK, surfaceOutdoorMap, type CabVolume, type SurfaceOutdoorMap} from '../world/surface/airMask';
+import {FOG_AIR} from '../world/surface/fogAir'; // task studio-surface-run-field-followup-20261116-211729-01 (lane FOG): the fog pressure's look
 import {RIDE_MASK} from '../world/rideMask'; // task studio-perf-ao-train-continuity-20261110-022206-01: the ride tunnel's medium (the CPU mirror)
 // task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO): screen-space ambient occlusion inside this pipeline
 import {AO_MARK, AmbientOcclusionPass, type AoDebug} from './ambientOcclusion';
@@ -560,6 +561,7 @@ export class VolumetricAtmosphere {
       this.depthAny = surf.gas.c > 0;
       this.u.depthOn.value = this.depthAny ? 1 : 0;
     }
+    this.setFogBoundary(surf?.boundary ?? null); // (task studio-surface-run-field-followup-20261116-211729-01, lane FOG: v2 districts; off elsewhere)
     this.field = field;
     this.epoch = null; // the fog clock restarts at the station's first frame
     this.statsCache = null;
@@ -808,6 +810,30 @@ export class VolumetricAtmosphere {
   setCabSource(source: (() => CabVolume | null) | null): void {
     this.cabSource = source;
     this.syncCab();
+  }
+
+  /**
+   * Task studio-surface-run-field-followup-20261116-211729-01 (lane FOG): a version-2 district's FOG-PRESSURE boundary for the surface
+   * variant's pressure terms (the clear rect, 1 / ramp, the thickening and the bank: world/surface/fogAir.ts) — null = off (1 / ramp 0:
+   * the outdoor term exactly as before). Plain uniforms of the shared group.
+   */
+  private setFogBoundary(b: {clear: {x0: number; z0: number; x1: number; z1: number}; ramp: number} | null): void {
+    const u = this.u;
+    if (b && b.ramp > 0) {
+      (u.fogClear.value as THREE.Vector4).set(b.clear.x0, b.clear.z0, b.clear.x1, b.clear.z1);
+      (u.fogP.value as THREE.Vector4).set(1 / b.ramp, FOG_AIR.gain, FOG_AIR.expo, FOG_AIR.cap);
+      (u.fogBank.value as THREE.Vector4).set(FOG_AIR.bank.y0, FOG_AIR.bank.y1, 0, 0);
+    } else {
+      (u.fogClear.value as THREE.Vector4).set(0, 0, 0, 0);
+      (u.fogP.value as THREE.Vector4).set(0, 0, 1, 1);
+      (u.fogBank.value as THREE.Vector4).set(1e4, 2e4, 0, 0);
+    }
+  }
+
+  /** (lane FOG, QA / tests) The fog-pressure uniforms the surface variant reads: clear [x0, z0, x1, z1], [1 / ramp, gain, expo, cap], bank [y0, y1]. */
+  fogDebug(): {clear: number[]; p: number[]; bank: number[]} {
+    const c = this.u.fogClear.value as THREE.Vector4, p = this.u.fogP.value as THREE.Vector4, b = this.u.fogBank.value as THREE.Vector4;
+    return {clear: [c.x, c.y, c.z, c.w], p: [p.x, p.y, p.z, p.w], bank: [b.x, b.y]};
   }
 
   /** (lane AIR, follow-up 1) The cab uniforms from the source now (also every frame's sync). */

@@ -363,6 +363,8 @@ export class SurfaceArch {
       }
       // not a building: the cordon ring, the tent's carved walls, debris / barricade blocks, kerb risers
       const y0 = base;
+      // (task studio-surface-run-field-followup-20261116-211729-01, lane FOG) a v2 district: no perimeter wall — its last-resort ring is not drawn
+      if (own === OWNER.cordon && !P.wall) continue;
       if (own === OWNER.cordon) {
         // where a street would run on through the cordon, the wall is a steel-plate barricade (the street reads closed, not cut):
         // the face splits at those stretches (a ring side is one long face)
@@ -413,7 +415,7 @@ export class SurfaceArch {
     }
     yield 'world.surface.tent';
     try { this.buildTent(group); } catch (e) { console.warn('surface arch: tent skipped', e); }
-    this.buildCordonCoping(A);
+    if (P.wall) this.buildCordonCoping(A); // (lane FOG: a v2 district has no wall to cap)
     yield 'world.surface.coarsen';
     try {
       const c = yield* coarsenSurfaceArchSteps(group, SURFACE_CHUNK, m => this.tintOfMaterial(m));

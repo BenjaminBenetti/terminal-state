@@ -101,6 +101,12 @@ export interface GasExposure {
   depth?: number;
   /** Task reactor-expansion-20261101 (lane GASLIGHT): the concentration handed to the in-engine fog fallback (0 while the pass draws the gas). */
   fallback?: number;
+  /**
+   * Task studio-surface-run-field-followup-20261116-211729-01 (lane FOG): the fog pressure at the eye (0 = none / a sheltered eye) and the
+   * part of `dps` it adds through gas protection (already inside dps).
+   */
+  pressure?: number;
+  pressureDps?: number;
 }
 
 /**
@@ -125,7 +131,17 @@ export interface GasWindowSource {
  * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): an analytic OUTDOOR air the exposure adds like the roof's (the Surface
  * Run district's toxic streets: world/surface/airMask.ts surfaceOutdoorGasAt — the volumetric march draws the same function).
  */
-export interface OutdoorAirSource { gasAt(x: number, y: number, z: number): number }
+export interface OutdoorAirSource {
+  gasAt(x: number, y: number, z: number): number;
+  /**
+   * Task studio-surface-run-field-followup-20261116-211729-01 (lane FOG, optional): the FOG PRESSURE at a point (a version-2 Surface Run
+   * district's outer fog: world/surface/airMask.ts surfaceAirPressureAt; absent / 0 = none) and the damage per second it deals THROUGH
+   * gas protection (world/surface/fogAir.ts fogPressureDps: > 0 only past what protection can hold — "Gas pressure too high"). Every
+   * other source (and level) has none: the normal gas / mask / filter / Airtank rules exactly.
+   */
+  pressureAt?(x: number, y: number, z: number): number;
+  pressureDps?(p: number): number;
+}
 
 /**
  * Task studio-bunker-level-20261109-072224-01: a world of permanent LOCAL GAS LEAKS (the Bunker's gas zones, layout.bunker.gasZones):
@@ -176,7 +192,7 @@ export class GasSystem {
   /** Integration point: the HUD hint while in gas ("Put on your gas mask (Q)" / "No filter" …). */
   hintFor: (protectedNow: boolean) => string = p => (p ? '' : 'Put on your gas mask (Q)');
   /** This frame's exposure. */
-  readonly exposure: GasExposure = {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null, puff: 0, depth: 0, fallback: 0}; // (+ depth: lane AIR; + fallback: lane GASLIGHT)
+  readonly exposure: GasExposure = {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null, puff: 0, depth: 0, fallback: 0, pressure: 0, pressureDps: 0}; // (+ depth: lane AIR; + fallback: lane GASLIGHT; + pressure: lane FOG)
   /** Task track1-siren-blightbelly-20261031 (lane BLIGHT): temporary local puffs of the current world (any level / storey). */
   readonly puffs = new GasPuffs();
   /** Task gas-mask-roof-feedback-20261030 (item 10): the office roof (its outside atmosphere; null on the Subway / between worlds). */
@@ -308,7 +324,7 @@ export class GasSystem {
     this.puffs.world = null;
     this.depth = null; // task reactor-build-20261101 (lane AIR): the Reactor runtime sets it again after this build (never outlives its world)
     this.outdoorAir = null; // (Surface Run, lane AIR) the district runtime sets it again after this build
-    Object.assign(this.exposure, {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null, puff: 0, depth: 0, fallback: 0});
+    Object.assign(this.exposure, {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null, puff: 0, depth: 0, fallback: 0, pressure: 0, pressureDps: 0});
     this.host.atmosphere.setGasFallback?.(0); // (lane GASLIGHT) no fallback fog outlives its world
     this.hud.clear();
   }
@@ -518,8 +534,12 @@ export class GasSystem {
     const c = Math.max(cField, cOut, cDepth);
     const raw = GAS.DPS_MAX * Math.min(1, Math.max(0, (c - GAS.THRESHOLD) / (1 - GAS.THRESHOLD)));
     const prot = c >= Math.min(GAS.HUD_MIN, GAS.THRESHOLD) ? this.protection() : false;
-    const dps = prot ? 0 : raw;
-    e.c = c; e.protected = prot; e.dps = dps; e.outdoor = cOut; e.puff = cPuff; e.depth = cDepth;
+    // task studio-surface-run-field-followup-20261116-211729-01 (lane FOG): + the outdoor source's FOG PRESSURE term, which gas protection
+    // does not stop (a v2 district's outer fog; 0 without a pressure source: every other world's rules exactly)
+    const pr = air && OA && OA.pressureAt ? OA.pressureAt(pl.x, pl.eye, pl.z) : 0;
+    const pd = pr > 0 && OA!.pressureDps ? OA!.pressureDps(pr) : 0;
+    const dps = (prot ? 0 : raw) + pd;
+    e.c = c; e.protected = prot; e.dps = dps; e.outdoor = cOut; e.puff = cPuff; e.depth = cDepth; e.pressure = pr; e.pressureDps = pd;
     e.source = c < GAS.HUD_MIN ? null : cOut > cField && cOut >= cDepth ? 'outdoor' : cDepth > cField ? 'depth' : 'field'; // (lane AIR: + 'depth')
     if (dps > 0 && dt > 0 && pl.alive) { pl.takeDamage(dps * dt); e.damage += dps * dt; }
     // the fallback haze stands in for the volumetric breach gas only: the roof's outdoor murk is the scene fog, always drawn. Lane AIR:
@@ -530,7 +550,7 @@ export class GasSystem {
     // never the old CSS screen haze; the mask (protection) never changes it
     e.fallback = haze ? c : 0;
     this.host.atmosphere.setGasFallback?.(e.fallback);
-    this.hud.update({c, protected: prot, dps, dpsMax: GAS.DPS_MAX, min: GAS.HUD_MIN, hint: c >= GAS.HUD_MIN ? this.hintFor(prot) : '', haze: false});
+    this.hud.update({c, protected: prot, dps, dpsMax: GAS.DPS_MAX, min: GAS.HUD_MIN, hint: c >= GAS.HUD_MIN ? this.hintFor(prot) : '', haze: false, ...(pd > 0 ? {pressure: true} : {})}); // (lane FOG: + "Gas pressure too high")
   }
 }
 

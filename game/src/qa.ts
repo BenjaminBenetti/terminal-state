@@ -60,6 +60,7 @@ import {trunkQaApi} from './world/skywaysCarTrunk'; // task studio-beta-skyways-
 import {truckQaApi} from './world/surface/truckStorage'; // task surface-run-opus-rebuild-20261116 (lane TRUCK): truck(), truckOpen(id), truckClose(), truckQuick / Move
 import {scannerQaApi} from './world/itemScanner'; // task train-crafting (lane SCANNER): scanner(), DEBUG scannerSweep()
 import {surfaceAirQaApi} from './world/surface/air'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): Surface Run air / doors spot-check hooks
+import {surfaceFogQaApi} from './world/surface/fogRuntime'; // task studio-surface-run-field-followup-20261116-211729-01 (lane FOG): the v2 fog-pressure boundary
 import {floorPlanPose, roofLadderPose, roofRewardPose, transitPose} from './gen/office'; // Task office-overhaul-20261030 (lane STRUCT) / office-interactions-layout-20261030: roof ladder / transit / roof cache / floor-plan poses
 import {mallShopPose} from './gen/mall/shopsWeapons'; // Task track3-eaton-centre-20261031 (primary): goShop
 import {MALL_POSE_NAMES, mallQaPose, type MallPoseName} from './gen/mall/qa'; // Task track3-eaton-centre-20261031 (lane GEN): mall QA poses
@@ -446,6 +447,8 @@ export function installQaHooks(game: Game): void {
     ...truckQaApi(game), // task surface-run-opus-rebuild-20261116 (lane TRUCK): truck() (state, transform, attachment points, compartments), truckOpen(id), truckClose(), truckQuick(spec), truckMove(from, to, n?)
     ...scannerQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane SCANNER): scanner() — active / scope open / seconds to the next sweep / blip counts; DEBUG scannerSweep() — a sweep now
     ...surfaceAirQaApi(), // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): surfaceAir() — outdoor air / cab / panes / doors / zones; surfaceDoor(id, 'open' | 'close'); DEBUG surfaceSettle()
+    // task studio-surface-run-field-followup-20261116-211729-01 (lane FOG): surfaceFog() — boundary / pressure / damage / sound at the eye; surfaceFogAt(x, z); surfaceFogPose(p, side?)
+    ...surfaceFogQaApi((x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     // Task office-overhaul-20261030 (lane STRUCT): stand at the roof access ladder (then the game's own "[E] Climb ladder") or on a transit-hall lane (0 / 2 escalators, 1 stair)
     goRoofLadder: (end: 'bottom' | 'top' = 'bottom') => {
       const q = roofLadderPose(game.layout, end);

@@ -33,7 +33,8 @@ import {buildWindows, type WindowPlan, type WindowView} from '../officeWindows';
 import {towerCue} from '../towerShared';
 import type {GasField} from '../gas/field';
 import type {GasWindowSource, OutdoorAirSource} from '../gas/system';
-import {cabVolumeOf, columnTop, outdoorWeight, surfaceAirAt, surfaceOutdoorGasAt, surfaceOutdoorMap, type CabVehicle, type CabVolume, type SurfaceOutdoorMap} from './airMask';
+import {cabVolumeOf, columnTop, outdoorWeight, surfaceAirAt, surfaceAirPressureAt, surfaceOutdoorGasAt, surfaceOutdoorMap, surfacePressureAt, type CabVehicle, type CabVolume, type SurfaceOutdoorMap} from './airMask';
+import {fogPressureDps} from './fogAir';
 import {SurfaceGasField, surfaceGasZones} from './airField';
 import {SURFACE_WINDOWS_LANE, planSurfaceWindows, surfacePrebreached} from './airPanes';
 import {DOOR_RT, SURFACE_DOORS_LANE, doorAimHit, doorBoxes, doorBreachId, doorSweeps, fitDoorBoxes, planSurfaceDoors, restoredDoor, saveDoors, shutLeafDistance, type SurfaceDoorState} from './airDoors';
@@ -69,7 +70,9 @@ export interface SurfaceAirHost {
   sectionPreloads?: ((layout: StationLayout) => Promise<void>)[];
   sfx?: unknown;
   hud?: {toast(text: string, warn?: boolean): void};
-  atmosphere?: {markShadows(root: THREE.Object3D, structure: boolean): void; setCabSource?(source: (() => CabVolume | null) | null): void};
+  atmosphere?: {markShadows(root: THREE.Object3D, structure: boolean): void; setCabSource?(source: (() => CabVolume | null) | null): void; readonly active?: boolean};
+  /** (task studio-surface-run-field-followup-20261116-211729-01, lane FOG) The QA bypass of the volumetric pass (Game: ?fog=off and the like). */
+  readonly atmosphereBypass?: unknown;
   /** (follow-up 1) The vehicle controller (world/skywaysCar.ts): its seat, `enclosed`, body pose and spec interior give the sealed cab. */
   skywaysCar?: CabVehicle | null;
   world?: {culler?: unknown} | null;
@@ -116,7 +119,12 @@ export class SurfaceAirRuntime {
   private readonly aimDir = new THREE.Vector3();
   private movable: {props: readonly unknown[]; n: number; list: PropPlacement[]} | null = null;
   // (follow-up 1) the outdoor air minus the sealed cab the player sits in (surfaceAirAt: the same cab the march leaves clean)
-  private readonly outdoor: OutdoorAirSource = {gasAt: (x, y, z) => (this.air ? surfaceAirAt(this.air.map, this.cab(), x, y, z) : 0)};
+  // (task studio-surface-run-field-followup-20261116-211729-01, lane FOG) + a v2 district's FOG PRESSURE (0 in a v1 district, in the cab)
+  private readonly outdoor: OutdoorAirSource = {
+    gasAt: (x, y, z) => (this.air ? surfaceAirAt(this.air.map, this.cab(), x, y, z) : 0),
+    pressureAt: (x, y, z) => (this.air?.map.boundary ? surfaceAirPressureAt(this.air.map, this.cab(), x, y, z) : 0),
+    pressureDps: fogPressureDps,
+  };
   private readonly cabSource = (): CabVolume | null => this.cab();
 
   constructor(readonly host: SurfaceAirHost) {
@@ -397,7 +405,10 @@ export class SurfaceAirRuntime {
     const h = this.host;
     // the scene-fog murk at the eye: the same outdoor weight as the exposure / the march (never the mask, never the truck seat)
     h.camera.getWorldPosition(this.eye);
-    this.fog.apply(outdoorWeight(a.map, this.eye.x, this.eye.y, this.eye.z));
+    // (lane FOG) + the fog pressure at the eye: thickens this murk only while the volumetric pass is not drawing the gas (the in-engine
+    // fallback; with the pass the march draws the pressure fog where it is)
+    const passOff = !h.atmosphere || h.atmosphere.active === false || !!h.atmosphereBypass;
+    this.fog.apply(outdoorWeight(a.map, this.eye.x, this.eye.y, this.eye.z), passOff ? surfacePressureAt(a.map, this.eye.x, this.eye.y, this.eye.z) : 0);
     for (let k = 0; k < a.doors.length; k++) this.doorFrame(a.doors[k], a.viewIndex[k] ?? -1, dt);
     this.target = this.aimedDoor();
   }
@@ -457,6 +468,7 @@ export class SurfaceAirRuntime {
       doors: a.doors.map(d => ({id: d.plan.id, gen: d.plan.gen, t: Math.round(d.t * 100) / 100, target: d.target, gas: d.gas, blocked: d.blocked})),
       field: a.field?.stats() ?? null, target: this.target?.plan.id ?? null, counts: {...this.counts},
       cab: this.cab(), airAtEye: surfaceAirAt(a.map, this.cab(), p.x, p.eye, p.z), // (follow-up 1: the sealed cab, the air the eye breathes)
+      pressureAtEye: surfaceAirPressureAt(a.map, this.cab(), p.x, p.eye, p.z), fogPressure: this.fog.p, // (lane FOG)
     };
   }
 }

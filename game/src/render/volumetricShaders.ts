@@ -142,6 +142,10 @@ export function createFogUniforms() {
     // airMask.ts CabVolume) — centre + heading [x, y, z, yaw], half extents + pitch [hx, hy, hz, pitch] (off: hx = 0). Plain uniforms of the shared group (no
     // uniform buffer of their own); read by the surface variant only: no gas term is drawn inside the cab, everything beyond it as before
     cabC: uniform(new THREE.Vector4(0, 0, 0, 0)), cabH: uniform(new THREE.Vector4(0, 0, 0, 0)),
+    // task studio-surface-run-field-followup-20261116-211729-01 (lane FOG): a version-2 district's FOG PRESSURE (world/surface/fogPressure.ts,
+    // world/surface/fogAir.ts) — the clear rect [x0, z0, x1, z1], [1 / ramp (0 = off), thickening gain, expo, cap], the bank [y0, y1, -, -].
+    // Plain uniforms of the shared group (no uniform buffer of their own); read by the surface variant only
+    fogClear: uniform(new THREE.Vector4(0, 0, 0, 0)), fogP: uniform(new THREE.Vector4(0, 0, 1, 1)), fogBank: uniform(new THREE.Vector4(1e4, 2e4, 0, 0)),
     // temporal
     prevView: uniform(M4()), prevProj: uniform(M4()), historyValid: uniform(0), blend: uniform(0.85),
     // composite
@@ -251,6 +255,10 @@ export const VF_DEPTH_MARK = 'vfDepthSig';
 export const VF_SURFACE_MARK = 'vfSurfaceTop';
 /** Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR, follow-up 1): name of the cab ray interval (marks the cab cut). */
 export const VF_CAB_MARK = 'vfCabSpan';
+/** Task studio-surface-run-field-followup-20261116-211729-01 (lane FOG): name of the fog-pressure variable (marks the pressure terms). */
+export const VF_FOG_MARK = 'vfFogPressure';
+/** (lane FOG) Samples of the far term (the pressure fog beyond the march's reach, out to the visible surface) and its farthest reach (m). */
+export const VF_FOG_FAR = {samples: 12, maxDist: 420} as const;
 
 /**
  * The march material (two outputs). Rebuilt when the step count or the shadow texture changes (quality change, the
@@ -326,6 +334,20 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
       const tIn = max(max(max(n(t1).x, n(t1).y), n(t1).z), 0).toVar(), tOut = min(min(n(t2).x, n(t2).y), n(t2).z).toVar();
       cabSpan = n(select(n(ch.x).greaterThan(0).and(tOut.greaterThan(tIn)), vec2(tIn, tOut), vec2(1e9, -1))).toVar(VF_CAB_MARK);
     }
+    // task studio-surface-run-field-followup-20261116-211729-01 (lane FOG): the fog pressure at a point (world/surface/fogPressure.ts
+    // fogPressureAt: metres outside the clear rect / ramp; 0 when off) and what it does to the outdoor air there (world/surface/fogAir.ts:
+    // the concentration c0 .. 1 at pressure 1, the visual thickening, both x the bank) — the surface variant only
+    const fogAt = (q: N, c0: N, mark = false): {c: N; thick: N} => {
+      const cl = n(u.fogClear), fp = n(u.fogP), fb = n(u.fogBank);
+      const out = max(max(max(n(cl.x).sub(n(q).x), n(q).x.sub(cl.z)), max(n(cl.y).sub(n(q).z), n(q).z.sub(cl.w))), 0);
+      const pr = n(out.mul(fp.x)).toVar(mark ? VF_FOG_MARK : undefined);
+      const bank = float(1).sub(smoothstep(fb.x, fb.y, n(q).y));
+      const c = n(c0).add(float(1).sub(c0).mul(clamp(pr, 0, 1)).mul(bank));
+      const thick = select(pr.greaterThan(0), float(1).add(n(fp.y).mul(pow(max(min(pr, fp.w), 1e-6), fp.z)).mul(bank)), float(1));
+      return {c, thick};
+    };
+    // (lane FOG) the in-scattered light of the last step: the far term's pressure fog is lit as the march's end was (the surface variant)
+    const lastL: N = outT ? n(vec3(0, 0, 0)).toVar('vfFogLight') : null;
 
     Loop(STEPS, ({i}: {i: N}) => {
       const uu = float(i).add(jit).div(STEPS).toVar();
@@ -463,13 +485,17 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
             // (lane GASLIGHT) + the outdoor part c · smoothstep(y0, y1, y) x its visual scale (world/gaslightRules.ts outdoorGasAt)
             const dO = n(u.depthOut);
             let outW: N = float(1);
+            let outC: N = n(dO.z);
             if (outT) {
               // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): x the column's outdoor weight (world/surface/airMask.ts
               // outdoorWeight: the nearest cell's indoor top — the density map's uv — then smoothstep(top − EDGE, top, y)): sealed interiors 0
               const top = n(n(outT.sample(muv).level(0)).r.mul(255 * SURFACE_AIR.TOP_STEP)).toVar(VF_SURFACE_MARK);
               outW = smoothstep(top.sub(SURFACE_AIR.EDGE), top, n(p).y).mul(cabKeep); // (follow-up 1: x 0 inside the sealed cab)
+              // (lane FOG) a v2 district: the concentration raised and the look thickened by the fog pressure here (1 / c0 exactly when off)
+              const fz = fogAt(p, dO.z, true);
+              outC = n(fz.c).mul(fz.thick);
             }
-            const dc = n(dcT.add(n(dO.z).mul(smoothstep(dO.x, dO.y, n(p).y)).mul(dO.w).mul(outW))).toVar();
+            const dc = n(dcT.add(n(outC).mul(smoothstep(dO.x, dO.y, n(p).y)).mul(dO.w).mul(outW))).toVar();
             If(dc.greaterThan(0.002), () => {
               // slow horizontal sheets (stretched noise, drifting with the air) x the moving wisps — both mean 1 (the exposure is the mean)
               const shv = n(u.depthSheet);
@@ -539,6 +565,7 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
             });
           });
         });
+        if (lastL) lastL.assign(L); // (lane FOG: the far term's light)
         const tr = n(u.fogDensity).mul(t);
         // gas: tinted single scatter of the same lights + its faint ambient emission (u.gasK.y albedo, .z emission)
         const gasTint = n(u.gasTint).mul(gasSig);
@@ -555,6 +582,32 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
         }
       });
     });
+    // task studio-surface-run-field-followup-20261116-211729-01 (lane FOG): THE FAR TERM — beyond the march's reach the base outdoor air is
+    // the scene fog (world/surface/airFog.ts), but the fog PRESSURE's excess over it continues to the visible surface (VF_FOG_FAR samples:
+    // what stands in the outer fog is seen through the fog that is there): the same concentration x thickening as the steps, lit by the
+    // last step's light with the outdoor look's scatter / emission / tint, under the scene fog's own attenuation. v2 districts only (1 /
+    // ramp > 0); a v1 district / every other program: nothing
+    if (outT && lastL) {
+      const fp = n(u.fogP), dO = n(u.depthOut);
+      If(n(fp.x).greaterThan(0).and(n(u.depthOn).greaterThan(0.5)).and(n(dO.z).greaterThan(0)).and(sceneDist.greaterThan(n(dist).add(0.5))), () => {
+        const NF = VF_FOG_FAR.samples;
+        const t0 = n(dist).toVar(), dtF = n(max(n(min(sceneDist, VF_FOG_FAR.maxDist)).sub(t0), 0).div(NF)).toVar();
+        const tau = n(float(0)).toVar(), inS = n(float(0)).toVar();
+        Loop(NF, ({i}: {i: N}) => {
+          const tf = n(t0).add(n(float(i).add(0.5)).mul(dtF)).toVar();
+          const q = n(u.camPos).add(n(dir).mul(tf)).toVar();
+          const fz = fogAt(q, dO.z);
+          const sig = n(max(n(fz.c).mul(fz.thick).sub(dO.z), 0)).mul(smoothstep(dO.x, dO.y, n(q).y)).mul(dO.w).mul(n(u.depthK).x).toVar();
+          const trF = n(u.fogDensity).mul(tf);
+          const a = float(1).sub(exp(sig.mul(dtF).negate()));
+          inS.addAssign(a.mul(exp(tau.negate())).mul(exp(trF.mul(trF).negate())));
+          tau.addAssign(sig.mul(dtF));
+        });
+        const rad = n(u.depthTint).mul(n(lastL).mul(n(u.depthK).y).add(n(u.depthK).z));
+        acc.addAssign(rad.mul(inS).mul(tv));
+        tv.mulAssign(exp(tau.negate()));
+      });
+    }
     out0.assign(vec4(acc, viewDepth));
     out1.assign(vec4(tv, 0, 0, 1));
     return vec4(0, 0, 0, 0);

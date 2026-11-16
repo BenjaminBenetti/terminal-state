@@ -8,7 +8,7 @@
 import type * as THREE from 'three';
 import type {StationLayout} from '../gen/stationTypes';
 import type {CarSpec} from './skywaysCarSpec';
-import type {CarBody, CarGeom} from './skywaysCarPhysics';
+import type {CarBody, CarControls, CarGeom} from './skywaysCarPhysics';
 import type {CarBeam} from './skywaysCarLights';
 import type {CarView} from './skywaysCarModel';
 import type {CAR_RT, CAR_TEXT, SkywaysCar} from './skywaysCar';
@@ -40,6 +40,12 @@ export interface VehicleDef {
   readonly enclosed: boolean;
   /** (follow-up) Its body box stops hitscan shots (SkywaysCar.shotStop, from Game.fire): nothing behind it is hit. Unset: the car's old rule. */
   readonly stopsShots?: boolean;
+  /**
+   * (task studio-surface-run-field-followup-20261116-211729-01, lane TRUCK) The geometry the physics steps THIS frame and the driver's
+   * controls filtered (the truck's condition: world/surface/truckCondition.ts tuneTruck — reduced mobility, broken down). Unset: `geom`
+   * every frame, the controls as pressed (the car: exactly as before).
+   */
+  readonly tune?: (car: SkywaysCar, ctl: CarControls, dt: number) => CarGeom;
   /** The generated pose in a layout (null: this layout has no such vehicle). */
   spawnOf(layout: StationLayout | null): VehicleSpawn | null;
   readonly model: {
