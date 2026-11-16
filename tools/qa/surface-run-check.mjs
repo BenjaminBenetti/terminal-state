@@ -63,6 +63,11 @@ await withBrowserLock(async () => {
       save();
     };
     const frames = async n => { await ev(k => new Promise(res => { let i = 0; const f = () => (++i >= k ? res(null) : requestAnimationFrame(f)); requestAnimationFrame(f); }), n).catch(() => {}); };
+    // one frame's draws / triangles over every pass (renderer.info.update is called per draw; info.render.calls counts render() calls)
+    const drawStats = () => ev(() => new Promise(res => { const inf = window.__game.renderer.info, orig = inf.update; let draws = 0, tris = 0;
+      inf.update = function (o, c, n) { draws++; tris += c / 3 * n; return orig.call(this, o, c, n); };
+      requestAnimationFrame(() => { inf.update = orig; res({draws, tris: Math.round(tris), geometries: inf.memory?.geometries, textures: inf.memory?.textures}); }); // (the game's own rAF runs first: one frame)
+    })).catch(e => String(e));
     if (!headroom('new campaign')) return;
     const t1 = Date.now();
     await ev((seed, host) => { window.__srNewGame = null; void window.__game.newCampaign(1, {overwrite: true, networkSeed: seed, dev: {level: host}}).then(r => { window.__srNewGame = r; }, e => { window.__srNewGame = {ok: false, error: String(e)}; }); }, NETWORK_SEED, HOST);
@@ -71,10 +76,11 @@ await withBrowserLock(async () => {
       station: await ev(() => ({id: window.__game.run.current.station, name: window.__game.layout?.name})).catch(e => String(e)), access: await ev(() => window.__LL.surface.access()).catch(e => String(e))});
     if (!playing) throw new Error('station never reached playing');
     await frames(30);
-    step('station renderer (before)', await ev(() => { const i = window.__game.renderer.info; return {geometries: i.memory?.geometries, textures: i.memory?.textures, calls: i.render?.calls, triangles: i.render?.triangles}; }).catch(e => String(e)));
+
     if (!headroom('door')) return;
     step('go door', {ok: await ev(() => window.__LL.surface.go())});
     await frames(20);
+    step('station draws (door, before)', await drawStats());
     await shot('station-stair-door', 'the extended stairwell top: the closed street door (the occlusion boundary)');
     if (!headroom('cross up')) return;
     const t2 = Date.now();
@@ -88,7 +94,7 @@ await withBrowserLock(async () => {
     await waitState('playing', 300);
     await frames(40);
     await shot('district-arrival', 'arrival at the portal: the checkpoint, tent and truck');
-    step('district renderer', await ev(() => { const i = window.__game.renderer.info; return {geometries: i.memory?.geometries, textures: i.memory?.textures, calls: i.render?.calls, triangles: i.render?.triangles}; }).catch(e => String(e)));
+    step('district draws (arrival)', await drawStats());
     const S = await ev(() => { const s = window.__game.layout.surface; return s && {portal: s.portal.pose, cp: s.checkpoint, truck: s.truck, core: s.core,
       dest: s.buildings.filter(b => b.destination && b.enterable).map(b => ({id: b.id, name: b.name, programme: b.programme, kind: b.kind, fp: b.footprint, areas: b.areas, ent: b.entrances.map(e => ({x: e.x, z: e.z, side: e.side, door: e.door}))})),
       streets: s.streets.filter(t => t.rank === 'avenue').map(t => ({name: t.name, ax: t.ax, az: t.az, bx: t.bx, bz: t.bz}))}; });
@@ -151,7 +157,9 @@ await withBrowserLock(async () => {
       await waitState('playing', 600);
       await frames(30);
       step('crossed down', {down, state: await ev(() => window.__LL.surface.state()).catch(e => String(e))});
-      step('station renderer', await ev(() => { const i = window.__game.renderer.info; return {geometries: i.memory?.geometries, textures: i.memory?.textures, calls: i.render?.calls}; }).catch(e => String(e)));
+      await ev(() => window.__LL.surface.go());
+      await frames(20);
+      step('station draws (door, after)', await drawStats());
       await shot('station-return', 'back in the station at the stairwell (no district left)');
     }
   } finally {
