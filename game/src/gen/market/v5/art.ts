@@ -394,10 +394,11 @@ export function creviceLines(layout: StationLayout): CrevLine[] {
     const [Lw, Le] = west ? [La, Lb] : [Lb, La];
     const ew = edges[Lw]?.W, ee = edges[Le]?.E;
     if (!Number.isFinite(ew) || !Number.isFinite(ee)) continue;
-    const yw = B[Lw] + Ln.cross[0] + (Ln.cross[1] - Ln.cross[0]) * h(6), ye = B[Le] + Ln.cross[0] + (Ln.cross[1] - Ln.cross[0]) * h(7);
     const skew = (h(8) - 0.5) * 1.4;
     const sag = Ln.sag[0] + (Ln.sag[1] - Ln.sag[0]) * h(9);
     const laundry = Lw === Le && Math.abs(ee - ew) <= Ln.laundryRun && h(10) < 0.72 && out.filter(q => q.laundry).length < Ln.laundry[0];
+    // (a laundry line is LEVEL: world/marketClothes.ts planLaundry hangs from y less the sag, the far end's y1 unread)
+    const yw = B[Lw] + Ln.cross[0] + (Ln.cross[1] - Ln.cross[0]) * h(6), ye = laundry ? yw : B[Le] + Ln.cross[0] + (Ln.cross[1] - Ln.cross[0]) * h(7);
     const x0 = r3(ew + 0.02), x1 = r3(ee - 0.02), z0 = r3(zz - skew / 2), z1 = r3(zz + skew / 2);
     // (a line between two storeys: y at the west end, the east end's height in y1 — sloped wire, MarketLine's sag on top)
     const line: CrevLine = {x0, z0, x1, z1, y: r3(yw), sag: r3(sag), laundry, seed: 1000 + out.length, poles: [
