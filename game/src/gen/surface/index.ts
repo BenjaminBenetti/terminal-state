@@ -2,7 +2,7 @@
 // ctx)` (levels/registry.ts). Deterministic from the host station's level seed through surfaceSeed (gen/surface/surfaceRun.ts), never
 // the host's streams; every stage draws from its own fork, each enterable building from its own (RNG-neutral across buildings).
 //
-// Stages (one Kit for the whole district: 3 level grids = the street + two upper storeys):
+// Stages (one Kit for the whole district: SURFACE_LEVELS = 2 level grids = the street + one upper storey):
 //   1. frame     gen/surface/cityFrame.ts   the 8 x 8-block street grid: perimeter roads, two avenues through the core, quadrant
 //                                           streets that jog at the avenues, named streets, junctions / segments
 //   2. blocks    gen/surface/cityBlocks.ts  what stands on each block: the portal block's corner plaza (the checkpoint), the rail
@@ -51,7 +51,7 @@ export const SURFACE_FRAME = {
   cell: CELL,
   /** Kerb height of sidewalks / raised lots, slab between storeys, open-sky band top over outdoor cells. */
   kerb: KERB, slab: SLAB, skyCeil: SKY_CEIL,
-  /** Walkable layout levels (street + two upper storeys). */
+  /** Walkable layout levels (the street + one upper storey; drawn storeys above them are closed). */
   levels: SURFACE_LEVELS,
   /** Carriageway kerb to kerb / each sidewalk. */
   avenue: {width: [18, 22], sidewalk: [3.5, 4]},
@@ -203,7 +203,7 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
   reserveCheckpoint(op, pc, host);
   const doorways: {cells: readonly number[]; side: Side}[] = rec.flatMap(r => r.entrances.filter(e => e.door !== 'boarded').map(e => ({cells: e.cells, side: e.side})));
   reserveFronts({kit, gm, plans, op}, doorways);
-  const cd = dressCheckpoint(op, kit, pc, host, compoundArea);
+  const cd = dressCheckpoint(op, kit, pc, host, compoundArea, rng.fork('checkpoint-supply'));
   const streets = streetRecords(f, plans);
   const dress = dressOutdoors({kit, f, gm, plans, op, rng: rng.fork('outdoors'), safe: cd.safe, streetOfSegment: f.segments.map(q => q.id)});
   for (const [seg, rs] of dress.blocked) streets[seg].blocked = rs;
@@ -258,7 +258,8 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
   const g0 = kit.g;
   const layout: StationLayout = {
     seed, attempt: 0, name: dn.name, archetype: 'side-mezzanine', towards: ['', ''], grid: g0, areas: kit.areas, doors: kit.doors, props,
-    lights: [...inner.lights, ...cd.lights], signs: inner.signs, pickups: inner.pickups, zombies: inner.zombies, storefronts: [], decor: [],
+    // (the checkpoint's guaranteed mask + spare filter first: their pickup indices never move with the interiors)
+    lights: [...inner.lights, ...cd.lights], signs: inner.signs, pickups: [...cd.pickups, ...inner.pickups], zombies: inner.zombies, storefronts: [], decor: [],
     playerSpawn: {x: pc.portal.pose.x, z: pc.portal.pose.z, yaw: pc.portal.pose.yaw},
     trench: {x0: 0, x1: 0, z0: 0, z1: 0, floorY: 0, platformX0: 0, platformX1: 0, tracks: [], third: [], columns: false, ceil: 0}, trenches: [],
     platform: compoundArea, platforms: [compoundArea], traversal: {stairs: flights, ladders: [], underpasses: []}, levels, levelLinks: links, rails,

@@ -14,14 +14,18 @@
 
 import {CELL, FLOOR, SOLID} from '../grid';
 import type {Kit} from '../stationKit';
-import type {Door, LightPlacement, Side} from '../stationTypes';
+import type {Door, LightPlacement, PickupPlacement, Side} from '../stationTypes';
+import type {PropPlacement} from '../props';
 import {layStairRun, type StairFlight} from '../traversal';
 import type {SBox, SPose, SRect, SurfaceCheckpoint, SurfacePortal} from './surfaceTypes';
 import type {SurfaceHost} from './surfaceRun';
 import {crH, crW, type CR, type CityFrame} from './cityFrame';
 import {KERB, addBuildingPlan, type BlockPlans, type BuildingPlan} from './cityBlocks';
 import type {GroundMap} from './cityCarve';
-import {FACE_ROT, OutdoorProps} from './outdoorKinds';
+import {FACE_ROT, OutdoorProps, halfExtents, kindDims, type PlannedProp} from './outdoorKinds';
+import {SR_MAP_TABLE} from './kinds';
+import {GAS_FILTER_ID, GAS_MASK_ID, MASK_LOOT} from '../maskLoot';
+import {FILTER_LIFE_S} from '../../items/gear';
 import type {Rng} from '../../core/rng';
 
 /** Headhouse / tent tunables (cells unless noted). */
@@ -164,7 +168,28 @@ export interface CheckpointDress {
   truck: SPose;
   lights: LightPlacement[];
   safe: SRect;
+  /** The tent's guaranteed gas mask (a fitted filter charge) and one spare filter, on the supply table (finite seeded pickups). */
+  pickups: PickupPlacement[];
 }
+
+/**
+ * The tent's interior plan (tent-local metres: u from the back canvas wall's inner face toward the flap end, v across the tent). The
+ * supply table stands against the back wall, the map table one walking gap in front of it (its reader on the flap side, clear of the
+ * flap's swing: the flap is a leaf of the doorway's width swinging in from the flap end), the radio on the map table's end strip (beside
+ * lane LIFE's centred map sheet), the crate against the far side wall facing the room (its lid opens toward the canvas).
+ */
+export const TENT_PLAN = {
+  /**
+   * Supply / map table centres (u from the back wall's inner face: a 1.0 m walking gap between them) and the reader's distance in front
+   * of the map table's front edge (the open flap's leaf tip stops ~0.3 m short of the reader).
+   */
+  supplyU: 0.65, mapU: 2.85, reader: 0.6,
+  /** Radio: along the map table's long axis (host-local x; LIFE's map sheet covers |x| <= 0.54); gear on the supply table (host-local x, z). */
+  radioX: 0.76,
+  gear: {mask: [-0.45, 0.15], filter: [0.45, 0.15]} as Readonly<Record<'mask' | 'filter', readonly [number, number]>>,
+  /** Crate: from the flap-end wall and the far side wall (m, to its footprint). */
+  crateEnd: 0.35, crateSide: 0.15,
+} as const;
 
 /** Reserves the truck box, the gate and the portal approach (before any outdoor dressing). */
 export function reserveCheckpoint(op: OutdoorProps, pc: PortalCarve, host: SurfaceHost): void {
@@ -183,8 +208,32 @@ export function reserveCheckpoint(op: OutdoorProps, pc: PortalCarve, host: Surfa
   box((2 + PORTAL.tent.len) * CELL, (2 + PORTAL.tent.len) * CELL + 2.2, tv0 * CELL + 1, (tv0 + PORTAL.tent.wid) * CELL - 1);
 }
 
-/** The compound's props, the truck pose, the work lights, the safe box. */
-export function dressCheckpoint(op: OutdoorProps, kit: Kit, pc: PortalCarve, host: SurfaceHost, compoundArea: number): CheckpointDress {
+const r3 = (v: number) => Math.round(v * 1000) / 1000;
+
+/** World point of a placed prop's local (x, z): local X = (cos rot, -sin rot), local Z (its front) = (sin rot, cos rot). */
+function hostLocal(h: {x: number; z: number; rot: number}, lx: number, lz: number): {x: number; z: number} {
+  return {x: h.x + Math.cos(h.rot) * lx + Math.sin(h.rot) * lz, z: h.z - Math.sin(h.rot) * lx + Math.cos(h.rot) * lz};
+}
+
+/**
+ * On-top decor on a placed lane KIT trestle table (srMapTable): `host` = the table's layout.props index, y = its top (SR_MAP_TABLE.top),
+ * the footprint inside the top's x span; the top gives up that span (PropPlacement.cut). Not grid-blocking (it stands on the table).
+ */
+function onTable(op: OutdoorProps, table: PlannedProp | null, kind: string, lx: number, lz: number, rot: number): PropPlacement | null {
+  if (!table || table.index < 0) return null;
+  const host = op.props[table.index], d = kindDims(kind), e = halfExtents(kind, rot), top = SR_MAP_TABLE.top;
+  if (!d || !e || host.kind !== 'srMapTable') return null;
+  const q = Math.round((rot - host.rot) / (Math.PI / 2)) & 1, ax = (q ? d.d : d.w) / 2, az = (q ? d.w : d.d) / 2;
+  if (lx - ax < top.x0 || lx + ax > top.x1 || lz - az < top.z0 || lz + az > top.z1) return null;
+  const w = hostLocal(host, lx, lz);
+  const p = {kind, x: r3(w.x), z: r3(w.z), y: r3(host.y + top.y), rot, area: host.area, hx: e.hx, hz: e.hz, h: d.h, blocksSight: false, variant: 0, host: table.index, level: 0} as PropPlacement;
+  host.cut = [...(host.cut ?? []), {y: top.y, x0: r3(lx - ax - 0.02), x1: r3(lx + ax + 0.02)}];
+  op.props.push(p);
+  return p;
+}
+
+/** The compound's props, the truck pose, the work lights, the safe box, the tent's gas-mask supply. */
+export function dressCheckpoint(op: OutdoorProps, kit: Kit, pc: PortalCarve, host: SurfaceHost, compoundArea: number, rng: Rng): CheckpointDress {
   const p = pc.plaza, U = p.U, V = p.V;
   const su = sideU(p), sv = sideV(p);
   const at = (u: number, v: number) => pw(p, u, v);
@@ -215,18 +264,32 @@ export function dressCheckpoint(op: OutdoorProps, kit: Kit, pc: PortalCarve, hos
   // traffic cones funnelling to the gate (outside the barrier line, on the plaza edge)
   for (const du of [-PORTAL.gate / 2 - 0.6, PORTAL.gate / 2 + 0.6]) put('srTrafficCone', gu + du, V - 2.2, 0, 'checkpoint-cone');
 
-  // --- inside the tent: the planning-map table, the field radio, a crate -----------------------------------------------------------
+  // --- inside the tent (TENT_PLAN): the planning-map table with the field radio on its end strip, the supply table against the back
+  // wall with the guaranteed gas mask and a spare filter, a crate against the far side wall ------------------------------------------
   const T = PORTAL.tent, tv0 = host === 'subway' ? 16 : 8;
   const tu0 = 3 * CELL, tu1 = (2 + T.len - 1) * CELL, tvA = (tv0 + 1) * CELL, tvB = (tv0 + T.wid - 1) * CELL;
-  const tableU = tu0 + 2.2, tableV = (tvA + tvB) / 2;
-  // (long side along v; its FRONT — where lane KIT's table expects the reader — faces +u, toward the reader and the flap)
+  const TP = TENT_PLAN, tableU = tu0 + TP.mapU, tableV = (tvA + tvB) / 2, supplyU = tu0 + TP.supplyU;
+  // (both tables: long side along v, FRONT — where lane KIT's table expects the reader — toward +u, the flap end)
   const table = put('srMapTable', tableU, tableV, FACE_ROT[su], 'checkpoint-map', pc.tent.area);
-  put('srFieldRadio', tu0 + 0.45, tvA + 0.4, FACE_ROT[su], 'checkpoint-radio', pc.tent.area);
-  put('srMilitaryCrate', tu0 + 0.7, tvB - 0.45, rotAlongU + (sv === 'N' ? 0 : Math.PI), 'checkpoint-crate', pc.tent.area);
-  const readW = at(tableU + 0.6 + 0.85, tableV);
+  const supply = put('srMapTable', supplyU, tableV, FACE_ROT[su], 'checkpoint-supply', pc.tent.area);
+  onTable(op, table, 'srFieldRadio', TP.radioX, 0, FACE_ROT[su] - Math.PI / 2); // (its front toward the sheet)
+  const sv2: Side = sv === 'N' ? 'S' : sv === 'S' ? 'N' : sv === 'W' ? 'E' : 'W';
+  const crate = kindDims('srMilitaryCrate')!;
+  put('srMilitaryCrate', tu1 - TP.crateEnd - crate.w / 2, tvB - TP.crateSide - crate.d / 2, FACE_ROT[sv2], 'checkpoint-crate', pc.tent.area);
+  const readW = at(tableU + 0.6 + TP.reader, tableV);
   const tw = at(tableU, tableV);
   const read: SPose = {x: readW.x, z: readW.z, yaw: yawTo(readW.x, readW.z, tw.x, tw.z), level: 0, y: KERB};
-  void tu1;
+  // the guaranteed mask (its fitted filter charge seeded like any found mask: gen/maskLoot.ts MASK_LOOT.foundFilter) and one spare filter
+  const pickups: PickupPlacement[] = [];
+  const sp = supply ? op.props[supply.index] : undefined;
+  if (sp) {
+    const [f0, f1] = MASK_LOOT.foundFilter;
+    const filter = Math.round(FILTER_LIFE_S * (f0 + (f1 - f0) * rng.next()) * 10) / 10;
+    for (const [itemId, [lx, lz]] of [[GAS_MASK_ID, TP.gear.mask], [GAS_FILTER_ID, TP.gear.filter]] as const) {
+      const w = hostLocal(sp, lx, lz);
+      pickups.push({itemId, count: 1, x: r3(w.x), y: r3(sp.y + SR_MAP_TABLE.top.y), z: r3(w.z), area: sp.area, yaw: sp.rot, ...(itemId === GAS_MASK_ID ? {filter} : {})});
+    }
+  }
 
   // --- crates along the inner u edge (else the inner v edge), cots beside the tent, the generator and work lights -----------------
   // (each tries its spots in order: a neighbour's side door onto the compound keeps its front clear)
@@ -277,6 +340,6 @@ export function dressCheckpoint(op: OutdoorProps, kit: Kit, pc: PortalCarve, hos
   void kit;
   return {
     checkpoint: {area: compoundArea, rect, tent: {rect: tentRect, area: pc.tent.area, door: pc.tent.door}, mapTable: {prop: table?.index ?? -1, read}},
-    truck, lights, safe,
+    truck, lights, safe, pickups,
   };
 }

@@ -28,8 +28,14 @@ import {sideCells} from './cityInteriors';
 
 /** Mound heights above the ground they cover (m). */
 export const MOUND = {edge: 0.6, crown: 1.0} as const;
-/** Dressing caps (a whole district). */
-const CAP = {parked: 140, lots: 44, junction: 10} as const;
+/**
+ * Dressing budget (a whole district; follow-up 1, the draw-call budget). Every wreck kind draws one instanced mesh per model part per
+ * 18 m cohort, every drawn kit kind one per material per 64 m cohort (world/surface/kit.ts, world/builder.ts addInstancedModel), so the
+ * counts stay where they read: wrecks dense where deliberate (pile-ups, the roadblock, the bus, junction corners, a few parked ROWS,
+ * parking-lot stalls) and at most `wrecks` in all; lamps one row per lit street (avenues and the core's streets), 30-40 m apart.
+ */
+export const DRESS_CAP = {wrecks: 90, parkedRows: 12, parked: 36, lots: 24, junction: 8, lampGap: [30, 40] as const} as const;
+const isWreck = (k: string) => k.startsWith('srWreck');
 
 export interface Collapse { corner: 'NW' | 'NE' | 'SW' | 'SE'; w: number; d: number }
 
@@ -300,63 +306,76 @@ function roadblockAndBus(c: DressCtx, out: DressOut): void {
 function wrecks(c: DressCtx, out: DressOut): void {
   const rng = c.rng.fork('wrecks');
   const car = () => rng.pick(SR_CAR_WRECKS);
-  let parked = 0, inLots = 0, inJunctions = 0;
-  // parked along kerbs: right-hand traffic (east-bound on the south half nose +X, south-bound on the west half nose +Z), a few askew
-  for (const s of c.f.segments) {
-    if (parked >= CAP.parked) break;
-    if (inSafe(c.safe, s.r) || out.blocked.has(s.id)) continue;
-    const runZ = s.run === 'z';
-    const core = c.f.blocks.some(b => b.core && rectsTouch(b.kerb, s.r, 1));
-    const p = s.line.rank === 'avenue' ? 0.05 : core ? 0.055 : s.line.perimeter ? 0.07 : 0.085;
-    const A0 = (runZ ? s.r.y0 : s.r.x0) * CELL + 4, A1 = (runZ ? s.r.y1 : s.r.x1) * CELL - 4;
-    for (const hiSide of [false, true]) {
-      for (let a = A0; a + 5 <= A1 && parked < CAP.parked; a += 6) {
-        if (!rng.chance(p)) continue;
-        const kind = car();
-        let rot = runZ ? (hiSide ? Math.PI / 2 : -Math.PI / 2) : (hiSide ? 0 : Math.PI);
-        if (rng.chance(0.15)) rot += Math.PI;
-        const e = halfExtents(kind, rot)!;
-        const acr = hiSide ? (runZ ? s.r.x1 : s.r.y1) * CELL - 0.15 - (runZ ? e.hx : e.hz) : (runZ ? s.r.x0 : s.r.y0) * CELL + 0.15 + (runZ ? e.hx : e.hz);
-        const along = a + (runZ ? e.hz : e.hx);
-        if (c.op.place(kind, runZ ? acr : along, runZ ? along : acr, rot, {role: 'parked'})) parked++;
-      }
-    }
-  }
+  let parked = 0, inLots = 0, inJunctions = 0, rows = 0;
+  // the district-wide wreck cap (pile-ups, the roadblock's truck and the bus are placed before this pass)
+  let total = c.op.planned.filter(p => isWreck(p.kind)).length;
+  const room = () => total < DRESS_CAP.wrecks;
+  const place = (kind: string, x: number, z: number, rot: number, role: string): boolean => {
+    if (!room() || !c.op.place(kind, x, z, rot, {role})) return false;
+    total++;
+    return true;
+  };
   // junction corners (the middle stays clear)
   const groups = c.gm.groupRect.map((r, k) => ({r, k})).filter(q => !inSafe(c.safe, q.r) && crW(q.r) >= 20 && crH(q.r) >= 20);
-  for (const q of rng.shuffle(groups).slice(0, rng.int(6, CAP.junction))) {
+  for (const q of rng.shuffle(groups).slice(0, rng.int(5, DRESS_CAP.junction))) {
     const kind = car(), rot = rng.int(0, 3) * Math.PI / 2;
     const e = halfExtents(kind, rot)!;
     const east = rng.chance(0.5), south = rng.chance(0.5);
     const x = east ? q.r.x1 * CELL - 0.6 - e.hx : q.r.x0 * CELL + 0.6 + e.hx;
     const z = south ? q.r.y1 * CELL - 0.6 - e.hz : q.r.y0 * CELL + 0.6 + e.hz;
-    if (c.op.place(kind, x, z, rot, {role: 'junction'})) inJunctions++;
+    if (place(kind, x, z, rot, 'junction')) inJunctions++;
+  }
+  // parked ROWS: a few kerbs (avenues and the core's streets first) each hold one row of 2-4 abandoned cars nose to tail, right-hand
+  // traffic (east-bound on the south kerb nose +X, south-bound on the west kerb nose +Z), now and then one turned round
+  const segs = c.f.segments.filter(s => !inSafe(c.safe, s.r) && !out.blocked.has(s.id) && (s.run === 'z' ? crH(s.r) : crW(s.r)) * CELL >= 30);
+  const coreSeg = (s: FrameSegment) => c.f.blocks.some(b => b.core && rectsTouch(b.kerb, s.r, 1));
+  const order = [...rng.shuffle(segs.filter(s => s.line.rank === 'avenue' || coreSeg(s))), ...rng.shuffle(segs.filter(s => s.line.rank !== 'avenue' && !coreSeg(s)))];
+  for (const s of order) {
+    if (rows >= DRESS_CAP.parkedRows || parked >= DRESS_CAP.parked || !room()) break;
+    if (!rng.chance(coreSeg(s) || s.line.rank === 'avenue' ? 0.55 : 0.2)) continue;
+    const runZ = s.run === 'z', hiSide = rng.chance(0.5);
+    const A0 = (runZ ? s.r.y0 : s.r.x0) * CELL + 5, A1 = (runZ ? s.r.y1 : s.r.x1) * CELL - 5;
+    const n = rng.int(2, 4);
+    let a = rng.range(A0, Math.max(A0, A1 - n * 5.6)), k = 0;
+    for (let t = 0; t < n && a + 5 <= A1 && parked < DRESS_CAP.parked; t++) {
+      const kind = car();
+      let rot = runZ ? (hiSide ? Math.PI / 2 : -Math.PI / 2) : (hiSide ? 0 : Math.PI);
+      if (rng.chance(0.15)) rot += Math.PI;
+      const e = halfExtents(kind, rot)!;
+      const acr = hiSide ? (runZ ? s.r.x1 : s.r.y1) * CELL - 0.15 - (runZ ? e.hx : e.hz) : (runZ ? s.r.x0 : s.r.y0) * CELL + 0.15 + (runZ ? e.hx : e.hz);
+      const along = a + (runZ ? e.hz : e.hx);
+      if (place(kind, runZ ? acr : along, runZ ? along : acr, rot, 'parked')) { parked++; k++; }
+      a += 2 * (runZ ? e.hz : e.hx) + rng.range(0.6, 1.6);
+    }
+    if (k) rows++;
   }
   // parking lots: stalls along the long edges (perpendicular), the aisle clear
-  for (const l of c.plans.lots) {
-    if (inLots >= CAP.lots) break;
-    if (l.use !== 'parking') continue;
+  // (a few lots, a handful of stalls each: shuffled so the cap does not fill the first lots only)
+  for (const l of rng.shuffle(c.plans.lots.filter(q => q.use === 'parking' && !inSafe(c.safe, q.r)))) {
+    if (inLots >= DRESS_CAP.lots || !room()) break;
     const r = l.r;
-    if (inSafe(c.safe, r)) continue;
     const alongX = crW(r) >= crH(r);
     const depth = alongX ? crH(r) : crW(r);
-    const rows: Side[] = alongX ? ['N', 'S'] : ['W', 'E'];
-    const use = depth >= 34 ? rows : [rows.find(s => !l.driveways.includes(s)) ?? rows[0]];
+    const sides: Side[] = alongX ? ['N', 'S'] : ['W', 'E'];
+    const use = depth >= 34 ? sides : [sides.find(s => !l.driveways.includes(s)) ?? sides[0]];
+    const lotCap = inLots + rng.int(3, 8);
     for (const s of use) {
-      for (let a = (alongX ? r.x0 : r.y0) * CELL + 1.6; a + 1.4 <= (alongX ? r.x1 : r.y1) * CELL - 1.0 && inLots < CAP.lots; a += 2.7) {
-        if (!rng.chance(0.38)) continue;
+      for (let a = (alongX ? r.x0 : r.y0) * CELL + 1.6; a + 1.4 <= (alongX ? r.x1 : r.y1) * CELL - 1.0 && inLots < Math.min(DRESS_CAP.lots, lotCap); a += 2.7) {
+        if (!rng.chance(0.3)) continue;
         const kind = car();
         const rot = alongX ? (s === 'N' ? Math.PI / 2 : -Math.PI / 2) : (s === 'W' ? 0 : Math.PI);
         const e = halfExtents(kind, rot)!;
         const x = alongX ? a : s === 'W' ? r.x0 * CELL + 0.4 + e.hx : r.x1 * CELL - 0.4 - e.hx;
         const z = alongX ? (s === 'N' ? r.y0 * CELL + 0.4 + e.hz : r.y1 * CELL - 0.4 - e.hz) : a;
-        if (c.op.place(kind, x, z, rot, {role: 'lot'})) inLots++;
+        if (place(kind, x, z, rot, 'lot')) inLots++;
       }
     }
   }
   out.counts.parked = parked;
+  out.counts.parkedRows = rows;
   out.counts.lotWrecks = inLots;
   out.counts.junctionWrecks = inJunctions;
+  out.counts.wrecks = total;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -412,8 +431,11 @@ function furniture(c: DressCtx, out: DressOut): void {
     const sx = segs.find(s => s.run === 'x'), sz = segs.find(s => s.run === 'z');
     const avenue = segs.some(s => s.line.rank === 'avenue');
     const corners = [[r.x0 * CELL - 0.7, r.y0 * CELL - 0.7, 0], [r.x1 * CELL + 0.7, r.y0 * CELL - 0.7, 0], [r.x0 * CELL - 0.7, r.y1 * CELL + 0.7, Math.PI], [r.x1 * CELL + 0.7, r.y1 * CELL + 0.7, Math.PI]] as const;
-    if (avenue) for (const [x, z, rot] of corners) put('srTrafficSignal', x, z, rot, 'signal');
-    if (sx || sz) {
+    // (two diagonal corners: one signal mast per approach pair, as at a real crossing)
+    if (avenue) { const d = rng.chance(0.5) ? [0, 3] : [1, 2]; for (const k2 of d) { const [x, z, rot] = corners[k2]; put('srTrafficSignal', x, z, rot, 'signal'); } }
+    // (a street-name sign where the streets are lit: the core's crossings and the avenues' — the outer ring reads by the map)
+    const lit = avenue || c.f.blocks.some(b => b.core && rectsTouch(b.kerb, r, 2));
+    if ((sx || sz) && lit) {
       const variant = streetSignVariant(sx ? c.streetOfSegment[sx.id] : c.streetOfSegment[sz!.id], sx && sz ? c.streetOfSegment[sz.id] : -1);
       for (const k2 of rng.shuffle([1, 2, 0, 3])) {
         const [x, z] = corners[k2];
@@ -421,18 +443,40 @@ function furniture(c: DressCtx, out: DressOut): void {
       }
     }
   });
-  // --- along every sidewalk: lamps (kerb zone, spaced), hydrants, then the core's benches / bins / news boxes / payphones ---------
-  for (const w of walks(c)) {
+  // --- lit streets: the avenues and the core's streets carry ONE lamp row per street line (on one kerb: the core side of a core-edge
+  // line, else seeded per line); every other street, the lanes and the perimeter road stay without lamps ---------------------------
+  const all = walks(c);
+  const lineKey = (w: Walk) => `${w.line}|${w.kerb === 'N' || w.kerb === 'S' ? 'x' : 'z'}`;
+  const litKerbs = new Map<string, Set<Side>>();
+  for (const w of all) {
+    if (!w.block || !(w.avenue || w.core) || w.block.lines[w.kerb].perimeter) continue;
+    const k = lineKey(w);
+    let s = litKerbs.get(k);
+    if (!s) litKerbs.set(k, (s = new Set()));
+    s.add(w.kerb);
+  }
+  const litSide = new Map<string, Side>();
+  const lineRng = c.rng.fork('lamp-lines');
+  for (const k of [...litKerbs.keys()].sort()) {
+    const s = [...litKerbs.get(k)!].sort();
+    litSide.set(k, s.length > 1 ? lineRng.pick(s) : s[0]);
+  }
+  // --- along every sidewalk: lamps (lit rows only, kerb zone, 30-40 m apart), hydrants, then the core's benches / bins / news boxes /
+  // payphones ----------------------------------------------------------------------------------------------------------------------
+  for (const w of all) {
     const [a0, a1] = walkRange(w);
     const faceRoad = FACE_ROT[w.kerb], faceIn = FACE_ROT[OPP[w.kerb]];
     const width = walkWidth(w);
     const lampAt: number[] = [];
-    for (let a = a0 + rng.range(4, 12); a < a1 - 4; a += rng.range(27, 36)) {
-      const p = onWalk(w, a, 0.5);
-      if (inSafeP(p.x, p.z)) continue;
-      if (put('srStreetLamp', p.x, p.z, faceRoad, 'lamp')) lampAt.push(a);
+    const lit = !!w.block && litSide.get(lineKey(w)) === w.kerb && (w.avenue || w.core) && !w.block.lines[w.kerb].perimeter;
+    if (lit) {
+      for (let a = a0 + rng.range(4, 14); a < a1 - 4; a += rng.range(DRESS_CAP.lampGap[0], DRESS_CAP.lampGap[1])) {
+        const p = onWalk(w, a, 0.5);
+        if (inSafeP(p.x, p.z)) continue;
+        if (put('srStreetLamp', p.x, p.z, faceRoad, 'lamp')) lampAt.push(a);
+      }
     }
-    if (rng.chance(0.45)) { const p = onWalk(w, rng.range(a0 + 6, a1 - 6), 0.5); if (!inSafeP(p.x, p.z)) put('srFireHydrant', p.x, p.z, faceRoad, 'hydrant'); }
+    if (rng.chance(lit ? 0.35 : w.block && w.core ? 0.15 : 0)) { const p = onWalk(w, rng.range(a0 + 6, a1 - 6), 0.5); if (!inSafeP(p.x, p.z)) put('srFireHydrant', p.x, p.z, faceRoad, 'hydrant'); }
     if (!w.block) continue;
     if (w.core && width >= 3) {
       if (rng.chance(0.3)) { const p = onWalk(w, rng.range(a0 + 8, a1 - 8), 0.55); if (!inSafeP(p.x, p.z)) put('bench', p.x, p.z, faceIn, 'bench'); }

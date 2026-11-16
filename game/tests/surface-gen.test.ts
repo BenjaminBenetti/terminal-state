@@ -7,9 +7,15 @@ import {CELL, FLOOR, SOLID} from '../src/gen/grid';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {SURFACE_FRAME, SURFACE_GEN_STATS, generateSurfaceDistrict, setSurfaceGenDebug, surfaceGenDebug} from '../src/gen/surface/index';
 import {surfaceSeed, type SurfaceHost} from '../src/gen/surface/surfaceRun';
-import {GUARANTEE, STORE_PROGRAMMES, guaranteeCounts} from '../src/gen/surface/cityBlocks';
+import {GUARANTEE, KERB, STORE_PROGRAMMES, guaranteeCounts} from '../src/gen/surface/cityBlocks';
 import {SURFACE_FACADE_IDS} from '../src/gen/surface/facades';
 import {SR_KINDS, halfExtents, isDefinedKind} from '../src/gen/surface/outdoorKinds';
+import {DRESS_CAP} from '../src/gen/surface/outdoorDress';
+import {SR_MAP_TABLE} from '../src/gen/surface/kinds';
+import {PROP_DEFS} from '../src/gen/props';
+import {propPhysics} from '../src/damage/materials';
+import {FILTER_LIFE_S} from '../src/items/gear';
+import {GAS_FILTER_ID, GAS_MASK_ID, MASK_LOOT} from '../src/gen/maskLoot';
 import {LEVELS} from '../src/levels/registry';
 
 const HOSTS: readonly SurfaceHost[] = ['subway', 'office', 'mall'];
@@ -85,7 +91,8 @@ describe('Surface district frame', () => {
 
 describe('Surface district guarantees over 30 seeds', () => {
   const runs: {seed: number; L: StationLayout}[] = [];
-  beforeAll(() => { for (let seed = 1; seed <= 30; seed++) runs.push({seed, L: gen(seed)}); });
+  // (lane ROOMS: with the real interior planner a district takes ~0.3-0.55 s here, so 30 of them outgrow the 10 s default hook timeout)
+  beforeAll(() => { for (let seed = 1; seed <= 30; seed++) runs.push({seed, L: gen(seed)}); }, 120000);
 
   it('every district has its depot, >= 2 centres, >= 3 offices, >= 8 stores of >= 6 kinds, <= 2 civic (all enterable, all in the core)', () => {
     for (const {seed, L} of runs) {
@@ -134,15 +141,21 @@ describe('Surface district guarantees over 30 seeds', () => {
     expect(jogs).toBeGreaterThan(3);
   });
 
-  it('buildings: 1-6 drawn storeys of 3.5-4 m (shop ground floors 4-5 m), <= 3 walkable levels, known facades, all four conditions', () => {
+  it('buildings: 1-6 drawn storeys of 3.5-4 m (shop ground floors 4-5 m), <= 2 walkable levels, known facades, all four conditions', () => {
     const cond = new Set<string>();
+    let tallClosed = 0;
     for (const {L} of runs) {
       const s = L.surface!;
-      expect(L.levels.length).toBeLessThanOrEqual(3);
+      // the street + one upper storey (lead decision, follow-up 1): the drawn storeys above are closed
+      expect(SURFACE_FRAME.levels).toBe(2);
+      expect(L.levels.length).toBe(2);
+      expect(s.storeys.map(q => q.level)).toEqual([0, 1]);
       for (const b of s.buildings) {
         cond.add(b.condition);
         expect((SURFACE_FACADE_IDS as readonly string[]).includes(b.facade)).toBe(true);
-        for (const lv of b.levels) expect(lv).toBeLessThan(3);
+        for (const lv of b.levels) expect(lv).toBeLessThan(2);
+        for (const a of b.areas) expect(L.areas[a].level ?? 0).toBeLessThan(2);
+        if (b.enterable && b.storeys > 2) { tallClosed++; expect(b.levels.length).toBeLessThanOrEqual(2); }
         if (b.host) continue; // the host's own tower / mall, the tent, the headhouse
         expect(b.storeys).toBeGreaterThanOrEqual(1);
         expect(b.storeys).toBeLessThanOrEqual(6);
@@ -155,6 +168,8 @@ describe('Surface district guarantees over 30 seeds', () => {
       }
     }
     expect([...cond].sort()).toEqual(['collapsed', 'damaged', 'gutted', 'intact']);
+    // taller enterable buildings (offices: 3-6 drawn storeys) exist and walk only their two lowest
+    expect(tallClosed).toBeGreaterThan(30);
   });
 
   it('blocks hold 2-6 buildings in the core (varied footprints); the outer ring is sparse', () => {
@@ -229,7 +244,7 @@ describe('Surface district guarantees over 30 seeds', () => {
     }
   });
 
-  it('outdoor props stand on real street-level floors, quarter-turn yaws, never overlapping (pending kinds included)', () => {
+  it('outdoor props stand on real street-level floors, quarter-turn yaws, never overlapping; every planned kit kind is emitted', () => {
     for (const {seed, L} of runs.slice(0, 8)) {
       const dbg = surfaceGenDebug(L)!;
       const g = L.grid;
@@ -241,8 +256,12 @@ describe('Surface district guarantees over 30 seeds', () => {
         const i = g.idx(Math.floor(p.x / CELL), Math.floor(p.z / CELL));
         expect(g.cells[i]).toBe(FLOOR);
         expect(Math.abs(g.floor[i] - p.y)).toBeLessThan(0.021);
-        if (p.index >= 0) { expect(L.props[p.index].kind).toBe(p.kind); expect(L.props[p.index].level).toBe(0); }
-        else expect(isDefinedKind(p.kind)).toBe(false);
+        // lane KIT's kinds are in PropKind now: nothing stays pending, every placement is the layout prop it planned (KIT's def box)
+        expect(isDefinedKind(p.kind), p.kind).toBe(true);
+        expect(p.index, p.kind).toBeGreaterThanOrEqual(0);
+        const lp = L.props[p.index];
+        expect(lp.kind).toBe(p.kind); expect(lp.level).toBe(0);
+        expect([lp.x, lp.z, lp.rot, lp.hx, lp.hz]).toEqual([p.x, p.z, p.rot, p.hx, p.hz]);
       }
       // no two outdoor boxes overlap (a sorted sweep along x)
       const sorted = [...boxes].sort((a, b) => a.x0 - b.x0);
@@ -292,13 +311,30 @@ describe('Surface portal, checkpoint and truck', () => {
         const i = g.idx(x, y);
         if (!flap.has(i)) expect(g.cells[i]).toBe(SOLID);
       }
-      // the planning-map table (pending until lane KIT's kind lands) and the reader's pose inside the tent
-      const table = dbg.planned.find(p => p.kind === 'srMapTable')!;
-      expect(table).toBeTruthy();
+      // the planning-map table (lane KIT's srMapTable: a real prop now) and the reader's pose inside the tent
+      const table = dbg.planned.find(p => p.role === 'checkpoint-map')!;
+      expect(table.kind).toBe('srMapTable');
       expect(g.area[cellAt(table.x, table.z)]).toBe(ta.id);
+      expect(table.index).toBeGreaterThanOrEqual(0);
       expect(s.checkpoint.mapTable.prop).toBe(table.index);
-      if (table.index >= 0) expect(L.props[table.index].kind).toBe('srMapTable');
+      expect(L.props[table.index].kind).toBe('srMapTable');
       expect(g.area[cellAt(s.checkpoint.mapTable.read.x, s.checkpoint.mapTable.read.z)]).toBe(ta.id);
+      // the field radio stands ON the map table (host index, its top; on the end strip beside LIFE's centred map sheet), never floating
+      const tp = L.props[table.index];
+      const radios = L.props.filter(p => p.kind === 'srFieldRadio');
+      expect(radios.length).toBe(1);
+      const radio = radios[0];
+      expect(radio.host).toBe(table.index);
+      expect(radio.y).toBeCloseTo(tp.y + SR_MAP_TABLE.top.y, 3);
+      expect(radio.y).toBeCloseTo(KERB + SR_MAP_TABLE.top.y, 3);
+      const lx = (radio.x - tp.x) * Math.cos(tp.rot) - (radio.z - tp.z) * Math.sin(tp.rot), lz = (radio.x - tp.x) * Math.sin(tp.rot) + (radio.z - tp.z) * Math.cos(tp.rot);
+      const q = Math.round((radio.rot - tp.rot) / (Math.PI / 2)) & 1;
+      const ax = (q ? PROP_DEFS.srFieldRadio.d : PROP_DEFS.srFieldRadio.w) / 2, az = (q ? PROP_DEFS.srFieldRadio.w : PROP_DEFS.srFieldRadio.d) / 2;
+      expect(Math.abs(lx) - ax).toBeGreaterThanOrEqual(0.54); // clear of the map sheet (side = 0.9 x the table's depth, centred)
+      expect(Math.abs(lx) + ax).toBeLessThanOrEqual(SR_MAP_TABLE.top.x1 + 1e-6);
+      expect(Math.abs(lz) + az).toBeLessThanOrEqual(SR_MAP_TABLE.top.z1 + 1e-6);
+      expect(tp.cut?.some(c => c.x0 <= lx - ax && c.x1 >= lx + ax)).toBe(true);
+      expect(Math.abs(radio.rot / (Math.PI / 2) - Math.round(radio.rot / (Math.PI / 2)))).toBeLessThan(1e-9);
       // compound kit: crates (one in the tent), cots, barriers, the generator and work lights (p7 kinds: real props now)
       const kinds = (k: string) => dbg.planned.filter(p => p.kind === k);
       expect(kinds('srMilitaryCrate').length).toBeGreaterThanOrEqual(4);
@@ -337,6 +373,90 @@ describe('Surface portal, checkpoint and truck', () => {
   }
 });
 
+describe('Surface checkpoint gas-mask supply (the district air is toxic; a subway arrival may have no mask)', () => {
+  it('one guaranteed mask with a fitted filter charge and one spare filter lie on the tent supply table: finite, seeded, never floating', () => {
+    const filters = new Set<number>();
+    for (const [seed, host] of [[2, 'subway'], [9, 'office'], [16, 'mall'], [23, 'subway'], [30, 'office'], [37, 'mall']] as const) {
+      const L = gen(seed, host), s = L.surface!, g = L.grid;
+      const dbg = surfaceGenDebug(L)!;
+      const ta = s.checkpoint.tent.area;
+      const inTent = L.pickups.filter(p => g.area[g.idx(Math.floor(p.x / CELL), Math.floor(p.z / CELL))] === ta);
+      // exactly the two supply items in the tent, first in layout.pickups (their indices never move with the interiors)
+      expect(inTent.map(p => p.itemId).sort(), `seed ${seed}`).toEqual([GAS_FILTER_ID, GAS_MASK_ID].sort());
+      expect(L.pickups.slice(0, 2)).toEqual(inTent);
+      const mask = inTent.find(p => p.itemId === GAS_MASK_ID)!, filter = inTent.find(p => p.itemId === GAS_FILTER_ID)!;
+      expect(mask.count).toBe(1); expect(filter.count).toBe(1);
+      expect(filter.filter).toBeUndefined();
+      // the mask's fitted charge: a found mask's partly used filter (gen/maskLoot.ts MASK_LOOT.foundFilter of FILTER_LIFE_S, 0.1 s steps)
+      expect(mask.filter!).toBeGreaterThanOrEqual(FILTER_LIFE_S * MASK_LOOT.foundFilter[0] - 0.05);
+      expect(mask.filter!).toBeLessThanOrEqual(FILTER_LIFE_S * MASK_LOOT.foundFilter[1] + 0.05);
+      expect(Math.abs(mask.filter! * 10 - Math.round(mask.filter! * 10))).toBeLessThan(1e-6);
+      filters.add(mask.filter!);
+      // on the supply table's top (a static trestle table: it never moves, so nothing floats), not on the map table under LIFE's [E] box
+      const sp = dbg.planned.find(p => p.role === 'checkpoint-supply')!;
+      expect(sp.kind).toBe('srMapTable');
+      const host2 = L.props[sp.index];
+      expect(propPhysics('srMapTable').dynamic).toBeFalsy();
+      expect(sp.index).not.toBe(s.checkpoint.mapTable.prop);
+      for (const p of inTent) {
+        expect(p.y).toBeCloseTo(host2.y + SR_MAP_TABLE.top.y, 3);
+        const dx = p.x - host2.x, dz = p.z - host2.z;
+        const lx = dx * Math.cos(host2.rot) - dz * Math.sin(host2.rot), lz = dx * Math.sin(host2.rot) + dz * Math.cos(host2.rot);
+        expect(lx).toBeGreaterThan(SR_MAP_TABLE.top.x0 + 0.15); expect(lx).toBeLessThan(SR_MAP_TABLE.top.x1 - 0.15);
+        expect(lz).toBeGreaterThan(SR_MAP_TABLE.top.z0 + 0.15); expect(lz).toBeLessThan(SR_MAP_TABLE.top.z1 - 0.15);
+        const mt = L.props[s.checkpoint.mapTable.prop];
+        expect(Math.abs(p.x - mt.x) > mt.hx + 0.3 || Math.abs(p.z - mt.z) > mt.hz + 0.3).toBe(true);
+        // never in a crate's lid sweep (the lid lifts over its own footprint and ~0.1 m behind it)
+        for (const c of L.props.filter(q => q.kind === 'srMilitaryCrate')) expect(Math.abs(p.x - c.x) > c.hx + 0.4 || Math.abs(p.z - c.z) > c.hz + 0.4).toBe(true);
+      }
+      // the tables, the crate and the reader keep a walking gap (the supply table is reached from the gap, away from the map table's box)
+      const mt = L.props[s.checkpoint.mapTable.prop];
+      const gap = Math.max(Math.abs(mt.x - host2.x) - mt.hx - host2.hx, Math.abs(mt.z - host2.z) - mt.hz - host2.hz);
+      expect(gap).toBeGreaterThanOrEqual(0.95);
+      // deterministic from the district seed
+      expect(gen(seed, host).pickups.slice(0, 2)).toEqual(inTent);
+    }
+    expect(filters.size).toBeGreaterThan(1);
+  });
+});
+
+describe('Surface street dressing budget (draw calls: instanced per kind per cohort)', () => {
+  it('lamps only along the lit streets, one row each; wrecks <= DRESS_CAP.wrecks, only where deliberate', () => {
+    const WRECK_ROLES = new Set(['blocked', 'roadblock', 'bus', 'junction', 'parked', 'lot']);
+    for (let seed = 40; seed < 48; seed++) {
+      const L = gen(seed);
+      const dbg = surfaceGenDebug(L)!;
+      const lamps = dbg.planned.filter(p => p.kind === 'srStreetLamp');
+      const wrecks = dbg.planned.filter(p => p.kind.startsWith('srWreck'));
+      expect(lamps.length, `seed ${seed} lamps`).toBeGreaterThan(40);
+      expect(lamps.length, `seed ${seed} lamps`).toBeLessThan(170);
+      expect(wrecks.length, `seed ${seed} wrecks`).toBeLessThanOrEqual(DRESS_CAP.wrecks);
+      expect(wrecks.length, `seed ${seed} wrecks`).toBeGreaterThan(30);
+      for (const w of wrecks) expect(WRECK_ROLES.has(w.role), w.role).toBe(true);
+      expect(wrecks.filter(w => w.role === 'parked').length).toBeLessThanOrEqual(DRESS_CAP.parked);
+      // signs at the lit crossings only, hydrants along the lit / core walks, two signal masts per avenue crossing
+      const n = (k: string) => dbg.planned.filter(p => p.kind === k).length;
+      expect(n('srStreetSign')).toBeGreaterThan(15); expect(n('srStreetSign')).toBeLessThanOrEqual(50);
+      expect(n('srFireHydrant')).toBeLessThanOrEqual(45);
+      expect(n('srTrafficSignal')).toBeLessThanOrEqual(50);
+      // lamps stand in the core / on the avenues (the outer streets, lanes and the perimeter road are unlit)
+      const s = L.surface!;
+      const core = s.core, avenues = s.streets.filter(q => q.rank === 'avenue');
+      for (const p of lamps) {
+        const onAvenue = avenues.some(q => (q.ax === q.bx ? Math.abs(p.x - q.ax) < q.width / 2 + 5 : Math.abs(p.z - q.az) < q.width / 2 + 5));
+        expect(onAvenue || inRect(core, p.x, p.z, 6), `seed ${seed} lamp ${p.x},${p.z}`).toBe(true);
+      }
+      // one row per street line: no lamp has a facing lamp across the carriageway within 8 m along it
+      for (const a of lamps) for (const b of lamps) {
+        if (a === b || Math.abs(Math.abs(a.rot - b.rot) - Math.PI) > 1e-6) continue;
+        const alongX = Math.abs(Math.sin(a.rot)) < 0.5; // facing N / S: the street runs along x
+        const along = alongX ? Math.abs(a.x - b.x) : Math.abs(a.z - b.z), across = alongX ? Math.abs(a.z - b.z) : Math.abs(a.x - b.x);
+        if (across < 26 && along < 8) expect.fail(`seed ${seed}: lamps face each other across a street at ${a.x},${a.z} / ${b.x},${b.z}`);
+      }
+    }
+  });
+});
+
 describe('Surface determinism, timing and memory', () => {
   const sig = (L: StationLayout) => {
     const g = L.grid;
@@ -355,14 +475,14 @@ describe('Surface determinism, timing and memory', () => {
     expect(LEVELS.office.generate('surface', {levelSeed: 5}).surface!.name).toBe(gen(5, 'office').surface!.name);
   });
 
-  it('generates well under 1.5 s with a bounded grid footprint (3 storeys x ~1.1k x 1.1k cells x 15 B)', () => {
+  it('generates well under 1.5 s with a bounded grid footprint (2 storeys x ~1.1k x 1.1k cells x 15 B)', () => {
     const ms: number[] = [];
     for (const seed of [101, 202, 303]) {
       gen(seed);
       ms.push(SURFACE_GEN_STATS.ms);
-      expect(SURFACE_GEN_STATS.levels).toBeLessThanOrEqual(3);
+      expect(SURFACE_GEN_STATS.levels).toBe(2);
       expect(SURFACE_GEN_STATS.bytesPerStorey).toBe(SURFACE_GEN_STATS.w * SURFACE_GEN_STATS.h * 15);
-      expect(SURFACE_GEN_STATS.gridBytes).toBeLessThan(3 * 21e6);
+      expect(SURFACE_GEN_STATS.gridBytes).toBeLessThan(2 * 21e6);
       expect(SURFACE_GEN_STATS.w).toBeLessThan(1180);
     }
     // a loose CI guard (local runs: ~0.3-0.6 s); the lane report records measured numbers

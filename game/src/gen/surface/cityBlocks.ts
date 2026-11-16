@@ -8,7 +8,8 @@
 //    spread over the core blocks, then every block is cut into ROWS (one through-row, two back-to-back rows, or two rows on a service
 //    alley) and each row into PARCELS (brief items first, then fillers: closed shells, gangways, vacant lots, forecourts, pocket plazas).
 //  - The outer ring is SPARSE: closed shells, ruins (collapsed / gutted), vacant lots, parking, parks, rubble fields — its streets stay.
-//  - Heights: storey = floor-to-floor (shop ground floors 4.3-5.0 m, upper storeys 3.0-4.3 m); walkable floors (<= 3 layout levels).
+//  - Heights: storey = floor-to-floor (shop ground floors 4.3-5.0 m, upper storeys 3.5-4.0 m); walkable floors (<= SURFACE_LEVELS = 2
+//    layout levels: the street storey and one upper storey; the drawn storeys above are closed).
 
 import type {Rng} from '../../core/rng';
 import type {Side} from '../stationTypes';
@@ -60,8 +61,13 @@ export interface BuildingPlan {
 export const KERB = 0.15;
 /** Floor slab between storeys (m). */
 export const SLAB = 0.35;
-/** Walkable layout levels of a district (street + two upper storeys). */
-export const SURFACE_LEVELS = 3;
+/**
+ * Walkable layout levels of a district: the street + ONE upper storey (lead decision, follow-up 1: every walkable level costs the runtime
+ * about 51 MB of path-finder / vocal-route buffers plus 27 MB of grids / level arrays at ~1.1k x 1.1k cells, measured in Node: 3 levels
+ * ~244 MB, 2 levels ~166 MB of array buffers). Taller buildings keep
+ * their DRAWN storeys; the storeys above the walkable ones are closed (not carved, not walkable).
+ */
+export const SURFACE_LEVELS = 2;
 
 export const STORE_PROGRAMMES = ['grocery', 'pharmacy', 'hardware', 'clothing', 'electronics', 'convenience', 'liquor', 'sporting-goods', 'bookstore', 'cafe', 'diner'] as const;
 export const CENTRE_PROGRAMMES = ['strip-centre', 'arcade'] as const;

@@ -47,7 +47,10 @@ function fixture(host: 'subway' | 'office' | 'mall' = 'subway', seed = 7): {layo
     s.notes.push({x: line(3), z: line(4) + 30, text: 'Gas pooling — mask up', kind: 'hazard'});
     s.notes.push({x: -60, z: -60, text: 'Off the sheet', kind: 'info'}); // on no real place: never printed
   }
-  if (!s.windows.length) s.windows.push({id: `w${shop.id}`, building: shop.id, level: 0, x0: shop.footprint.x0, z0: shop.footprint.z1 - 0.5, x1: shop.footprint.x1, z1: shop.footprint.z1, side: 'S', sill: 0.4, head: 2.6, panes: ['intact', 'broken', 'broken', 'cracked'], room: shop.areas[0] ?? 0, shop: true});
+  // (lane ROOMS: the real interior planner plans the window spans — the shop's own spans read all intact here, so the report counts
+  // exactly the two broken panes of the span below)
+  for (const w of s.windows) if (w.building === shop.id) w.panes = w.panes.map(() => 'intact' as const);
+  if (!s.windows.some(w => w.id === `w${shop.id}`)) s.windows.push({id: `w${shop.id}`, building: shop.id, level: 0, x0: shop.footprint.x0, z0: shop.footprint.z1 - 0.5, x1: shop.footprint.x1, z1: shop.footprint.z1, side: 'S', sill: 0.4, head: 2.6, panes: ['intact', 'broken', 'broken', 'cracked'], room: shop.areas[0] ?? 0, shop: true});
   return {layout, s};
 }
 

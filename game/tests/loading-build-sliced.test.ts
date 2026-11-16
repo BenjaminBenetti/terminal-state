@@ -269,9 +269,11 @@ describe('the loading screen builds the station in time slices (Game.buildSectio
     expect(b.held()).toBe(false);
   });
 
-  it('game.ts: all four loading-screen routes build this way and go on to the warm-up right after; the frame loop checks the hold where it checks the warm-up', () => {
+  it('game.ts: all six loading-screen routes build this way and go on to the warm-up right after; the frame loop checks the hold where it checks the warm-up', () => {
     const routes = [...SRC.matchAll(/await this\.buildSectionSliced\(/g)];
-    expect(routes).toHaveLength(4);
+    // continue / new game / retry / menu travel + (task studio-surface-run-opus-rebuild-20261116-020827-01, lane ACCESS) the Surface Run
+    // crossing (Game.crossSurface) and its recovery rebuild of the section it left — the same per-route checks apply to every one
+    expect(routes).toHaveLength(6);
     for (const r of routes) {
       const after = SRC.slice(r.index! + r[0].length, r.index! + 700);
       expect(after).toMatch(/const w = await this\.prepareGraphics\(ui\);/);

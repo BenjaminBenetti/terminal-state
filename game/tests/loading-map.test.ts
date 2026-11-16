@@ -399,7 +399,7 @@ describe('game.ts: the map is told the truth, and only the loading screen change
     expect(game.match(/meter\?\.complete\(\)/g)).toHaveLength(1);
     expect(body('  private readyLine(', '\n  }')).toContain('ui.meter?.complete();');
     const calls = [...game.matchAll(/this\.readyLine\(ui, w\);/g)];
-    expect(calls).toHaveLength(4); // continue / new game / retry / menu travel
+    expect(calls).toHaveLength(6); // continue / new game / retry / menu travel + the Surface Run crossing and its recovery (lane ACCESS: Game.crossSurface)
     for (const c of calls) {
       const before = game.slice(c.index! - 320, c.index!);
       expect(before).toMatch(/const w = await this\.prepareGraphics\(ui\);[^\n]*\n\s*if \(w\.status === 'cancelled'\) return [^\n]*\n\s*$/);
