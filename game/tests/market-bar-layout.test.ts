@@ -76,8 +76,9 @@ describe('the Survivor Market, layout version 3 (the settlement with the upper-l
     const sig = (L: StationLayout) => JSON.stringify({areas: L.areas, doors: L.doors, props: L.props, lights: L.lights, signs: L.signs, market: L.market, rails: L.rails, links: L.levelLinks});
     expect(sig(generateMarketLevel({levelSeed: SEEDS[0], layoutVersion: 3}))).toBe(sig(layouts[0].L));
     expect(sig(LEVELS.market.generate('main', {levelSeed: SEEDS[0], layoutVersion: 3}))).toBe(sig(layouts[0].L));
-    // (the default, version 4, carries this same bar: the den is appended after it — market-den-layout.test.ts)
-    expect(generateMarketLevel({levelSeed: SEEDS[0]}).market!.stalls).toEqual(layouts[0].L.market!.stalls);
+    // (version 4 carries this same bar: the den is appended after it — market-den-layout.test.ts; re-pinned by task
+    // studio-survivor-market-crevice-20261116-074419: the default is version 5 now, the crevice, with its own bar deck)
+    expect(generateMarketLevel({levelSeed: SEEDS[0], layoutVersion: 4}).market!.stalls).toEqual(layouts[0].L.market!.stalls);
     expect(new Set(layouts.map(({L}) => L.levelLinks[0].bottom.x > L.grid.w * CELL / 2)).size).toBe(2); // both mirror states
     expect(new Set(layouts.map(({L}) => barOf(L).name)).size).toBeGreaterThan(1); // the bar's painted name is seeded
   });

@@ -42,6 +42,11 @@ const SKYWAYS: Readonly<Record<string, DamageClass>> = {
 /** Task studio-survivor-market-20261108-005807-01 (lane LEVEL): the Survivor Market's finishes (world/marketArch.ts). */
 const MARKET: Readonly<Record<string, DamageClass>> = {
   'market-wall': 'steel', 'market-roof': 'steel', 'market-trim': 'steel', 'market-ply': 'wood', 'market-deck': 'wood',
+  // task studio-survivor-market-crevice-20261116-074419 (lane ARCH): version 5's crevice finishes (world/marketArch.ts CREVICE_KEYS) — the
+  // cast concrete / rock walls, vault, top, floors and the chasm bed chip like concrete; the rusted plate (landings, treads, deck
+  // undersides) sparks like structural steel
+  'market-crev-wall': 'concrete', 'market-crev-vault': 'concrete', 'market-crev-top': 'concrete', 'market-crev-cut': 'concrete',
+  'market-crev-floor': 'concrete', 'market-crev-chasm': 'concrete', 'market-crev-steel': 'steel',
 };
 
 /** Damage class of an arch-owned finish key, or null (not an arch finish this table knows: the station rule applies). */

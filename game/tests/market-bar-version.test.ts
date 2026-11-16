@@ -34,17 +34,20 @@ describe('Market bar: the layout version policy (version 3 = the settlement with
   // (re-pinned by task studio-corpse-market-shop-20261114-031614-01: the current version is now 4 — version 3 plus the corpse buyer's den,
   // gen/market/v4/ — so a never-entered station builds and records 4, a recorded 3 stays 3 (market-den-layout.test.ts pins its
   // fingerprints), and {v: 4} is a valid record now, no longer a malformed one: the malformed example moves to 5)
+  // (re-pinned by task studio-survivor-market-crevice-20261116-074419: the current version is now 5 — the crevice, gen/market/v5/ — so
+  // a never-entered station builds and records 5, a recorded 4 stays 4 (market-crevice-layout.test.ts pins its fingerprints), and {v: 5}
+  // is a valid record now: the malformed example moves to 6)
   it('never entered -> the current version (recorded on first build); a recorded version is kept (a version-2 market stays 2: no bar); visited, no record -> 1', () => {
-    expect(MARKET_LAYOUT_VERSION).toBe(4);
-    expect(marketLayoutVersionFor(undefined)).toBe(4);
-    expect(marketLayoutVersionFor({visits: 0, lanes: {}})).toBe(4);
+    expect(MARKET_LAYOUT_VERSION).toBe(5);
+    expect(marketLayoutVersionFor(undefined)).toBe(5);
+    expect(marketLayoutVersionFor({visits: 0, lanes: {}})).toBe(5);
     expect(marketLayoutVersionFor({visits: 2, lanes: {}})).toBe(1);
-    for (const v of [1, 2, 3, 4]) {
+    for (const v of [1, 2, 3, 4, 5]) {
       expect(marketLayoutVersionFor({visits: 4, lanes: {[MARKET_LAYOUT_LANE]: {v}}})).toBe(v);
       expect(marketLayoutVersionFor({visits: 0, lanes: {[MARKET_LAYOUT_LANE]: {v}}})).toBe(v);
     }
-    expect(marketLayoutVersionFor({visits: 1, lanes: {[MARKET_LAYOUT_LANE]: {v: 5}}})).toBe(1); // (a malformed record: the visit rule)
-    expect(marketLayoutVersionFor({visits: 0, lanes: {[MARKET_LAYOUT_LANE]: {v: 2.5}}})).toBe(4);
+    expect(marketLayoutVersionFor({visits: 1, lanes: {[MARKET_LAYOUT_LANE]: {v: 6}}})).toBe(1); // (a malformed record: the visit rule)
+    expect(marketLayoutVersionFor({visits: 0, lanes: {[MARKET_LAYOUT_LANE]: {v: 2.5}}})).toBe(5);
   });
 
   it('version 2 places the six stalls and no bar; version 3 the six + the bar; each valid', () => {
@@ -58,7 +61,7 @@ describe('Market bar: the layout version policy (version 3 = the settlement with
     }
   });
 
-  it('a campaign: a version-2 station keeps version 2 (no bar), a never-entered one records the current version (4) on its first build', () => {
+  it('a campaign: a version-2 station keeps version 2 (no bar), a never-entered one records the current version (5) on its first build', () => {
     const run = createRun({seeds: {subway: 1, office: 2, mall: 3, market: 4, bunker: 7, skyways: 5, reactor: 6}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
     const v1Key = {level: 'market' as const, section: 'main', station: 'st-v1'}, v2Key = {level: 'market' as const, section: 'main', station: 'st-v2'}, newKey = {level: 'market' as const, section: 'main', station: 'st-new'};
     run.memory(v1Key).visits = 2; // entered under the first market's build: no record
@@ -69,10 +72,10 @@ describe('Market bar: the layout version policy (version 3 = the settlement with
       if (run.laneStore(MARKET_LAYOUT_LANE, k) === undefined) run.setLaneStore(MARKET_LAYOUT_LANE, {v}, k);
       return v;
     };
-    expect([version(v1Key), version(v2Key), version(newKey)]).toEqual([1, 2, 4]);
+    expect([version(v1Key), version(v2Key), version(newKey)]).toEqual([1, 2, 5]);
     run.memory(newKey).visits++;
-    expect([version(v1Key), version(v2Key), version(newKey)]).toEqual([1, 2, 4]);
-    expect([v1Key, v2Key, newKey].map(k => run.laneStore(MARKET_LAYOUT_LANE, k))).toEqual([{v: 1}, {v: 2}, {v: 4}]);
+    expect([version(v1Key), version(v2Key), version(newKey)]).toEqual([1, 2, 5]);
+    expect([v1Key, v2Key, newKey].map(k => run.laneStore(MARKET_LAYOUT_LANE, k))).toEqual([{v: 1}, {v: 2}, {v: 5}]);
     const seed = run.seedFor(v2Key);
     expect(fingerprint(LEVELS.market.generate('main', {levelSeed: seed, layoutVersion: 2}))).toBe(fingerprint(generateMarketLevel({levelSeed: seed, layoutVersion: 2})));
     expect(LEVELS.market.generate('main', {levelSeed: seed, layoutVersion: 2}).market!.stalls.some(q => q.id === BAR_STALL)).toBe(false);

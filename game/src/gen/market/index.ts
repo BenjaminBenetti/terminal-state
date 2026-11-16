@@ -34,6 +34,8 @@ import {generateSettlement, settleStoreyLabel} from './v2/index';
 import {settleIssues} from './v2/validate';
 import {barSettleIssues} from './v3/barValidate'; // task studio-market-bar-20261108-225231-01 (lane BAR): layout version 3
 import {denSettleIssues} from './v4/denValidate'; // task studio-corpse-market-shop-20261114-031614-01 (lane LAYOUT): layout version 4
+import {creviceStoreyLabel, generateCrevice} from './v5/index'; // task studio-survivor-market-crevice-20261116-074419: layout version 5, the crevice
+import {creviceIssues} from './v5/validate';
 
 export {MARKET, MARKET_GENERIC_NAME, marketFrame, marketNameOf, marketSeed} from './frame';
 export {MARKET_LAYOUT_LANE, MARKET_LAYOUT_VERSION, marketLayoutVersionFor} from './layoutVersion';
@@ -42,6 +44,8 @@ export {BAR_DECK, barDeckArea} from './v3/barCarve';
 export {BAR_RULES, barFloorArea, barSettleIssues} from './v3/barValidate';
 export {DEN} from './v4/denCarve'; // (task studio-corpse-market-shop-20261114-031614-01: the corpse buyer's den)
 export {DEN_RULES, denIssues, denSettleIssues} from './v4/denValidate';
+export {CREVICE_GEN_STATS, CREVICE_REJECTS, generateCrevice} from './v5/index'; // (task studio-survivor-market-crevice-20261116-074419)
+export {creviceIssues} from './v5/validate';
 export {marketIssues} from './validate';
 export {MARKET_EMPTY_KEY} from './dress';
 export {MARKET_POPULATION, marketStandOk} from './spots';
@@ -55,25 +59,28 @@ export const MARKET_GEN_STATS = {ms: 0, attempts: 0, carveFails: 0, issues: [] a
 
 /** Storey labels (HUD / map): the shed floor and the housing deck (version 2: the lanes, the catwalks, the rooftops). */
 export function marketStoreyLabel(level: number, version = 1): string {
+  if (version >= 5) return creviceStoreyLabel(level); // (task studio-survivor-market-crevice-20261116-074419: the crevice floor, the terraces)
   if (version >= 2) return settleStoreyLabel(level); // (task studio-market-rework-20261108-074144-01)
   return level === 1 ? 'Housing deck' : 'Market floor';
 }
 
-/** Any market layout's validation issues (version 1, 2, 3 or 4). */
+/** Any market layout's validation issues (version 1, 2, 3, 4 or 5). */
 export function marketLayoutIssues(layout: StationLayout): string[] {
   const v = layout.market?.v;
-  return v === 4 ? denSettleIssues(layout) : v === 3 ? barSettleIssues(layout) : v === 2 ? settleIssues(layout) : marketIssues(layout);
+  return v === 5 ? creviceIssues(layout) : v === 4 ? denSettleIssues(layout) : v === 3 ? barSettleIssues(layout) : v === 2 ? settleIssues(layout) : marketIssues(layout);
 }
 
 /**
  * The ONE continuous market layout. Task studio-market-rework-20261108-074144-01 (lane LAYOUT): `ctx.layoutVersion` picks the generator
  * (gen/market/layoutVersion.ts: a station keeps the version it was first built with) — 1 = the first market (below, unchanged), 2 = the
  * dense container settlement (gen/market/v2/), 3 (task studio-market-bar-20261108-225231-01, lane BAR) = that settlement plus
- * the upper-level bar (gen/market/v3/), absent / 4 (task studio-corpse-market-shop-20261114-031614-01) = version 3 plus the corpse
- * buyer's den (gen/market/v4/).
+ * the upper-level bar (gen/market/v3/), 4 (task studio-corpse-market-shop-20261114-031614-01) = version 3 plus the corpse buyer's den
+ * (gen/market/v4/), 5 (task studio-survivor-market-crevice-20261116-074419) = THE CREVICE (gen/market/v5/: a new settlement of converted
+ * containers on both sides of an underground crevice, with the same stalls, bar and den).
  */
 export function generateMarketLevel(ctx: SectionGenContext): StationLayout {
   const version = ctx.layoutVersion ?? MARKET_LAYOUT_VERSION;
+  if (version >= 5) return generateCrevice(ctx);
   if (version >= 2) return generateSettlement(ctx, {bar: version >= 3, den: version >= 4});
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const seed = marketSeed(ctx.levelSeed);

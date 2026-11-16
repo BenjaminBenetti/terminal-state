@@ -1,0 +1,664 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "market-bridge-kit",
+ "level": "market",
+ "role": "the Survivor Market crevice layout's modular walkway-bridge kit: End (an abutment end), Mid (a tileable bay with a cable festoon), MidPlain (the same bay without cables, for over walkways) and Trestle (a leg frame for a deck standing over a lower floor)",
+ "task": "studio-survivor-market-crevice-20261116-074419-01",
+ "route": "the user's own textured walkway-bridge model (its upload file name mentions Meshy), supplied by the user for the Survivor Market's crevice layout with explicit permission to cut / trim its legs and adapt pieces for different spans, decks and landings (the original unchanged); cooked into a modular kit: rotation-free uniform scale, a lossless weld, exact plane clips, one recorded x-remap of a cable swag, attribute-weighted decimation, and the model's own maps downsized / re-encoded (no generation, re-texture, projection or replacement)",
+ "source": {
+  "kind": "user-supplied textured GLB: the private master stays outside Git, read-only and never shipped (an independent backup is kept by the lead)",
+  "sha256": "729afb41d59d3bed61aa6d545f33a84acea878cbb0f9f66ec1f52d0945cf9f0f",
+  "bytes": 43177692,
+  "triangles": 1044990,
+  "vertices": 636843,
+  "bounds": {
+   "min": [
+    -0.95078,
+    -0.48427,
+    -0.26194
+   ],
+   "max": [
+    0.94841,
+    0.48427,
+    0.25945
+   ]
+  },
+  "axes": "the deck along X, +Y up, width along Z; a plank deck between two side girders, baluster handrails on both sides, two halves meeting at x ~0, cable bundles swagging under both girders, an X-braced leg frame at each end",
+  "material": {
+   "baseColorFactor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "metallicFactor": 1,
+   "roughnessFactor": 1,
+   "emissiveFactor": [
+    1,
+    1,
+    1
+   ],
+   "normalScale": 1,
+   "doubleSided": true,
+   "alphaMode": "OPAQUE"
+  },
+  "maps": [
+   {
+    "slot": "baseColor",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 3808665,
+    "sha256": "987676f39c551ee696523530ffba743a610a5eb002fa25c309c362f07ccf561c"
+   },
+   {
+    "slot": "metallicRoughness",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2420782,
+    "sha256": "df3fa2d53da43e83b07d9642bcb3c5ffe4ab2ac5f72fa6af4170041fbebb04e0"
+   },
+   {
+    "slot": "normal",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 3816264,
+    "sha256": "b51fad55a06cffdf39d464154e8daa6acaa3e8b7c573ac06190c37a9a5493d07"
+   }
+  ],
+  "emissive": {
+   "size": [
+    2048,
+    2048
+   ],
+   "mime": "image/jpeg",
+   "bytes": 210604,
+   "sha256": "45da120e494a64bca05944520a23183717fbdefe9ddc4bed04dbd58edd4f4a23",
+   "decoded": [
+    2048,
+    2048
+   ],
+   "channelMax": [
+    42,
+    43,
+    37
+   ],
+   "channelMean": [
+    0.131,
+    0.1208,
+    0.0934
+   ],
+   "pixelsAbove8Fraction": 0.001777
+  },
+  "droppedAttributes": []
+ },
+ "processing": {
+  "weld": {
+   "verticesBefore": 636843,
+   "verticesAfter": 636843,
+   "unreferencedVerticesDropped": 0,
+   "degenerateTrianglesDropped": 0,
+   "rule": "exact-attribute weld (bitwise-equal position / normal / uv), degenerate triangles and unreferenced vertices dropped: lossless"
+  },
+  "measured": {
+   "railCentreLineZ": [
+    -0.22874,
+    0.22202
+   ],
+   "railMidLineZ": -0.00336,
+   "railHalfSpacing": 0.22538,
+   "railTopY": [
+    0.4824,
+    0.48246
+   ],
+   "railRule": "the top-rail tube band y 0.455 .. 0.49 (|x| < 0.85) split at z = 0; centre-line z = the median z of each rail's vertices; top = the median over 0.01-wide x bins of the band's highest vertex within 0.02 of the line",
+   "girderFlangeY": 0.14,
+   "girderRule": "the girders' bottom flanges: the height histogram of the bay's vertices under both girders peaks at 0.1400 - 0.1405 (none lower but a pipe-hanger rod and the cable clamps)",
+   "deckY": 0.24627,
+   "deckRule": "the area-weighted median centroid height of the up-facing (normal y > 0.9) triangles within 0.15 of the rail mid-line, y 0.235 .. 0.255, |x| < 0.9: the board tops",
+   "units": "source units"
+  },
+  "frame": {
+   "scale": 4.436950345992614,
+   "stretchY": 1,
+   "rule": "x' = (x - x0) * 4.43695 (x0 = the piece's local origin), y' = (y - 0.246271) * 4.43695, z' = (z - -0.003362) * 4.43695",
+   "railZ": 1,
+   "scaleRule": "uniform scale = 1 m / the measured half-spacing of the two top-rail centre-lines (the runtime deck's collision rails run along z = +-1)",
+   "yStretch": "none: the measured handrail top stands 1.0477 m above the deck (>= 0.95)",
+   "rotation": "none: the source's +X stays the deck's long axis"
+  },
+  "cuts": {
+   "yCutSource": {
+    "bay": 0.1395,
+    "end": 0.134
+   },
+   "jointsSource": [
+    -0.63,
+    -0.338
+   ],
+   "cablesSource": [
+    -0.2335,
+    0.2315
+   ],
+   "trestleSource": {
+    "x": [
+     null,
+     -0.8425
+    ],
+    "carve": [
+     "transverse cable swag"
+    ]
+   },
+   "rationale": [
+    "girder underside: the girders' bottom flanges are at y 0.1400; the bay is cut just under them (0.1395) and the End / Trestle a little lower (0.134: under the end frame's lowest cross bar, so it stays whole on the End). The cuts keep the whole girders on the deck pieces and take every cable, the cable tray pipe, the pipe hangers, the leg nameplate and the hose reels off them (hanging cables over walkways would hang into people's heads)",
+    "the rail period: the left half's two heavy posts (x -0.630 / -0.338: a bay of one heavy post, ~6 balusters, a diagonal brace and a sign plate); cut through their centres, the two half-posts of consecutive bays join into one post; their cross-sections (posts, girders, board top) overlay within a few mm. The board pitch (~0.066) does not divide the bay, so each joint shows one narrow board",
+    "the cable festoon: the swags hang leg -> hanger (x ~-0.233) -> hanger (x ~0.232) -> leg; no swag spans the rail period, so the middle swag (the one hung between two identical clamps) is clipped from clamp centre to clamp centre and remapped onto the bay (factor in ops): the clamps land on the joint planes, the festoon connects across copies",
+    "the End: the source's -X end (its first bay is continuous with the cooked bay); the +X end is a near mirror image",
+    "the Trestle: the -X leg frame below the cut; its box ends just inboard of the X-brace plane, its transverse cable swag (outboard of the brace, between the legs) carved out at the legs' inner faces"
+   ]
+  },
+  "ops": [
+   {
+    "piece": "End",
+    "op": "clip",
+    "what": "the -X end above the end cut (legs cut just under the girders and the end frame), up to the first heavy post's centre",
+    "box": {
+     "min": [
+      null,
+      0.134,
+      null
+     ],
+     "max": [
+      -0.63,
+      null,
+      null
+     ]
+    },
+    "keep": "inside",
+    "candidateTriangles": 1821,
+    "splitTriangles": 1821,
+    "keptTriangles": 103329,
+    "rule": "exact axis-aligned clip in source units (null = open): triangles crossing a face are split exactly along it (interpolated position / normal / UV); the inside part kept"
+   },
+   {
+    "piece": "MidPlain",
+    "op": "clip",
+    "what": "one rail bay above the girder underside: heavy-post centre to heavy-post centre",
+    "box": {
+     "min": [
+      -0.63,
+      0.1395,
+      null
+     ],
+     "max": [
+      -0.338,
+      null,
+      null
+     ]
+    },
+    "keep": "inside",
+    "candidateTriangles": 3256,
+    "splitTriangles": 3256,
+    "keptTriangles": 87484,
+    "rule": "exact axis-aligned clip in source units (null = open): triangles crossing a face are split exactly along it (interpolated position / normal / UV); the inside part kept"
+   },
+   {
+    "piece": "Mid",
+    "op": "clip",
+    "what": "the middle cable swag below the girder underside, hanger-clamp centre to hanger-clamp centre",
+    "box": {
+     "min": [
+      -0.2335,
+      null,
+      null
+     ],
+     "max": [
+      0.2315,
+      0.1395,
+      null
+     ]
+    },
+    "keep": "inside",
+    "candidateTriangles": 838,
+    "splitTriangles": 852,
+    "keptTriangles": 57090,
+    "rule": "exact axis-aligned clip in source units (null = open): triangles crossing a face are split exactly along it (interpolated position / normal / UV); the inside part kept"
+   },
+   {
+    "piece": "Trestle",
+    "op": "clip",
+    "what": "the -X leg frame below the girder underside, to just inboard of its X-brace",
+    "box": {
+     "min": [
+      null,
+      null,
+      null
+     ],
+     "max": [
+      -0.8425,
+      0.134,
+      null
+     ]
+    },
+    "keep": "inside",
+    "candidateTriangles": 1032,
+    "splitTriangles": 1039,
+    "keptTriangles": 75351,
+    "rule": "exact axis-aligned clip in source units (null = open): triangles crossing a face are split exactly along it (interpolated position / normal / UV); the inside part kept"
+   },
+   {
+    "piece": "Trestle",
+    "op": "carve",
+    "what": "transverse cable swag",
+    "box": {
+     "min": [
+      null,
+      -0.135,
+      -0.168
+     ],
+     "max": [
+      -0.8875,
+      0.1345,
+      0.138
+     ]
+    },
+    "keep": "outside",
+    "candidateTriangles": 503,
+    "splitTriangles": 510,
+    "keptTriangles": 60981,
+    "rule": "exact axis-aligned clip in source units (null = open): triangles crossing a face are split exactly along it (interpolated position / normal / UV); the outside part kept"
+   },
+   {
+    "piece": "Mid",
+    "op": "remapX",
+    "what": "the cable festoon onto the bay",
+    "factor": 0.627957,
+    "from": [
+     -0.2335,
+     0.2315
+    ],
+    "to": [
+     -0.63,
+     -0.338
+    ],
+    "rule": "x' = (x - -0.2335) * 0.627957 (source units, then the game scale): the swag's two hanger-clamp centres land exactly on the bay's joint planes, so tiled copies hang one continuous festoon from a clamp at every heavy post; normals by the inverse transpose. Cable cross-sections are in y / z and keep their size; the clamps and the diagonal cable runs near them narrow along x"
+   }
+  ],
+  "simplify": {
+   "End": {
+    "applied": true,
+    "tool": "meshoptimizer 1.3 simplifyWithAttributes (normals x0.5 + UV x1 attribute weights; UV seams preserved; source UVs / normals kept; open clip borders collapse only along themselves, so they stay on their planes)",
+    "mode": "seam-preserving",
+    "uvWeight": 1,
+    "normalWeight": 0.5,
+    "fromTriangles": 103329,
+    "triangles": 7999,
+    "budget": 8000,
+    "askedTriangles": 8000,
+    "passes": 1,
+    "errorRelative": 0.018674,
+    "errorM": 0.0398
+   },
+   "MidPlain": {
+    "applied": true,
+    "tool": "meshoptimizer 1.3 simplifyWithAttributes (normals x0.5 + UV x1 attribute weights; UV seams preserved; source UVs / normals kept; open clip borders collapse only along themselves, so they stay on their planes)",
+    "mode": "permissive (the seam-preserving collapse stalled above the budget)",
+    "seamPreservingStall": {
+     "triangles": 5132,
+     "errorM": 0.8783
+    },
+    "uvWeight": 64,
+    "protectedPlanesX": [
+     0,
+     1.2956
+    ],
+    "islandStraddlingTriangles": 34,
+    "islandStraddlingAreaShare": 0.0027,
+    "why": "the bay's 488 UV islands stall the seam-preserving collapse at ~5.1 k triangles; a heavily weighted UV error keeps seam crossings rare",
+    "normalWeight": 0.5,
+    "fromTriangles": 87484,
+    "triangles": 3499,
+    "budget": 3500,
+    "askedTriangles": 3500,
+    "passes": 1,
+    "errorRelative": 0.032108,
+    "errorM": 0.0687
+   },
+   "Mid cable festoon": {
+    "applied": true,
+    "tool": "meshoptimizer 1.3 simplifyWithAttributes (normals x0.5 + UV x1 attribute weights; UV seams preserved; source UVs / normals kept; open clip borders collapse only along themselves, so they stay on their planes)",
+    "mode": "seam-preserving",
+    "uvWeight": 1,
+    "normalWeight": 0.5,
+    "fromTriangles": 57090,
+    "triangles": 4000,
+    "budget": 4000,
+    "askedTriangles": 4000,
+    "passes": 1,
+    "errorRelative": 0.015263,
+    "errorM": 0.0324
+   },
+   "Trestle": {
+    "applied": true,
+    "tool": "meshoptimizer 1.3 simplifyWithAttributes (normals x0.5 + UV x1 attribute weights; UV seams preserved; source UVs / normals kept; open clip borders collapse only along themselves, so they stay on their planes)",
+    "mode": "seam-preserving",
+    "uvWeight": 1,
+    "normalWeight": 0.5,
+    "fromTriangles": 60981,
+    "triangles": 5999,
+    "budget": 6000,
+    "askedTriangles": 6000,
+    "passes": 1,
+    "errorRelative": 0.010511,
+    "errorM": 0.0288
+   }
+  },
+  "pieceComposition": {
+   "End": "End clip",
+   "Mid": "MidPlain (the identical decimated bay) + the decimated cable festoon",
+   "MidPlain": "MidPlain clip",
+   "Trestle": "Trestle clip minus its carves"
+  }
+ },
+ "output": {
+  "url": "assets/models/market-bridge-kit.glb",
+  "file": "game/public/assets/models/market-bridge-kit.glb",
+  "bytes": 2495764,
+  "sha256": "145db42d8a134cbbe07abd1c6a4113417808759e7ec8b6e7bbf132775ddfe5ce",
+  "triangles": 24996,
+  "nodes": [
+   "End",
+   "Mid",
+   "MidPlain",
+   "Trestle"
+  ],
+  "pieces": {
+   "End": {
+    "node": "End",
+    "tris": 7999,
+    "vertices": 8059,
+    "min": [
+     -1.3832,
+     -0.4981,
+     -1.0767
+    ],
+    "max": [
+     0,
+     1.0554,
+     1.0513
+    ],
+    "dims": [
+     1.3832,
+     1.5536,
+     2.128
+    ]
+   },
+   "Mid": {
+    "node": "Mid",
+    "tris": 7499,
+    "vertices": 7824,
+    "min": [
+     0,
+     -1.1641,
+     -1.0778
+    ],
+    "max": [
+     1.2956,
+     1.0474,
+     1.0669
+    ],
+    "dims": [
+     1.2956,
+     2.2115,
+     2.1447
+    ]
+   },
+   "MidPlain": {
+    "node": "MidPlain",
+    "tris": 3499,
+    "vertices": 3983,
+    "min": [
+     0,
+     -0.4737,
+     -1.0633
+    ],
+    "max": [
+     1.2956,
+     1.0474,
+     1.0669
+    ],
+    "dims": [
+     1.2956,
+     1.5212,
+     2.1301
+    ]
+   },
+   "Trestle": {
+    "node": "Trestle",
+    "tris": 5999,
+    "vertices": 5448,
+    "min": [
+     -0.2395,
+     -2.743,
+     -1.1429
+    ],
+    "max": [
+     0.2402,
+     0,
+     1.0835
+    ],
+    "dims": [
+     0.4797,
+     2.743,
+     2.2264
+    ]
+   }
+  },
+  "deckY": 0,
+  "railZ": 1,
+  "railH": 1.043,
+  "girderDepth": 0.4737,
+  "legCutDepth": 0.4981,
+  "cableDrop": 1.1641,
+  "trestleHeight": 2.743,
+  "midLength": 1.2956,
+  "endLength": 1.3832,
+  "endTrestleX": -1.1831,
+  "spanGaps": [
+   [
+    2.7664,
+    3.8677
+   ],
+   [
+    4.3211,
+    4.9689
+   ],
+   [
+    5.8758,
+    6.0702
+   ]
+  ],
+  "deckSurface": {
+   "End": {
+    "y": -0.00097,
+    "areaM2": 1.1659
+   },
+   "Mid": {
+    "y": -0.00133,
+    "areaM2": 1.2157
+   },
+   "MidPlain": {
+    "y": -0.00133,
+    "areaM2": 1.2157
+   }
+  },
+  "deckRule": "area-weighted median height of the up-facing (normal y > 0.9) triangles within |z| < 0.6 and |y| < 0.06 (the board tops between the rails)",
+  "railTops": {
+   "End": [
+    1.0454,
+    1.0468
+   ],
+   "Mid": [
+    1.038,
+    1.0406
+   ]
+  },
+  "joints": {
+   "End": {
+    "x0": {
+     "vertices": 266,
+     "y": [
+      -0.4707,
+      1.0474
+     ],
+     "z": [
+      -1.0632,
+      1.0473
+     ]
+    }
+   },
+   "Mid": {
+    "x0": {
+     "vertices": 261,
+     "y": [
+      -0.7715,
+      1.0474
+     ],
+     "z": [
+      -1.0778,
+      1.0473
+     ]
+    },
+    "xL": {
+     "vertices": 282,
+     "y": [
+      -0.7708,
+      1.0419
+     ],
+     "z": [
+      -1.0766,
+      1.0669
+     ]
+    }
+   },
+   "MidPlain": {
+    "x0": {
+     "vertices": 221,
+     "y": [
+      -0.4701,
+      1.0474
+     ],
+     "z": [
+      -1.0632,
+      1.0473
+     ]
+    },
+    "xL": {
+     "vertices": 238,
+     "y": [
+      -0.4696,
+      1.0419
+     ],
+     "z": [
+      -1.0633,
+      1.0669
+     ]
+    }
+   }
+  },
+  "stretch": {
+   "min": 0.85,
+   "max": 1.2
+  },
+  "frames": {
+   "End": "x <= 0: the joint plane at x = 0, the abutment end toward -x; deck top y = 0, rails z = +-1; girders down to y = -girderDepth, its leg stubs (and the end frame) down to y = -legCutDepth; the source's -X leg frame (the Trestle) stood under it at x = endTrestleX, its top at y = -legCutDepth",
+   "Mid": "x 0 .. 1.2956: tileable (consecutive copies at x += midLength join post half to post half; the cable festoon's clamps sit on both joint planes); deck top y = 0, rails z = +-1; its cables hang to y = -cableDrop",
+   "MidPlain": "Mid without the cable festoon (nothing below y = -girderDepth: the girders' bottom flanges): for over walkways",
+   "Trestle": "top y = 0, feet y = -trestleHeight, centred on x; z on the deck's rail mid-line (z = 0 under a deck). Under an End: at End x = endTrestleX, top at y = -legCutDepth (its legs continue the End's leg stubs: the source's own leg frame). Under a bay (a joint's heavy posts): top at y = -girderDepth, against the girders' bottom flanges (its feet then stand legCutDepth - girderDepth lower relative to the deck; a runtime may stretch it along y to meet a floor)"
+  }
+ },
+ "textures": [
+  {
+   "slot": "baseColor",
+   "source": {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 3808665,
+    "sha256": "987676f39c551ee696523530ffba743a610a5eb002fa25c309c362f07ccf561c"
+   },
+   "size": [
+    2048,
+    2048
+   ],
+   "mime": "image/jpeg",
+   "bytes": 1068626,
+   "sha256": "cdc300da9217b9a0880b9161fa508dfc1f4abdb01815d4c14d9fa59dbb68904f",
+   "note": "the model's 2048 px map re-encoded at 2048 (sharp lanczos3, JPEG q86 4:2:0)"
+  },
+  {
+   "slot": "metallicRoughness",
+   "source": {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2420782,
+    "sha256": "df3fa2d53da43e83b07d9642bcb3c5ffe4ab2ac5f72fa6af4170041fbebb04e0"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 252068,
+   "sha256": "adec39a52bcccfb80a3be56232b1dd7bfaf7cd57237bcd00945eaebc3ceafedc",
+   "note": "the model's 2048 px map downsized to 1024 (sharp lanczos3, JPEG q88 4:4:4)"
+  },
+  {
+   "slot": "normal",
+   "source": {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 3816264,
+    "sha256": "b51fad55a06cffdf39d464154e8daa6acaa3e8b7c573ac06190c37a9a5493d07"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 211182,
+   "sha256": "15b902498379a76ad4dcbc6e059eed5f5f4a4e06580cbe7d5b5051dbfac9fb2b",
+   "note": "the model's 2048 px map downsized to 1024 (sharp lanczos3, JPEG q90 4:4:4)"
+  }
+ ],
+ "texturePolicy": "the model's own PBR maps kept slot for slot (base colour / metallic-roughness / normal), only downsized + re-encoded: base colour 2048 px (kept: the deck boards and rust read at walking distance), metallic-roughness / normal 2048 -> 1024 px (no recolour, tint, re-texture, projection or new art); the emissive map is DROPPED (emissive factor 0): measured all but black (source.emissive)",
+ "limitations": [
+  "the clip faces are open (the material is double-sided, as the source's): the End's leg stubs end open at the girder underside and the Trestle's legs open at its top, both under the girders",
+  "each bay joint shows one narrow deck board (the board pitch does not divide the rail period)",
+  "Mid's cable festoon is the source's middle swag remapped along x onto the shorter bay: it hangs relatively deeper and its two clamps are narrower than in the source",
+  "the End has no legs of its own below the girders (the Trestle supplies them); the abutment end's end posts and the end frame are the source's",
+  "the festoon ends at both joint planes on a clamp's centre: where a Mid meets a MidPlain or an End, the half clamp and the cable ends stop open at that plane",
+  "the Trestle's X-brace, rust and dents are the source's own (one diagonal is broken in the source)",
+  "MidPlain (and so Mid's bay) is decimated in meshoptimizer's Permissive mode under a heavy UV weight: 34 of its triangles (0.27 % of its area) straddle two UV islands and may show a small texture stretch up close; its board edges read a little softer than the 6 k bay's",
+  "with the End unstretched and the bays stretched 0.85 .. 1.2, spans of 2.7664 m (two Ends) and up have gaps at 2.7664 .. 3.8677 m, 4.3211 .. 4.9689 m, 5.8758 .. 6.0702 m (n bays reach 2 * endLength + n * midLength * k): a runtime stretches the bays a little further (renders at 1.25 read fine) or the Ends too"
+ ],
+ "convention": "metres, +Y up, the deck along +X, rails along z = +-1, the deck's walking surface at y = 0; four mesh nodes with identity transforms and one shared material; geometry in each piece's own local frame (see output.frames)",
+ "licence": "supplied by the user for this project (its upload file name mentions Meshy; the generator, account, settings and licence are not verified and the provider's terms may apply); unapproved prototype asset, no blanket licence or commercial clearance implied",
+ "rebuild": "node --max-old-space-size=4096 tools/asset-pipeline/props/build-market-bridge-kit.mjs [--master <the private master glb>]"
+}
