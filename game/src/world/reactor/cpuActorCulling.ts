@@ -27,7 +27,7 @@ interface TrackingCuller { track(obj: THREE.Object3D, box: (out: THREE.Box3) => 
 export interface ReactorCpuCullingHost {
   frameHooks: ((dt: number) => void)[];
   sectionHooks: {build?(layout: never): void; teardown?(): void}[];
-  layout?: {reactor?: unknown; skyways?: unknown} | null;
+  layout?: {reactor?: unknown; skyways?: unknown; surface?: unknown} | null;
   world?: {culler?: unknown} | null;
   zombies: readonly {root: THREE.Object3D; ragdolled: boolean}[];
   pickups?: {list: readonly {obj: THREE.Object3D}[]} | null;
@@ -101,7 +101,9 @@ export class ReactorCpuCulling {
   /** Brings the tracked set in line with the live enemies / pickups (the Reactor and the Skyways; otherwise releases everything it holds). */
   sync(): void {
     const h = this.host, c = h.world?.culler as Partial<TrackingCuller> | undefined;
-    if (!(h.layout?.reactor || h.layout?.skyways) || !c || typeof c.track !== 'function' || typeof c.untrack !== 'function') { this.clear(); return; }
+    // (task studio-surface-run-opus-rebuild-20261116-020827-01, lane LOOK follow-up 2: + a Surface Run district — its culler has the same
+    // slab / storey occlusion now, world/surface/lookOcclusion.ts: the infected and loose items behind its facades are not submitted)
+    if (!(h.layout?.reactor || h.layout?.skyways || h.layout?.surface) || !c || typeof c.track !== 'function' || typeof c.untrack !== 'function') { this.clear(); return; }
     if (c !== this.culler) { this.clear(); this.culler = c as TrackingCuller; }
     const culler = this.culler!;
     const live = this.live;
@@ -122,7 +124,7 @@ export class ReactorCpuCulling {
     }
     for (const root of this.actors.keys()) if (!live.has(root)) { culler.untrack(root); this.actors.delete(root); }
     live.clear();
-    const car = h.layout?.skyways ? h.skywaysCar?.view?.group ?? null : null; // (task studio-skywalk-variety, lane PERF)
+    const car = h.layout?.skyways || h.layout?.surface ? h.skywaysCar?.view?.group ?? null : null; // (task studio-skywalk-variety, lane PERF; + the district's truck view)
     for (const obj of car ? [car] : []) this.item(culler, obj, live);
     for (const p of h.pickups?.list ?? []) this.item(culler, p.obj, live);
     for (const obj of this.items.keys()) if (!live.has(obj)) { culler.untrack(obj); this.items.delete(obj); }

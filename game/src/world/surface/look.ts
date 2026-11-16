@@ -28,6 +28,8 @@ import {modelParts} from '../exterior';
 import {preloadOfficeArch} from '../officeArch';
 import {SURFACE_TEXTURES, SURFACE_TEX_SLOTS, setSurfaceResourceOwner, setSurfaceTexture, surfaceArchMaterial, surfaceTexturesReady, liveSurfaceMaterials} from './archMaterials';
 import {GROUND, SIDE_NORMAL, surfaceLookPlan, type Decal, type DepotGear, type SurfaceLookPlan} from './archPlan';
+import {CELL} from '../../gen/grid';
+import {LookOcclusion, closedShell, facadeStrips, streetSide, type FacadeStrip} from './lookOccluders';
 import {LOOK_SKY, liveLookMaterials, lookSkyMaterial, lookTune, outdoorFlatMaterial, outdoorModelMaterial, syncLookHorizon} from './lookSky';
 import {FAR_CITY_KEYS, farCityPlan, type FarCityPlan} from './lookCity';
 import {daylightStats} from './lookDaylight';
@@ -69,6 +71,29 @@ export interface SurfaceLookStats {
 }
 
 interface Culled { obj: THREE.Object3D; x: number; z: number; r: number; near: number }
+
+/**
+ * Follow-up 2 (draws): the walls round a building's roof decks. `fp` = the footprint (the facade faces lie on its lines); x0..z1 = the
+ * footprint INSET by a cell (the inner face of the wall band: the parapet's inner face is LOOK_TUNE.parapetT in, AIR's window reveals
+ * end at the span box); per side (N S W E) the LOWEST top of that side's drawn facade, or -Infinity where the side is not a street
+ * facade along its whole length (a party wall onto a neighbour, the cordon, the tent: nothing assumed to hide).
+ */
+export interface RoofWalls { fp: {x0: number; z0: number; x1: number; z1: number}; x0: number; z0: number; x1: number; z1: number; top: [number, number, number, number] }
+
+/**
+ * Follow-up 2 (draws): one instanced look piece culled PER INSTANCE (the rooftop plant per tile, the surroundings per sector): its full
+ * instance list in build order (16 floats each), each instance's world sphere (cx cy cz r), its world box (BOX floats: x0 z0 x1 z1
+ * yTop yBottom — the AABB of its part's bounds) and its deck's walls (index into SurfaceLookView.walls, -1 none). A roof tile keeps its
+ * former draw-distance rule (LOOK_DECOR.tileNear, unchanged). cullSurfaceInstances packs the instances drawn this frame to the front.
+ */
+export interface LookInstSet {
+  im: THREE.InstancedMesh;
+  n: number;
+  mats: Float32Array; sph: Float32Array; top: Float32Array; walls: Int32Array;
+  tile: {x: number; z: number; r: number; near: number} | null;
+  /** The instances drawn at the last decision (their indices; `shown` of them). */
+  shownIdx: Int32Array; shown: number;
+}
 
 /** Plain mesh-data accumulator (positions / normals / uvs / indices). */
 class Mesh3 {
@@ -138,7 +163,14 @@ export interface SurfaceLookView {
   instanced: THREE.InstancedMesh[];
   far: FarCityPlan;
   stats: SurfaceLookStats;
+  /** Follow-up 2: the per-instance culled pieces (cullSurfaceInstances), the roof decks' walls and the facade strips they test. */
+  inst: LookInstSet[];
+  walls: RoofWalls[];
+  strips: FacadeStrip[];
 }
+
+/** Floats per instance box in LookInstSet.top: x0 z0 x1 z1 yTop yBottom. */
+export const BOX = 6;
 
 /**
  * Builds the district's runtime look group: sky dome, ground ring, surroundings, street decor, rooftop plant. `models(key)` = the
@@ -151,7 +183,7 @@ export function buildSurfaceLookView(layout: StationLayout, mats: Parameters<typ
   const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
   const root = new THREE.Group();
   root.name = 'surface-look';
-  const geometries: THREE.BufferGeometry[] = [], instanced: THREE.InstancedMesh[] = [], culled: Culled[] = [];
+  const geometries: THREE.BufferGeometry[] = [], instanced: THREE.InstancedMesh[] = [], culled: Culled[] = [], inst: LookInstSet[] = [];
   const missing = new Set<string>();
   const stats: SurfaceLookStats = {buildMs: 0, decorMeshes: 0, decorTris: 0, clutterMeshes: 0, clutterInstances: 0, clutterTris: 0, farMeshes: 0, farInstances: 0, farTris: 0,
     groundTris: 0, decals: plan.decals.length, discs: plan.discs.length, railM: 0, depotMeshes: 0, depotTris: 0, visibleDecor: 0, missingModels: []};
@@ -202,6 +234,8 @@ export function buildSurfaceLookView(layout: StationLayout, mats: Parameters<typ
     instanced.push(im);
     return im;
   };
+  // (follow-up 2) an instanced piece culled per instance
+  const track = (im: THREE.InstancedMesh, list: THREE.Matrix4[], walls: readonly number[] | null, tile: LookInstSet['tile']): void => { inst.push(lookInstSet(im, list, walls, tile)); };
   const byKey = new Map<string, typeof far.placements>();
   for (const p of far.placements) { let l = byKey.get(p.key); if (!l) byKey.set(p.key, (l = [])); l.push(p); }
   for (const [key, list] of byKey) {
@@ -212,8 +246,9 @@ export function buildSurfaceLookView(layout: StationLayout, mats: Parameters<typ
       const mat = outdoorModelMaterial(part.material, true);
       for (let sct = 0; sct < 8; sct++) {
         const ps = list.filter(p => p.sector === sct);
-        const im = addInstanced(`surface-far-${key}-${pi}-s${sct}`, part.geometry, mat, ps.map(p => place(p.x, p.y, p.z, p.yaw, p.s).multiply(part.matrix)));
-        if (im) { stats.farMeshes++; stats.farInstances += ps.length; stats.farTris += triCount(part.geometry) * ps.length; }
+        const ms = ps.map(p => place(p.x, p.y, p.z, p.yaw, p.s).multiply(part.matrix));
+        const im = addInstanced(`surface-far-${key}-${pi}-s${sct}`, part.geometry, mat, ms);
+        if (im) { stats.farMeshes++; stats.farInstances += ps.length; stats.farTris += triCount(part.geometry) * ps.length; track(im, ms, null, null); }
       }
     }
   }
@@ -277,7 +312,16 @@ export function buildSurfaceLookView(layout: StationLayout, mats: Parameters<typ
   }
   // --- rooftop plant: instanced per (model part x tile), distance culled; stands / vents as merged boxes per tile ---
   const T = LOOK_DECOR.tile;
-  const tiles = new Map<string, {tx: number; tz: number; byModel: Map<string, THREE.Matrix4[]>; boxes: Mesh3}>();
+  const tiles = new Map<string, {tx: number; tz: number; byModel: Map<string, {m: THREE.Matrix4; w: number}[]>; boxes: Mesh3}>();
+  // (follow-up 2) each placement's deck walls: the building whose footprint holds it
+  const walls: RoofWalls[] = [], wallIx = new Map<number, number>();
+  const wallsOf = (x: number, z: number): number => {
+    const k = plan.buildings.findIndex(bl => { const f = bl.b.footprint; return x > f.x0 && x < f.x1 && z > f.z0 && z < f.z1; });
+    if (k < 0) return -1;
+    let w = wallIx.get(k);
+    if (w === undefined) { w = walls.length; walls.push(roofWalls(layout, plan, k)); wallIx.set(k, w); }
+    return w;
+  };
   const tileOf = (x: number, z: number) => {
     const tx = Math.floor(x / T), tz = Math.floor(z / T), k = `${tx},${tz}`;
     let e = tiles.get(k);
@@ -303,7 +347,7 @@ export function buildSurfaceLookView(layout: StationLayout, mats: Parameters<typ
     }
     let l = t.byModel.get(key);
     if (!l) t.byModel.set(key, (l = []));
-    l.push(place(p.x, p.y + lift, p.z, p.yaw, p.s));
+    l.push({m: place(p.x, p.y + lift, p.z, p.yaw, p.s), w: wallsOf(p.x, p.z)});
   }
   const partsOf = new Map<string, ReturnType<typeof modelParts> | null>();
   for (const t of tiles.values()) {
@@ -313,9 +357,10 @@ export function buildSurfaceLookView(layout: StationLayout, mats: Parameters<typ
       const parts = partsOf.get(key);
       if (!parts) continue;
       for (const [pi, part] of parts.entries()) {
-        const im = addInstanced(`surface-roof-${key}-${pi}@${t.tx},${t.tz}`, part.geometry, outdoorModelMaterial(part.material), list.map(m => m.clone().multiply(part.matrix)));
+        const ms = list.map(e => e.m.clone().multiply(part.matrix));
+        const im = addInstanced(`surface-roof-${key}-${pi}@${t.tx},${t.tz}`, part.geometry, outdoorModelMaterial(part.material), ms);
         if (!im) continue;
-        culled.push({obj: im, x: cx, z: cz, r, near: LOOK_DECOR.tileNear});
+        track(im, ms, list.map(e => e.w), {x: cx, z: cz, r, near: LOOK_DECOR.tileNear}); // (follow-up 2: per instance; the tile's distance rule kept)
         stats.clutterMeshes++;
         stats.clutterInstances += list.length;
         stats.clutterTris += triCount(part.geometry) * list.length;
@@ -333,7 +378,142 @@ export function buildSurfaceLookView(layout: StationLayout, mats: Parameters<typ
   root.updateMatrixWorld(true);
   stats.missingModels = [...missing];
   stats.buildMs = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
-  return {root, dome, culled, geometries, instanced, far, stats};
+  return {root, dome, culled, geometries, instanced, far, stats, inst, walls, strips: facadeStrips(layout, plan)};
+}
+
+/**
+ * Follow-up 2: an instanced piece's per-instance record (LookInstSet): `list` = its instance matrices (world: the look group sits at the
+ * origin), `walls` = each instance's deck walls (null: none), `tile` = a roof tile's draw-distance rule (null: none).
+ */
+export function lookInstSet(im: THREE.InstancedMesh, list: readonly THREE.Matrix4[], walls: readonly number[] | null, tile: LookInstSet['tile']): LookInstSet {
+  const g = im.geometry;
+  if (!g.boundingSphere) g.computeBoundingSphere();
+  if (!g.boundingBox) g.computeBoundingBox();
+  const n = list.length, bs = g.boundingSphere!, bb = g.boundingBox!, c = new THREE.Vector3();
+  const mats = new Float32Array(16 * n), sph = new Float32Array(4 * n), top = new Float32Array(BOX * n), shownIdx = new Int32Array(n);
+  list.forEach((m, i) => {
+    mats.set(m.elements, 16 * i);
+    c.copy(bs.center).applyMatrix4(m);
+    sph.set([c.x, c.y, c.z, bs.radius * m.getMaxScaleOnAxis()], 4 * i);
+    let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity, y1 = -Infinity, y0 = Infinity;
+    for (let k = 0; k < 8; k++) {
+      c.set(k & 1 ? bb.max.x : bb.min.x, k & 2 ? bb.max.y : bb.min.y, k & 4 ? bb.max.z : bb.min.z).applyMatrix4(m);
+      x0 = Math.min(x0, c.x); x1 = Math.max(x1, c.x); z0 = Math.min(z0, c.z); z1 = Math.max(z1, c.z); y1 = Math.max(y1, c.y); y0 = Math.min(y0, c.y);
+    }
+    top.set([x0, z0, x1, z1, y1, y0], BOX * i);
+    shownIdx[i] = i;
+  });
+  return {im, n, mats, sph, top, walls: Int32Array.from(walls ?? new Array<number>(n).fill(-1)), tile, shownIdx, shown: n};
+}
+
+/** Follow-up 2: the walls round building `k`'s decks (RoofWalls). A side counts only where every cell just outside it is open street. */
+export function roofWalls(layout: StationLayout, plan: SurfaceLookPlan, k: number): RoofWalls {
+  const bl = plan.buildings[k], f = bl.b.footprint;
+  const top: RoofWalls['top'] = [-Infinity, -Infinity, -Infinity, -Infinity];
+  const order = ['N', 'S', 'W', 'E'];
+  if (closedShell(bl)) for (const sd of bl.sides) if (sd.tops.length && streetSide(layout, plan, sd)) top[order.indexOf(sd.side)] = Math.min(...sd.tops.map(t => t.top));
+  return {fp: {x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1}, x0: f.x0 + CELL, z0: f.z0 + CELL, x1: f.x1 - CELL, z1: f.z1 - CELL, top};
+}
+
+/** Margin (m) under a wall top within which a sight line counts as clearing it. */
+const WALL_MARGIN = 0.05;
+
+/**
+ * Follow-up 2: whether the walls round its deck hide a roof piece (top box x0 z0 x1 z1 at height q) from the eye (ex ey ez). A sight
+ * line from the eye to a point of the box leaves the inset footprint through one side (a corner: both) a fraction t of the way from the
+ * point, at height q + (ey - q) t. Below that side's lowest top it meets the facade face (between the inset line and the face the line
+ * only drops towards the eye): opaque from the street to its top except at openings, and an opening leads into the building's closed
+ * shell under the deck (window / door reveals, rooms with ceilings, dark-room boxes) — the line rises from there to the deck and
+ * cannot leave it. The box's top hides its lower points (lower = lower line); every interior point of the top lies on a sight line
+ * through an outline point that sits higher at the same wall; along an outline edge the height is monotonic between its corners and
+ * the points whose line passes a footprint corner (where the exit side changes): those points are tested.
+ * Never hidden: the eye inside the footprint, any part of the box outside the inset footprint, an exit side without a street facade.
+ */
+export function roofPieceHidden(w: RoofWalls, x0: number, z0: number, x1: number, z1: number, q: number, ex: number, ey: number, ez: number): boolean {
+  const F = w.fp;
+  if (ex >= F.x0 - 0.05 && ex <= F.x1 + 0.05 && ez >= F.z0 - 0.05 && ez <= F.z1 + 0.05) return false;
+  if (x0 < w.x0 || x1 > w.x1 || z0 < w.z0 || z1 > w.z1) return false;
+  const hiddenAt = (qx: number, qz: number): boolean => {
+    let t = Infinity, top = Infinity;
+    const cand = (tt: number, side: number): void => {
+      if (!(tt >= 0)) return;
+      if (tt < t - 1e-6) { t = tt; top = w.top[side]; } else if (tt <= t + 1e-6) top = Math.min(top, w.top[side]);
+    };
+    if (ez < qz) cand((w.z0 - qz) / (ez - qz), 0); else if (ez > qz) cand((w.z1 - qz) / (ez - qz), 1);
+    if (ex < qx) cand((w.x0 - qx) / (ex - qx), 2); else if (ex > qx) cand((w.x1 - qx) / (ex - qx), 3);
+    if (!(t <= 1) || !(top > -Infinity)) return false;
+    return q + (ey - q) * t < top - WALL_MARGIN;
+  };
+  if (!hiddenAt(x0, z0) || !hiddenAt(x1, z0) || !hiddenAt(x0, z1) || !hiddenAt(x1, z1)) return false;
+  // the outline points whose sight line passes a footprint corner
+  for (const cx of [w.x0, w.x1]) for (const cz of [w.z0, w.z1]) {
+    const dx = cx - ex, dz = cz - ez;
+    if (Math.abs(dx) > 1e-9) for (const xe of [x0, x1]) { const u = (xe - ex) / dx, z = ez + u * dz; if (u > 1 && z > z0 && z < z1 && !hiddenAt(xe, z)) return false; }
+    if (Math.abs(dz) > 1e-9) for (const ze of [z0, z1]) { const u = (ze - ez) / dz, x = ex + u * dx; if (u > 1 && x > x0 && x < x1 && !hiddenAt(x, ze)) return false; }
+  }
+  return true;
+}
+
+const _fr = new THREE.Frustum(), _pm = new THREE.Matrix4(), _sp = new THREE.Sphere();
+
+/**
+ * Follow-up 2 (draws): the look's per-instance culling for the camera's CURRENT view (run right before each main render). An instance
+ * is drawn when its sphere meets the view frustum, its nearest view depth is inside `maxDistance` (the level culler's fog distance: the
+ * rule every registered mesh follows; the look's materials take the scene fog), a roof piece's own deck walls do not hide it
+ * (roofPieceHidden) and — with `occl` — the district's facade strips do not hide its box (lookOccluders.ts LookOcclusion, built here
+ * for this view); a roof tile beyond its draw distance is hidden whole, as before. The drawn instances are packed to the front of the
+ * instance buffer (rewritten only when the set changes); a piece with none is hidden. No shadow casters here (castShadow off).
+ */
+export function cullSurfaceInstances(v: SurfaceLookView, cam: THREE.Camera, maxDistance: number, occl: LookOcclusion | null = null): {shown: number; total: number} {
+  const oc = occl && v.strips.length && (cam as THREE.PerspectiveCamera).isPerspectiveCamera ? occl : null;
+  if (oc) oc.build(cam as THREE.PerspectiveCamera, v.strips, maxDistance);
+  _pm.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+  _fr.setFromProjectionMatrix(_pm);
+  const me = cam.matrixWorld.elements, ex = me[12], ey = me[13], ez = me[14];
+  const fl = Math.hypot(me[8], me[9], me[10]) || 1, fx = -me[8] / fl, fy = -me[9] / fl, fz = -me[10] / fl;
+  let shown = 0, total = 0;
+  for (const set of v.inst) {
+    total += set.n;
+    const t = set.tile;
+    if (t && Math.hypot(t.x - ex, t.z - ez) - t.r >= t.near) { set.shown = 0; if (set.im.visible) set.im.visible = false; continue; }
+    const s = set.sph, b = set.top, idx = set.shownIdx;
+    let k = 0, changed = false;
+    for (let i = 0; i < set.n; i++) {
+      const cx = s[4 * i], cy = s[4 * i + 1], cz = s[4 * i + 2], r = s[4 * i + 3];
+      if (fx * (cx - ex) + fy * (cy - ey) + fz * (cz - ez) - r > maxDistance) continue;
+      _sp.center.set(cx, cy, cz);
+      _sp.radius = r;
+      if (!_fr.intersectsSphere(_sp)) continue;
+      const w = set.walls[i], o = BOX * i;
+      if (w >= 0 && roofPieceHidden(v.walls[w], b[o], b[o + 1], b[o + 2], b[o + 3], b[o + 4], ex, ey, ez)) continue;
+      if (oc && oc.boxHidden(b[o], b[o + 5], b[o + 1], b[o + 2], b[o + 4], b[o + 3])) continue;
+      if (k >= set.shown || idx[k] !== i) changed = true;
+      idx[k++] = i;
+    }
+    if (k !== set.shown) changed = true;
+    set.shown = k;
+    shown += k;
+    if (k === 0) { if (set.im.visible) set.im.visible = false; continue; }
+    if (!set.im.visible) set.im.visible = true;
+    if (!changed && set.im.count === k) continue;
+    const arr = set.im.instanceMatrix.array as Float32Array;
+    for (let j = 0; j < k; j++) arr.set(set.mats.subarray(16 * idx[j], 16 * idx[j] + 16), 16 * j);
+    set.im.count = k;
+    set.im.instanceMatrix.needsUpdate = true;
+  }
+  return {shown, total};
+}
+
+/** Follow-up 2: every per-instance piece back to its full instance list (the state before any per-instance decision). */
+export function resetSurfaceInstances(v: SurfaceLookView): void {
+  for (const set of v.inst) {
+    (set.im.instanceMatrix.array as Float32Array).set(set.mats);
+    for (let i = 0; i < set.n; i++) set.shownIdx[i] = i;
+    set.shown = set.n;
+    set.im.count = set.n;
+    set.im.visible = true;
+    set.im.instanceMatrix.needsUpdate = true;
+  }
 }
 
 /** The depot gear's materials: crane yellow / rope black are the painted-steel trim tints (the Reactor crane's yellow). */
@@ -443,6 +623,13 @@ export class SurfaceLook {
   private farWas: number | null = null;
   private frame = 0;
   private readonly game: Game;
+  /** Follow-up 2: the last per-instance decision (instances drawn / total) and the camera matrix it was made for. */
+  instStats = {shown: 0, total: 0, decisions: 0, ms: 0};
+  private readonly occl = new LookOcclusion();
+  private readonly instEye = new THREE.Matrix4();
+  private readonly instProj = new THREE.Matrix4();
+  private instMax = 0;
+  private instValid = false;
 
   constructor(game: Game) {
     this.game = game;
@@ -451,6 +638,32 @@ export class SurfaceLook {
     game.sectionHooks.push({build: layout => this.build(layout as StationLayout), teardown: () => this.teardown()});
     game.frameHooks.push(() => this.tick());
     game.warmRegistry.addPool('surface-look', () => (this.view ? [this.view.root] : []));
+    // (follow-up 2) the per-instance culling runs right before each main render, for the camera it draws with (the frame hooks run a
+    // frame ahead of the camera); skipped while the warm-up owns the renderer (it compiles every piece whatever it shows)
+    const look = this, scene = game.scene, prev = scene.onBeforeRender;
+    scene.onBeforeRender = function (this: THREE.Scene, ...args: Parameters<THREE.Object3D['onBeforeRender']>) {
+      prev.apply(this, args);
+      look.beforeRender(args[2]);
+    };
+  }
+
+  /** Follow-up 2: the per-instance culling of the look's instanced pieces for the main camera's current view (see cullSurfaceInstances). */
+  beforeRender(camera: THREE.Camera): void {
+    const g = this.game, v = this.view;
+    if (!v || !this.active || camera !== g.camera || g.warming || !v.inst.length) return;
+    camera.updateMatrixWorld();
+    const maxD = g.world?.culler?.maxDistance ?? Math.min(fogCullDistance(LOOK_SKY.fogDensity), LOOK_SKY.far);
+    if (this.instValid && this.instEye.equals(camera.matrixWorld) && this.instProj.equals(camera.projectionMatrix) && this.instMax === maxD) return;
+    this.instEye.copy(camera.matrixWorld);
+    this.instProj.copy(camera.projectionMatrix);
+    this.instMax = maxD;
+    this.instValid = true;
+    const t0 = performance.now();
+    const r = cullSurfaceInstances(v, camera, maxD, this.occl);
+    this.instStats.ms = performance.now() - t0;
+    this.instStats.shown = r.shown;
+    this.instStats.total = r.total;
+    this.instStats.decisions++;
   }
 
   /** The district's textures (existing approved sets under the 'surface' family) + the office programs' maps. */
@@ -489,6 +702,7 @@ export class SurfaceLook {
     this.view?.root.removeFromParent();
     if (this.view) disposeSurfaceLookView(this.view);
     this.view = buildSurfaceLookView(layout, g.mats, k => g.propModels.get(k));
+    this.instValid = false;
     if (this.view) {
       g.scene.add(this.view.root);
       this.view.stats.visibleDecor = cullSurfaceDecor(this.view, g.camera.position.x, g.camera.position.z);
@@ -525,6 +739,7 @@ export class SurfaceLook {
   teardown(): void {
     const g = this.game;
     if (this.view) { disposeSurfaceLookView(this.view); this.view = null; }
+    this.instValid = false;
     (g.world as {surfaceArch?: SurfaceArch} | undefined)?.surfaceArch?.dispose();
     if (!this.active) return;
     const fog = g.scene.fog as THREE.FogExp2 | null;
@@ -545,7 +760,7 @@ export class SurfaceLook {
     return {
       active: this.active, fog: fog ? {density: fog.density, color: fog.color.getHex()} : null, far: g.camera.far, cullerDistance: g.world?.culler?.maxDistance ?? null,
       textures: surfaceTexturesReady(), materials: {arch: liveSurfaceMaterials.size, look: liveLookMaterials()},
-      view: v ? {...v.stats, far: v.far.stats, farTris: v.far.tris, culled: v.culled.length} : null,
+      view: v ? {...v.stats, far: v.far.stats, farTris: v.far.tris, culled: v.culled.length, instances: {...this.instStats, sets: v.inst.length, walls: v.walls.length, strips: v.strips.length, occl: this.occl.stats}} : null,
       arch: arch ? arch.summary() : null, daylight: daylightStats(),
     };
   }

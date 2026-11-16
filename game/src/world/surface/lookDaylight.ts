@@ -49,13 +49,23 @@ let last: DaylightStats | null = null;
 export const daylightStats = (): DaylightStats | null => last;
 
 /**
+ * Follow-up 2 (P0: the district's Enhanced lighting): the X/Z texel scale a district's light field is drawn at on the GPU — 2 (1 m
+ * texels), the scale its field already had (world/lights.ts StationLighting: the slots past their byte budget). Declared on the field
+ * source (FieldSource.fieldScale) so the enhanced runtime bounds the field WITH its ambient cube at the size really uploaded (~72 MB on
+ * the journey district) instead of at the full 0.5 m grid (~286 MB: past FIELD_CUBE_BYTES, so the district fell back to plain shading).
+ * 1 on every other layout (their field source carries none: unchanged).
+ */
+export const SURFACE_FIELD_SCALE = 2;
+export const surfaceFieldScale = (layout: StationLayout): number => (layout.surface ? SURFACE_FIELD_SCALE : 1);
+
+/**
  * The FieldSource hook of a district layout ({} for every other layout: nothing changes there). Lazy: the look plan is taken (made, if
  * nobody has yet, in the bake's own steps) when the term is baked — never when the source is assembled (stationBakeInput runs in the
- * section preload, before the paced world build plans it: archPlan.ts surfaceLookPlanSteps).
+ * section preload, before the paced world build plans it: archPlan.ts surfaceLookPlanSteps). + the field's texel scale (above).
  */
-export function surfaceSkyField(layout: StationLayout): {extraDirectSteps?: (ctx: Ctx) => BuildSteps<Record<string, number>>} {
+export function surfaceSkyField(layout: StationLayout): {extraDirectSteps?: (ctx: Ctx) => BuildSteps<Record<string, number>>; fieldScale?: number} {
   if (!layout.surface) return {};
-  return {extraDirectSteps: function* (ctx) {
+  return {fieldScale: SURFACE_FIELD_SCALE, extraDirectSteps: function* (ctx) {
     const plan = yield* surfaceLookPlanSteps(layout);
     if (!plan) return {};
     const st = yield* bakeDaylight(layout, plan, ctx);
