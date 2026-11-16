@@ -64,7 +64,7 @@ const n = (x: unknown): N => x;
 const {
   Fn, If, Loop, clamp, dot, exp, float, floor, getScreenPosition, getViewPosition, int, interleavedGradientNoise, ivec2, length,
   max, min, mix, outputStruct, pow, property, screenCoordinate, select, smoothstep, sqrt, texture, texture3D, textureSize,
-  uniform, uniformArray, uv, vec2, vec3, vec4,
+  uniform, uniformArray, uv, vec2, vec3, vec4, abs, cos, sin, step,
 } = TSL as unknown as Record<string, N>;
 
 const V2 = () => new THREE.Vector2(1, 1), V3 = () => new THREE.Vector3(), V4 = () => new THREE.Vector4(), M4 = () => new THREE.Matrix4();
@@ -138,6 +138,10 @@ export function createFogUniforms() {
     // task reactor-surface-redesign-credits-20261103 (primary): the Reactor's OUTDOOR haze cap [y0, y1, -, on] — the haze term fades out
     // between y0 and y1 over its surface deck (reactor-variant programs only; render/atmosphere.ts AtmosphereParams.skyCap)
     skyCap: uniform(new THREE.Vector4(0, 1, 0, 0)),
+    // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR, follow-up 1): the SEALED VEHICLE CAB the eye sits in (world/surface/
+    // airMask.ts CabVolume) — centre + heading [x, y, z, yaw], half extents + pitch [hx, hy, hz, pitch] (off: hx = 0). Plain uniforms of the shared group (no
+    // uniform buffer of their own); read by the surface variant only: no gas term is drawn inside the cab, everything beyond it as before
+    cabC: uniform(new THREE.Vector4(0, 0, 0, 0)), cabH: uniform(new THREE.Vector4(0, 0, 0, 0)),
     // temporal
     prevView: uniform(M4()), prevProj: uniform(M4()), historyValid: uniform(0), blend: uniform(0.85),
     // composite
@@ -245,6 +249,8 @@ export interface MarchOptions {
 export const VF_DEPTH_MARK = 'vfDepthSig';
 /** Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): name of the column-top variable (marks the surface variant). */
 export const VF_SURFACE_MARK = 'vfSurfaceTop';
+/** Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR, follow-up 1): name of the cab ray interval (marks the cab cut). */
+export const VF_CAB_MARK = 'vfCabSpan';
 
 /**
  * The march material (two outputs). Rebuilt when the step count or the shadow texture changes (quality change, the
@@ -302,12 +308,32 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
     const flashOn = n(u.flashColor).x.add(n(u.flashColor).y).add(n(u.flashColor).z).greaterThan(0);
     const muzzleOn = n(u.muzzleColor).x.add(n(u.muzzleColor).y).add(n(u.muzzleColor).z).greaterThan(0);
     const sc = {p: n(u.scaleP), d: n(u.scaleD)};
+    // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR, follow-up 1): the ray's span [tIn, tOut] inside the sealed cab
+    // (world/surface/airMask.ts cabRaySpan, the slab test in the cab's own frame; empty when off) — the surface variant only
+    let cabSpan: N = null;
+    if (outT) {
+      const cc = n(u.cabC), ch = n(u.cabH), cs = n(cos(cc.w)).toVar(), sn = n(sin(cc.w)).toVar(), cp = n(cos(ch.w)).toVar(), sp = n(sin(ch.w)).toVar();
+      // world -> the cab's frame: the yaw undone, then the pitch (airMask.ts cabRotate)
+      const toCab = (v: N): N => {
+        const lx = n(v).x.mul(cs).sub(n(v).z.mul(sn)), lz = n(v).x.mul(sn).add(n(v).z.mul(cs));
+        return vec3(lx, n(v).y.mul(cp).add(lz.mul(sp)), n(v).y.negate().mul(sp).add(lz.mul(cp)));
+      };
+      const lo = n(toCab(n(u.camPos).sub(cc.xyz))).toVar();
+      const ld = n(toCab(dir)).toVar();
+      const inv = n(step(0, ld).mul(2).sub(1)).div(max(abs(ld), 1e-6)).toVar(); // (sign never 0: a parallel axis -> ±1e6)
+      const ta = n(ch.xyz.negate().sub(lo)).mul(inv).toVar(), tb = n(ch.xyz.sub(lo)).mul(inv).toVar();
+      const t1 = min(ta, tb).toVar(), t2 = max(ta, tb).toVar();
+      const tIn = max(max(max(n(t1).x, n(t1).y), n(t1).z), 0).toVar(), tOut = min(min(n(t2).x, n(t2).y), n(t2).z).toVar();
+      cabSpan = n(select(n(ch.x).greaterThan(0).and(tOut.greaterThan(tIn)), vec2(tIn, tOut), vec2(1e9, -1))).toVar(VF_CAB_MARK);
+    }
 
     Loop(STEPS, ({i}: {i: N}) => {
       const uu = float(i).add(jit).div(STEPS).toVar();
       const t = n(dist).mul(uu).mul(uu).toVar();
       const w = n(dist).mul(uu).mul(2 / STEPS).toVar();
       const p = n(u.camPos).add(n(dir).mul(t)).toVar();
+      // (lane AIR, follow-up 1) 0 inside the sealed cab, 1 everywhere else (the surface variant only)
+      const cabKeep: N = cabSpan ? n(float(1).sub(step(n(cabSpan).x, t).mul(step(t, n(cabSpan).y)))).toVar() : null;
       // flashlight shadow FIRST, unconditionally (uniform control flow for textureSampleCompare)
       let shadow: N = float(1);
       if (shadowT) {
@@ -416,6 +442,7 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
           gasSig.assign(gc.mul(prof).mul(band).mul(wisp).mul(n(u.gasK).x));
         });
       });
+      if (cabKeep) gasSig.mulAssign(cabKeep); // (lane AIR, follow-up 1: the breach / puff gas is never drawn inside the sealed cab either)
       // --- task reactor-build-20261101 (lane AIR): the Reactor's depth gas strata (world/reactor/air.ts table), reactor layouts only ---
       let depthSig: N = null;
       if (o.depth) {
@@ -440,7 +467,7 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
               // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): x the column's outdoor weight (world/surface/airMask.ts
               // outdoorWeight: the nearest cell's indoor top — the density map's uv — then smoothstep(top − EDGE, top, y)): sealed interiors 0
               const top = n(n(outT.sample(muv).level(0)).r.mul(255 * SURFACE_AIR.TOP_STEP)).toVar(VF_SURFACE_MARK);
-              outW = smoothstep(top.sub(SURFACE_AIR.EDGE), top, n(p).y);
+              outW = smoothstep(top.sub(SURFACE_AIR.EDGE), top, n(p).y).mul(cabKeep); // (follow-up 1: x 0 inside the sealed cab)
             }
             const dc = n(dcT.add(n(dO.z).mul(smoothstep(dO.x, dO.y, n(p).y)).mul(dO.w).mul(outW))).toVar();
             If(dc.greaterThan(0.002), () => {

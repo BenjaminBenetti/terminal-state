@@ -8,11 +8,14 @@
 //    checkpoint tent — over its own cells only. Its `closed` test shuts every cell outside the enclosure and every OUTDOOR column inside it
 //    (world/surface/airMask.ts): the outdoor air is the analytic term, never simulated; a zone's gas never leaks onto the street.
 //  - Fields are created on a zone's first breach; an intact building (no breach) has no field at all: zero gas, zero cost.
-//  - Only zones NEAR THE PLAYER simulate (within SURFACE_FIELD.WAKE_M of the footprint; frozen beyond SLEEP_M). A frozen zone keeps its
-//    state and remembers what happened to it since (breaches added / removed, with their times); waking it REPLAYS that history from where
-//    it froze — the same arithmetic as the Office's fastForward (coarse 0.5 s steps, ages capped at GAS.AGE_CAP_S), spread over frames
-//    within a cell-substep budget (CATCHUP_CELL_STEPS) while it is still far out of sight (WAKE_M > the march's 36 m), never a hitch.
-//    settle() does it at once for the zones round the arrival point (the section build: behind the loading screen).
+//  - Only zones NEAR THE PLAYER simulate (within the wake distance of the footprint: SURFACE_FIELD.WAKE_M + the player's speed x LEAD_S;
+//    frozen beyond it + SLEEP_EXTRA_M). A frozen zone keeps its state and remembers what happened to it since (breaches added / removed,
+//    with their times); waking it REPLAYS that history from where it froze — the fast-forward arithmetic (steps of whole 0.1 s ticks, the
+//    live tick's own 1/30 s substeps, ages capped at GAS.AGE_CAP_S), spread over frames NEAREST ZONE FIRST within a per-frame cell-substep
+//    budget (CATCHUP_CELL_STEPS: a step never costs more than what is left of it, so a frame's replay stays ~1 ms) while the zone is still
+//    out of sight. A zone the player can SEE or BREATHE (within SEEN_M: the march draws to 36 m) is never stale: one still catching up
+//    there completes at once (counts.forced — a teleport / the arrival; never on a walk or a drive). settle() does it at once for the zones
+//    round the arrival point (the section build: behind the loading screen).
 //  - Breaches carry the outdoor strength (SURFACE_AIR.C): a room fills toward the outside air's concentration, never beyond it.
 // The GasSystem sees ONE GasField (this subclass: addBreach / removeBreach / tick / advance / drainChanged / concentrationAt / storeys);
 // exposure and the volumetric layers read the zones' own fields, so what shows inside is exactly what hurts.
@@ -23,15 +26,30 @@ import type {SurfaceInfo, SRect} from '../../gen/surface/surfaceTypes';
 import {SURFACE_AIR, type SurfaceOutdoorMap} from './airMask';
 
 export const SURFACE_FIELD = {
-  /** A zone simulates while the player is within this (m) of its footprint, and freezes beyond SLEEP_M (hysteresis). */
-  WAKE_M: 56,
-  SLEEP_M: 72,
   /**
-   * Replay budget per frame over all waking zones: Σ (active-box cells x substeps). Measured in Node on the generated district: ~25 ns per
-   * cell-substep, so 100 k ≈ 2.5 ms a frame; a 42 m building's 90 s history (~1.2 M) catches up in ~12 frames, long before it is in view.
+   * A zone simulates while the player is within WAKE_M + speed x LEAD_S (m) of its footprint (the faster the player — the truck — the
+   * earlier it wakes: LEAD_S of catch-up before it can come into view), and freezes SLEEP_EXTRA_M beyond that (hysteresis).
    */
-  CATCHUP_CELL_STEPS: 100_000,
-  /** Replay step (s): the Office fast-forward's coarse step. */
+  WAKE_M: 56,
+  LEAD_S: 4,
+  /** The speed the wake lead counts at most (m/s; faster = a teleport, not travel). */
+  LEAD_MAX_SPEED: 30,
+  SLEEP_EXTRA_M: 16,
+  /** Within this (m) a zone is visible or breathable (the march draws to 36 m): it must be current — a stale one completes at once. */
+  SEEN_M: 40,
+  /**
+   * Replay budget per frame over all waking zones: Σ (active-box cells x substeps). Measured in Node on the generated district: ~20-25 ns
+   * per cell-substep, so 40 k ≈ 1 ms a frame (+ at most one 0.1 s tick of one zone when nothing else ran: a frame's replay is never more).
+   */
+  CATCHUP_CELL_STEPS: 40_000,
+  /**
+   * What a replayed op costs, in the budget's units: a breach added (the zone's field on its first one + the pool's flood fill: measured
+   * 0.4 / 0.65 ms mean / max warm on the generated district, up to ~1.4 ms on a loaded worker — a whole frame's budget: an add takes a
+   * frame of its own) and one removed (the marks rebuilt). Charged like steps.
+   */
+  OP_ADD_CELL_STEPS: 40_000,
+  OP_REMOVE_CELL_STEPS: 4_000,
+  /** Longest replay step (s): the Office fast-forward's coarse step (shorter where the budget is short: whole 0.1 s ticks). */
   STEP_S: GAS.FAST_FORWARD_STEP_S,
 } as const;
 
@@ -90,7 +108,12 @@ export class SurfaceGasField extends GasField {
   /** Breach strength (default: the outdoor air's concentration). */
   strength: number = SURFACE_AIR.C;
   /** Counters (QA / the cost report): replay steps / cell-substeps, ticked cell-substeps (estimated from the active boxes). */
-  readonly counts = {replaySteps: 0, replayCellSteps: 0, tickCellSteps: 0, wakes: 0, freezes: 0};
+  readonly counts = {replaySteps: 0, replayCellSteps: 0, tickCellSteps: 0, wakes: 0, freezes: 0, forced: 0, ops: 0, fields: 0};
+  /** The player's smoothed speed (m/s, from the focus) and the wake distance it gives (m). */
+  speed = 0;
+  wakeM: number = SURFACE_FIELD.WAKE_M;
+  private readonly lastFocus = {x: 0, z: 0, has: false};
+  private readonly order: {z: SurfaceGasZone; d: number}[] = [];
   private readonly zoneOf: Int16Array;
   private readonly gw: number;
   private readonly gh: number;
@@ -196,6 +219,7 @@ export class SurfaceGasField extends GasField {
   }
 
   private ensureField(z: SurfaceGasZone): GasField {
+    if (!z.field) this.counts.fields++;
     return (z.field ??= new GasField(z.levels, {domain: z.spec.cells, closed: z.closed}));
   }
 
@@ -204,18 +228,24 @@ export class SurfaceGasField extends GasField {
     if (seconds > 0 && Number.isFinite(seconds)) this.now += seconds;
   }
 
-  /** Play time: the clock, then wake / freeze by distance, replay within the budget, tick the live zones on the fixed 10 Hz tick. */
+  /**
+   * Play time: the clock, then wake / freeze by distance, tick the live zones on the fixed 10 Hz tick, complete any stale zone the player
+   * can see / breathe, and replay the rest nearest first within the frame's budget.
+   */
   override tick(dt: number): number {
     const d = Math.max(0, Number.isFinite(dt) ? dt : 0);
     this.now += d;
     this.ticks++;
     const f = this.focus();
-    let budget: number = SURFACE_FIELD.CATCHUP_CELL_STEPS, ran = 0;
+    this.trackSpeed(f, d);
+    const wake = this.wakeM, sleep = wake + SURFACE_FIELD.SLEEP_EXTRA_M, order = this.order;
+    let ran = 0;
+    order.length = 0;
     for (const z of this.zones) {
       if (!z.field && !z.pending.length && !z.queue.length) continue; // never breached: nothing to do
       const dist = f ? rectDistance(z.spec.rect, f.x, f.z) : Infinity;
       if (z.mode === 'live') {
-        if (dist > SURFACE_FIELD.SLEEP_M) { z.mode = 'frozen'; z.simT = this.now - d; this.counts.freezes++; continue; }
+        if (dist > sleep) { z.mode = 'frozen'; z.simT = this.now - d; this.counts.freezes++; continue; }
         if (z.field) {
           const before = z.field.ticks;
           ran += z.field.tick(d);
@@ -225,10 +255,31 @@ export class SurfaceGasField extends GasField {
         z.simT = this.now;
         continue;
       }
-      if (z.mode === 'frozen' && dist <= SURFACE_FIELD.WAKE_M) this.startReplay(z);
-      if (z.mode === 'catching' && budget > 0) budget -= this.runReplay(z, budget);
+      if (z.mode === 'frozen' && dist <= wake) this.startReplay(z);
+      if (z.mode !== 'catching') continue;
+      // seen / breathed: never stale (completes now: unbudgeted — only after a teleport or at the arrival)
+      if (dist <= SURFACE_FIELD.SEEN_M) { this.runReplay(z, Infinity, true); this.counts.forced++; continue; }
+      order.push({z, d: dist});
+    }
+    if (order.length > 1) order.sort((a, b) => a.d - b.d);
+    let budget: number = SURFACE_FIELD.CATCHUP_CELL_STEPS;
+    for (const {z} of order) {
+      if (budget <= 0) break;
+      budget -= this.runReplay(z, budget, budget === SURFACE_FIELD.CATCHUP_CELL_STEPS);
     }
     return ran;
+  }
+
+  /** The smoothed player speed from the focus (a jump faster than LEAD_MAX_SPEED is a teleport: ignored) -> the wake distance. */
+  private trackSpeed(f: {x: number; z: number} | null, d: number): void {
+    const last = this.lastFocus, had = last.has;
+    const v = f && had && d > 0 ? Math.hypot(f.x - last.x, f.z - last.z) / d : -1;
+    if (f) { last.x = f.x; last.z = f.z; }
+    last.has = !!f;
+    if (v < 0 || v > SURFACE_FIELD.LEAD_MAX_SPEED) return;
+    const k = Math.min(1, d / 0.5); // ~0.5 s smoothing
+    this.speed += (v - this.speed) * k;
+    this.wakeM = SURFACE_FIELD.WAKE_M + Math.min(SURFACE_FIELD.LEAD_MAX_SPEED, this.speed) * SURFACE_FIELD.LEAD_S;
   }
 
   /** Replays (synchronously, unbudgeted) every zone within `radius` m of (x, z) that has history — the section build's arrival point. */
@@ -238,7 +289,7 @@ export class SurfaceGasField extends GasField {
       if (!zn.field && !zn.pending.length && !zn.queue.length) continue;
       if (rectDistance(zn.spec.rect, x, z) > radius) continue;
       if (zn.mode === 'frozen') this.startReplay(zn);
-      if (zn.mode === 'catching') { this.runReplay(zn, Infinity); n++; }
+      if (zn.mode === 'catching') { this.runReplay(zn, Infinity, true); n++; }
     }
     return n;
   }
@@ -253,17 +304,30 @@ export class SurfaceGasField extends GasField {
     this.counts.wakes++;
   }
 
-  /** Runs zone z's replay up to `budget` cell-substeps; returns the cost spent (at least 1 per call). */
-  private runReplay(z: SurfaceGasZone, budget: number): number {
+  /**
+   * Runs zone z's replay within `budget` cell-substeps (Infinity: to the end); returns the cost spent. A step never costs more than what is
+   * left of the budget (whole 0.1 s ticks, up to STEP_S) — except, when `first` (nothing else replayed this frame), one 0.1 s tick, so the
+   * biggest zone still progresses: a frame's replay never exceeds max(budget, one tick of one zone).
+   */
+  private runReplay(z: SurfaceGasZone, budget: number, first: boolean): number {
     let spent = 0;
+    const T = 1 / GAS.TICK_HZ;
     while (spent < budget) {
       const op = z.queue[0];
       const target = op ? Math.max(op.at, z.simT) : this.now;
       if (target > z.simT + 1e-9) {
         if (z.field) release(z.field);
         if (!z.field || z.field.storeys.every(s => s.asleep || !s.active)) { z.simT = target; spent += 1; continue; } // nothing moving: jump
-        const step = Math.min(SURFACE_FIELD.STEP_S, target - z.simT);
-        const cost = GasField.substeps(step) * Math.max(1, activeCells(z.field));
+        const cells = Math.max(1, activeCells(z.field));
+        let step = Math.min(SURFACE_FIELD.STEP_S, target - z.simT);
+        if (Number.isFinite(budget)) {
+          const ticks = Math.floor((budget - spent) / (GasField.substeps(T) * cells));
+          if (ticks < 1) {
+            if (spent > 0 || !first) break; // the rest next frame
+            step = Math.min(step, T);
+          } else step = Math.min(step, ticks * T);
+        }
+        const cost = GasField.substeps(step) * cells;
         z.field.advance(step, step);
         z.simT += step;
         spent += cost;
@@ -272,12 +336,15 @@ export class SurfaceGasField extends GasField {
         continue;
       }
       if (!op) { z.mode = 'live'; z.simT = this.now; break; }
+      const opCost = op.kind === 'add' ? SURFACE_FIELD.OP_ADD_CELL_STEPS : SURFACE_FIELD.OP_REMOVE_CELL_STEPS;
+      if (Number.isFinite(budget) && spent + opCost > budget && (spent > 0 || !first)) break; // (the op next frame)
       z.queue.shift();
+      this.counts.ops++;
       if (op.kind === 'add') this.ensureField(z).addBreach(op.b);
       else z.field?.removeBreach(op.id);
-      spent += 1;
+      spent += opCost;
     }
-    return Math.max(1, spent);
+    return spent;
   }
 
   override drainChanged(): StoreyGas[] {

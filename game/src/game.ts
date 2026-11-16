@@ -914,9 +914,10 @@ export class Game {
     // Task gasmask-breach-20261030 (primary): breach gas spares the player only behind a mask that is on with a working filter.
     // The mask's frame hook runs first (installed earlier), so a filter swapped in this frame already counts.
     this.gas.protection = () => this.gasMask.protects();
-    // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): seated in an ENCLOSED vehicle (the Surface Run truck's cab, the
-    // vehicle controller's optional `enclosed`) the eye breathes clean air — exposure 0; the gas still renders round it. Open vehicles: no.
-    this.gas.shelter = () => !!this.skywaysCar?.driving && (this.skywaysCar as {enclosed?: boolean}).enclosed === true;
+    // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): seated in an ENCLOSED vehicle (the Surface Run truck's cab: the
+    // vehicle controller's `enclosed`) the eye breathes clean air — exposure 0; the gas still renders round it (beyond the cab's glass:
+    // world/surface/air.ts). Open vehicles: no.
+    this.gas.shelter = () => this.skywaysCar?.enclosed === true;
     this.gas.hintFor = protectedNow => {
       const m = this.gasMask;
       if (protectedNow || m.state === 'donning') return '';
