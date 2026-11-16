@@ -16,7 +16,10 @@ import {LOOK_TUNE, SIDE_NORMAL, entranceFloor, surfaceLookPlan, type FacadeSide}
 import {CELL, FLOOR, SOLID} from '../src/gen/grid';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {FACADE_STYLES, LOOK_FACADE_IDS, surfaceImpactClass} from '../src/world/surface/archStyles';
-import {surfaceArchMaterial} from '../src/world/surface/archMaterials';
+import {SURFACE_TINT_HOOK, isSurfaceTintFamily, setSurfaceTexture, surfaceArchMaterial, surfaceTintFamily, type SurfaceTexSlot} from '../src/world/surface/archMaterials';
+import type {SurfaceNodeMaterial} from '../src/world/materials';
+import {nodeHookKeys} from '../src/render/nodeHooks';
+import {reflectTagOf} from '../src/render/reflectTag';
 import {lookSkyMaterial, outdoorFlatMaterial, outdoorModelMaterial} from '../src/world/surface/lookSky';
 import {SURFACE_FACADE_IDS} from '../src/gen/surface/facades';
 import {finishClass} from '../src/damage/impactFinish';
@@ -113,7 +116,7 @@ describe('Surface Run look: the district architecture', () => {
     mine.userData.surfaceArch = 'surface-roof';
     const tris = () => g.children.reduce((a, o) => a + ((o as THREE.Mesh).geometry.index!.count / 3), 0);
     const t0 = tris();
-    expect(coarsenSurfaceArch(g)).toEqual({before: 6, after: 4});
+    expect(coarsenSurfaceArch(g)).toEqual({before: 6, after: 4, tinted: 0});
     expect(g.children).toHaveLength(6);
     expect(tris()).toBe(t0);
     expect(released).toBe(3);
@@ -125,6 +128,118 @@ describe('Surface Run look: the district architecture', () => {
     merged.geometry.computeBoundingBox();
     expect(merged.geometry.boundingBox!.min.x).toBeCloseTo(9.5, 5);
     expect(merged.geometry.boundingBox!.max.z).toBeCloseTo(60.5, 5);
+  });
+
+  it('coarsenSurfaceArch with a tint: family members move onto the shared material, their exact colour in a Float32 colour attribute, and merge', () => {
+    const g = new THREE.Group(), shared = new THREE.MeshBasicMaterial(), other = new THREE.MeshBasicMaterial();
+    const red = new THREE.MeshBasicMaterial({color: new THREE.Color(0.7123456789, 0.2, 0.1)}), blue = new THREE.MeshBasicMaterial({color: new THREE.Color(0.1, 0.3, 0.9)});
+    for (const [x, mat] of [[10, red], [30, blue], [50, other]] as const) {
+      const geo = new THREE.BoxGeometry(1, 1, 1).translate(x, 0, 10);
+      geo.clearGroups();
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = 'surface-arch-k'; mesh.userData.level = 0; mesh.matrixAutoUpdate = false;
+      g.add(mesh);
+    }
+    const r = coarsenSurfaceArch(g, 96, mm => (mm === red || mm === blue ? {material: shared, color: (mm as THREE.MeshBasicMaterial).color} : null));
+    expect(r).toEqual({before: 3, after: 2, tinted: 2});
+    const merged = g.children.find(o => (o as THREE.Mesh).material === shared) as THREE.Mesh;
+    const C = merged.geometry.attributes.color as THREE.BufferAttribute;
+    expect(C.array).toBeInstanceOf(Float32Array);
+    expect(C.count).toBe(48);
+    const want = new Set([red, blue].map(mm => mm.color.toArray().map(Math.fround).join(',')));
+    const got = new Set<string>();
+    for (let i = 0; i < C.count; i++) got.add([C.getX(i), C.getY(i), C.getZ(i)].join(','));
+    expect(got).toEqual(want);
+    expect((g.children.find(o => (o as THREE.Mesh).material === other) as THREE.Mesh).geometry.attributes.color).toBeUndefined();
+  });
+
+  it('the facade wall families and the trims draw through ONE shared material each, the building tint per vertex: the same PBR material otherwise', () => {
+    const {w, m} = district();
+    // what differs between a member key's own material and its family's shared one: the colour (1 there: the tint is the vertex's),
+    // and the tint stage FIRST in the colour chain; everything else (maps, their sampling, roughness / metalness, normal scale, world
+    // mapping, decay profile, polygon offset, reflections, the albedo the bake reads) is identical
+    const tex = (t: THREE.Texture | null) => (t ? [t.source.uuid, t.wrapS, t.wrapT, t.repeat.toArray(), t.offset.toArray(), t.colorSpace, t.anisotropy, t.flipY, t.channel] : null);
+    const sig = (x: THREE.Material) => {
+      const q = x as SurfaceNodeMaterial;
+      return JSON.stringify({
+        type: q.type, rough: q.roughness, metal: q.metalness, map: tex(q.map), normal: tex(q.normalMap), rmap: tex(q.roughnessMap), mmap: tex(q.metalnessMap),
+        ns: q.normalScale.toArray(), side: q.side, shadowSide: q.shadowSide, transparent: q.transparent, opacity: q.opacity, alphaTest: q.alphaTest,
+        po: [q.polygonOffset, q.polygonOffsetFactor, q.polygonOffsetUnits], wm: q.wmMap.toArray(), grime: q.wmGrime.toArray(),
+        decay: [q.decayP0.toArray(), q.decayP1.toArray(), q.decayP2.toArray(), q.decayTint.toArray()], ctx: q.contextNode?.uuid ?? null, nrm: q.normalNode?.uuid ?? null,
+        emissive: q.emissive.getHex(), flat: q.flatShading, depth: [q.depthTest, q.depthWrite], vc: q.vertexColors, reflect: reflectTagOf(q) ?? null, albedo: q.userData.lightAlbedo ?? null,
+      });
+    };
+    const check = (mm: WorldMaterials, key: string) => {
+      const fam = surfaceTintFamily(key)!, F = surfaceArchMaterial(mm, fam) as SurfaceNodeMaterial, M = surfaceArchMaterial(mm, key) as SurfaceNodeMaterial;
+      expect(F, fam).toBeDefined();
+      expect(sig(F), `${key} vs ${fam}`).toBe(sig(M));
+      expect(F.color.toArray()).toEqual([1, 1, 1]);
+      expect(F.vertexColors).toBe(false); // (three's own vertex colours would multiply AFTER decay's grime)
+      expect(nodeHookKeys(F), key).toEqual([SURFACE_TINT_HOOK, ...nodeHookKeys(M)]);
+    };
+    const members = new Set<string>();
+    for (const f of w.drawn!.faces as BuiltFace[]) if (surfaceTintFamily(f.finish)) members.add(f.finish);
+    for (const bl of surfaceLookPlan(lookFixture().layout)!.buildings) { if (surfaceTintFamily(bl.key)) members.add(bl.key); members.add(bl.trimKey); }
+    for (const k of ['surface-trim-2f3133', 'surface-trim-3a3a2c']) members.add(k); // (door frames outside a building; the tent's ropes)
+    expect(members.size).toBeGreaterThan(20);
+    for (const k of members) check(m, k);
+    // with the district's own texture sets loaded (stand-ins): the PBR / UV-mapped branches of every wall family match the same way
+    const slots: SurfaceTexSlot[] = ['concrete:color', 'concrete:normal', 'concrete:orm', 'rusted:color', 'rusted:normal', 'rusted:orm', 'brick', 'fabric'];
+    try {
+      for (const sl of slots) setSurfaceTexture(sl, new THREE.Texture({width: 4, height: 4} as unknown as HTMLImageElement));
+      const m2 = mats();
+      for (const k of ['surface-facade-brick-8f5545', 'surface-facade-concrete-a8a49b', 'surface-facade-stone-d8ccb4', 'surface-facade-metal-5a6a60', 'surface-facade-curtain-445566', 'surface-facade-canvas-6b6a4a', 'surface-trim-2f3133']) {
+        check(m2, k);
+        // the same image (trims sample anisotropy-1 clones of the shared set: world/materials.ts thinTrim)
+        expect((surfaceArchMaterial(m2, surfaceTintFamily(k)!) as SurfaceNodeMaterial).map?.source, k).toBe((surfaceArchMaterial(m2, k) as SurfaceNodeMaterial).map?.source);
+      }
+    } finally { for (const sl of slots) setSurfaceTexture(sl, null); }
+    // nothing drawn uses a member's own material any more; every family mesh carries its tint per vertex, and only its members' tints
+    const tintsOf = new Map<string, Set<string>>();
+    for (const k of members) {
+      const c = (surfaceArchMaterial(m, k) as SurfaceNodeMaterial).color, fam = surfaceTintFamily(k)!;
+      (tintsOf.get(fam) ?? tintsOf.set(fam, new Set()).get(fam)!).add(c.toArray().map(Math.fround).join(','));
+    }
+    const drawnMembers: string[] = [], fams = new Set<string>();
+    let tintedVerts = 0;
+    w.group.traverse(o => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const k = String((mesh.material as THREE.Material).userData?.surfaceArch ?? '');
+      if (surfaceTintFamily(k)) drawnMembers.push(`${mesh.name} ${k}`);
+      if (!isSurfaceTintFamily(k)) return;
+      fams.add(k);
+      const C = mesh.geometry.attributes.color as THREE.BufferAttribute;
+      expect(C?.itemSize, mesh.name).toBe(3);
+      expect(C.array, mesh.name).toBeInstanceOf(Float32Array);
+      expect(C.count, mesh.name).toBe(mesh.geometry.attributes.position.count);
+      const ok = tintsOf.get(k) ?? new Set<string>();
+      for (let i = 0; i < C.count; i++) { const t = [C.getX(i), C.getY(i), C.getZ(i)].join(','); if (!ok.has(t)) expect.fail(`${mesh.name}: tint ${t} is no ${k} member's`); }
+      tintedVerts += C.count;
+    });
+    expect(drawnMembers).toEqual([]);
+    expect(fams.has('surface-trim-tint')).toBe(true);
+    expect([...fams].filter(f => f.startsWith('surface-facade-')).length).toBeGreaterThanOrEqual(4);
+    expect(tintedVerts).toBeGreaterThan(1000);
+    // a building's wall face carries ITS tint: the vertices at its corners in the builder's family meshes have its member's colour
+    const at = new Map<string, Set<string>>();
+    const P = (x: number, y: number, z: number) => `${Math.round(x * 1e3)},${Math.round(y * 1e3)},${Math.round(z * 1e3)}`;
+    for (const o of w.group.children) {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || mesh.userData.surfaceArch !== undefined || !isSurfaceTintFamily(String((mesh.material as THREE.Material).userData?.surfaceArch ?? ''))) continue;
+      const p = mesh.geometry.attributes.position, C = mesh.geometry.attributes.color;
+      for (let i = 0; i < p.count; i++) { const k = P(p.getX(i), p.getY(i), p.getZ(i)); (at.get(k) ?? at.set(k, new Set()).get(k)!).add([C.getX(i), C.getY(i), C.getZ(i)].join(',')); }
+    }
+    let faces = 0;
+    for (const f of w.drawn!.faces as BuiltFace[]) {
+      if (!surfaceTintFamily(f.finish) || f.slope) continue;
+      const want = (surfaceArchMaterial(m, f.finish) as SurfaceNodeMaterial).color.toArray().map(Math.fround).join(',');
+      const corners = [P(f.x0, f.y0, f.z0), P(f.x1, f.y0, f.z1), P(f.x1, f.y1, f.z1), P(f.x0, f.y1, f.z0)].filter(k => at.has(k));
+      expect(corners.length, `${f.finish} face corners drawn`).toBeGreaterThan(0);
+      for (const k of corners) expect(at.get(k)!.has(want), `${f.finish} face at ${k}`).toBe(true);
+      faces++;
+    }
+    expect(faces).toBeGreaterThan(100);
   });
 
   it("AIR's live window spans: cut through both wall planes and framed, never glazed by LOOK", () => {
@@ -281,6 +396,15 @@ describe('Surface Run look: the district architecture', () => {
     for (const mat of list) {
       for (const sh of buildBoth(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat), {lights: [new THREE.SpotLight(0xffffff, 1)]})) {
         expect(sh.errors, `${mat.name} ${sh.backend}`).toEqual([]);
+      }
+    }
+    // the shared tinted families (follow-up 1) read their tint from the geometry's 'color' attribute
+    for (const k of ['surface-facade-brick-tint', 'surface-facade-metal-tint', 'surface-facade-curtain-tint', 'surface-trim-tint']) {
+      const mat = surfaceArchMaterial(m, k)!, geo = new THREE.BoxGeometry(1, 1, 1);
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(geo.attributes.position.count * 3).fill(0.5), 3));
+      for (const sh of buildBoth(new THREE.Mesh(geo, mat), {lights: [new THREE.SpotLight(0xffffff, 1)]})) {
+        expect(sh.errors, `${k} ${sh.backend}`).toEqual([]);
+        expect(/\bcolor\b/.test(sh.vertex), `${k} ${sh.backend}: the colour attribute is read`).toBe(true);
       }
     }
   });

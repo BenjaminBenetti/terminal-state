@@ -42,6 +42,7 @@ import {
 import {genericAmmo} from '../items/calibers';
 import {REACTOR_BUNKER_PURPOSES} from './reactor/complex/bunkerPurposes'; // task reactor-expansion-20261101 (lane BUNKER)
 import {SKYWAYS_RAMEN_PURPOSES} from './skyways/ramenPurposes'; // task studio-skyways-level-20261106-054448 (lane FOOD)
+import {SURFACE_ROOM_PURPOSES} from './surface/rooms/lootPurposes'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ROOMS)
 
 // ---------------------------------------------------------------------------------------
 // Types
@@ -637,6 +638,8 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
   ...REACTOR_BUNKER_PURPOSES(),
   // task studio-skyways-level-20261106-054448 (lane FOOD): the Skyways ramen restaurant's dining room / kitchen ('skyways-ramen*', preset; weight 0, appended last)
   ...SKYWAYS_RAMEN_PURPOSES(),
+  // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ROOMS): the Surface Run buildings' back-of-house loot keys ('surface-*', preset; weight 0, appended last)
+  ...SURFACE_ROOM_PURPOSES(),
 };
 
 export const ALL_PURPOSES: readonly Purpose[] = [...Object.values(STORE_PURPOSES), ...Object.values(ROOM_PURPOSES)];

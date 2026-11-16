@@ -69,6 +69,7 @@ import {buildWasteVisuals} from './reactor/wasteVisuals'; // task reactor-expans
 import {SkywaysArch} from './skywaysArch'; // task studio-skyways-level-20261106-054448 (lane VIEW): the Skyways finishes + atrium roofs
 import {MarketArch} from './marketArch'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL): the Survivor Market's corrugated / salvaged finishes
 import {SurfaceArch} from './surface/arch'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): the Surface Run district's streets, facades and interiors
+import {surfaceLookPlanSteps} from './surface/archPlan';
 import {BunkerArch} from './bunkerArch'; // task studio-bunker-level-20261109-072224-01: the Bunker's finishes (the Reactor's arch materials) + the shelter hero models
 import {CORPSE_DEN_MODEL_FOR} from '../gen/market/v4/denKinds'; // task studio-corpse-market-shop-20261114-031614-01: the Market den's chute / booth instanced through MODEL_FOR
 import {BUNKER_MODEL_FOR, isBunkerObjectiveKind} from '../gen/bunker/bunkerKinds'; // task studio-bunker-level-20261109-072224-01: objective kinds drawn by world/bunker; the model-backed flavour kinds instanced through MODEL_FOR
@@ -341,6 +342,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   const sky = office || mall || reactor ? null : SkywaysArch.for(layout, mats, levels); // task studio-skyways-level-20261106-054448 (lane VIEW): null on every other level
   const mkt = office || mall || reactor || sky ? null : MarketArch.for(layout, mats, levels); // task studio-survivor-market-20261108-005807-01 (lane LEVEL): null on every other level
   const bunk = office || mall || reactor || sky || mkt ? null : BunkerArch.for(layout, mats, levels); // task studio-bunker-level-20261109-072224-01: null on every other level
+  if (layout.surface && !(office || mall || reactor || sky || mkt || bunk)) yield* surfaceLookPlanSteps(layout); // (lane LOOK: the district's look plan, ~0.5 s, in slices)
   const surf = office || mall || reactor || sky || mkt || bunk ? null : SurfaceArch.for(layout, mats, levels); // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): null without layout.surface
   // Track 2 playtest revision (lane ART): + the annexes' board-formed wall finish (world/trackExt/wallFinish.ts), created on first use.
   const scaleOf = (k: string): {u: number; v: number} => office?.scale(k) ?? mall?.scale(k) ?? reactor?.scale(k) ?? sky?.scale(k) ?? mkt?.scale(k) ?? bunk?.scale(k) ?? surf?.scale(k) ?? (k === ANNEX_WALL ? {u: BOARD_SPAN, v: BOARD_SPAN} : mats.scale[k as MatKey]); // (+ reactor: lane ARCH; + sky: lane VIEW)
@@ -867,6 +869,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     mesh.matrixAutoUpdate = false;
     group.add(mesh);
   }
+  surf?.coarsenTrims(group); // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): the trim family's door frames, one material per 96 m cell
 
   yield 'world.finish';
   group.updateMatrixWorld(true);

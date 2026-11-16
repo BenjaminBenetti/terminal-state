@@ -215,6 +215,27 @@ export interface SurfaceDepot {
   building: number;
   /** The recoverables as generated (seeded ONCE into the district's memory on first entry; never refilled). */
   recoverables: SurfaceRecoverable[];
+  /**
+   * Lane ROOMS (optional, additive): the maintenance shed's working gear as planned (gen/surface/rooms/depot.ts) — the rail tracks, the
+   * inspection pit, the overhead crane, the kept dolly lanes — pure data for LOOK to draw. Absent when the depot's interior planner gave none.
+   */
+  features?: SurfaceDepotFeatures;
+}
+
+/** The depot shed's planned working gear (world metres; absolute heights; ids of this layout). Lane ROOMS plans it, LOOK draws it. */
+export interface SurfaceDepotFeatures {
+  /** The maintenance shed (area id). */
+  shed: number;
+  /** Rail tracks: centre line (world m) from the roller-door wall to the back wall; standard gauge (m). */
+  tracks: {x0: number; z0: number; x1: number; z1: number; gauge: number}[];
+  /** Inspection pits (world rect between the rails of the first track; grated, walkable; depth m). */
+  pits: {x0: number; z0: number; x1: number; z1: number; depth: number}[];
+  /** Overhead travelling crane: the runway's box (world m), bridge span, rail height (abs), bridge position (0..1 along `axis`), hook height. */
+  crane: {x0: number; z0: number; x1: number; z1: number; span: number; y: number; at: number; hookY: number; axis: 'x' | 'z'} | null;
+  /** The dolly lanes kept clear of props (level-0 grid indices): the track corridor and the loading-door lane. */
+  lane: number[];
+  /** The loading-bay entrance id (SurfaceEntrance.id) when there is one (the truck's door), else the roller door's. */
+  exit: string | null;
 }
 
 /** A local report / annotation printed on the checkpoint's planning map (LIFE lane draws it). Never campaign-network intel. */

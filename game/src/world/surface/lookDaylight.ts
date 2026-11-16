@@ -17,8 +17,9 @@
 import {CELL, FLOOR} from '../../gen/grid';
 import type {StationLayout} from '../../gen/stationTypes';
 import type {BuildSteps} from '../../core/pacedBuild';
+import {ContentHasher} from '../../core/contentHash';
 import type {ExtraDirectContext} from '../lightField';
-import {GROUND, LOOK_TUNE, OWNER, SIDE_NORMAL, entranceFloor, surfaceLookPlan, topAt, type SurfaceLookPlan} from './archPlan';
+import {GROUND, LOOK_TUNE, OWNER, SIDE_NORMAL, entranceFloor, surfaceLookPlanSteps, topAt, type SurfaceLookPlan} from './archPlan';
 
 /** Daylight tunables (field units: FIELD_EMAX 12 = the encode ceiling; a fixture pool is ~2-4). */
 export const DAYLIGHT = {
@@ -47,18 +48,34 @@ let last: DaylightStats | null = null;
 /** The last district daylight bake's stats (QA / the report). */
 export const daylightStats = (): DaylightStats | null => last;
 
-/** The FieldSource hook of a district layout ({} for every other layout: nothing changes there). */
+/**
+ * The FieldSource hook of a district layout ({} for every other layout: nothing changes there). Lazy: the look plan is taken (made, if
+ * nobody has yet, in the bake's own steps) when the term is baked — never when the source is assembled (stationBakeInput runs in the
+ * section preload, before the paced world build plans it: archPlan.ts surfaceLookPlanSteps).
+ */
 export function surfaceSkyField(layout: StationLayout): {extraDirectSteps?: (ctx: Ctx) => BuildSteps<Record<string, number>>} {
-  const plan = layout.surface ? surfaceLookPlan(layout) : null;
-  if (!plan) return {};
-  return {extraDirectSteps: function* (ctx) { const st = yield* bakeDaylight(layout, plan, ctx); last = st; return {...st}; }};
+  if (!layout.surface) return {};
+  return {extraDirectSteps: function* (ctx) {
+    const plan = yield* surfaceLookPlanSteps(layout);
+    if (!plan) return {};
+    const st = yield* bakeDaylight(layout, plan, ctx);
+    last = st;
+    return {...st};
+  }};
 }
 
-/** The bake input digest of the district's daylight (world/lights.ts stationBakeInput `extra`): what the term depends on. */
+/**
+ * The bake input digest of the district's daylight (world/lights.ts stationBakeInput `extra`): what the term depends on. Plan-free (it
+ * is asked in the section preload, before the world build plans the district): the plan is a pure function of the layout — its grid
+ * is in the lighting address already — and of the district record's fields it reads, hashed here, with the look's tunables.
+ * (Version 2: was a summary of the plan's buildings.)
+ */
 export function surfaceDaylightDigest(layout: StationLayout): string {
-  const plan = layout.surface ? surfaceLookPlan(layout) : null;
-  if (!plan) return '';
-  return JSON.stringify(['surface-daylight-1', DAYLIGHT, LOOK_TUNE.cordonH, plan.seed, plan.buildings.map(b => [b.id, b.top, b.minTop, b.sides.map(s => s.tops.length)])]);
+  const S = layout.surface;
+  if (!S) return '';
+  const G = S as typeof S & {lots?: unknown; rail?: unknown; depot: {features?: unknown}};
+  const read = [S.seed, S.extent, S.blocks, S.streets, S.buildings, S.windows, S.outdoorAreas, S.checkpoint, S.depot.building, G.depot.features ?? null, G.lots ?? null, G.rail ?? null, S.storeys];
+  return JSON.stringify(['surface-daylight-2', DAYLIGHT, LOOK_TUNE, new ContentHasher().str(JSON.stringify(read)).digest()]);
 }
 
 /** Per-cell obstruction top (absolute y) of the district: roofs (ruin profiles), the cordon, the tent, debris; open ground = its floor. */

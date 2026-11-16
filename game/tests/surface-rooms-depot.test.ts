@@ -5,9 +5,11 @@
 
 import {describe, expect, it} from 'vitest';
 import {CELL} from '../src/gen/grid';
-import {DEPOT_RECOVERABLES, type DepotFeatures} from '../src/gen/surface/rooms/depot';
+import {DEPOT_PIT_WIDTH, DEPOT_RECOVERABLES, type DepotFeatures} from '../src/gen/surface/rooms/depot';
 import type {InteriorPlan} from '../src/gen/surface/rooms/api';
 import {makePlot, planFixture, programmeCases, reach, type Fixture} from './helpers/surfaceRoomsFixture';
+import {generateSurfaceDistrict} from '../src/gen/surface/index';
+import type {SurfaceHost} from '../src/gen/surface/surfaceRun';
 
 const SEEDS = [1, 2, 3, 4, 5, 6];
 const all = (): {f: Fixture; plan: InteriorPlan; tag: string}[] => SEEDS.map(seed => {
@@ -50,6 +52,17 @@ describe('Surface Run depot: the shed, the wing, the mezzanine', () => {
       const c = alongX ? t.x0 : t.z0, mid = alongX ? main.x : main.z;
       expect(Math.abs(c - mid), `${tag}: track on the door's centre line`).toBeLessThan(main.width / 2);
       expect(d.pits[0].x1 > d.pits[0].x0 && d.pits[0].z1 > d.pits[0].z0, tag).toBe(true);
+      // the pit sits BETWEEN the rails: 1.0 m across (< the 1.435 m gauge), centred on the first track's centre line
+      const pit = d.pits[0], across = alongX ? pit.x1 - pit.x0 : pit.z1 - pit.z0, centre = alongX ? (pit.x0 + pit.x1) / 2 : (pit.z0 + pit.z1) / 2;
+      expect(across, `${tag}: pit width`).toBeCloseTo(DEPOT_PIT_WIDTH, 3);
+      expect(across, `${tag}: pit inside the gauge`).toBeLessThan(t.gauge);
+      expect(Math.abs(centre - c), `${tag}: pit on the track's centre line`).toBeLessThan(1e-3);
+      // grated and walkable: every cell under the pit stays walkable floor
+      const g0 = f.kit.g;
+      for (let z = pit.z0 + CELL / 2; z < pit.z1; z += CELL) for (let x = pit.x0 + CELL / 4; x < pit.x1; x += CELL / 2) {
+        const [cx, cy] = g0.cellOf(x, z);
+        expect(g0.walkable(cx, cy), `${tag}: pit cell ${cx},${cy} walkable`).toBe(true);
+      }
       expect(d.crane, `${tag}: crane`).not.toBeNull();
       expect(d.crane!.y, tag).toBeLessThan(f.kit.areas[d.shed].ceil);
       expect(d.crane!.hookY, tag).toBeGreaterThan(f.plot.floors[0].y + 2);
@@ -127,4 +140,25 @@ describe('Surface Run depot: the recoverables', () => {
     const plan = planFixture(f);
     expect((plan.recoverables ?? []).length).toBe(DEPOT_RECOVERABLES.length);
   });
+});
+
+describe('Surface Run depot in the generated district: its shed gear reaches the layout (LOOK draws it)', () => {
+  it('layout.surface.depot.features: the shed is the depot building\'s area; tracks, pit and crane inside its footprint; lanes on the shed floor', () => {
+    for (const [seed, host] of [[3, 'subway'], [8, 'office'], [13, 'mall']] as [number, SurfaceHost][]) {
+      const L = generateSurfaceDistrict(host, {levelSeed: seed});
+      const s = L.surface!, depot = s.depot, ft = depot.features;
+      const b = s.buildings[depot.building];
+      expect(ft, `${host} ${seed}: depot features`).toBeDefined();
+      expect(b.areas, `${host} ${seed}: shed`).toContain(ft!.shed);
+      const fp = b.footprint, inside = (x: number, z: number) => x >= fp.x0 - 1e-6 && x <= fp.x1 + 1e-6 && z >= fp.z0 - 1e-6 && z <= fp.z1 + 1e-6;
+      expect(ft!.tracks.length, `${host} ${seed}: tracks`).toBeGreaterThan(0);
+      for (const t of ft!.tracks) expect(inside(t.x0, t.z0) && inside(t.x1, t.z1), `${host} ${seed}: track in the depot`).toBe(true);
+      for (const p of ft!.pits) expect(inside(p.x0, p.z0) && inside(p.x1, p.z1), `${host} ${seed}: pit in the depot`).toBe(true);
+      if (ft!.crane) expect(inside(ft!.crane.x0, ft!.crane.z0) && inside(ft!.crane.x1, ft!.crane.z1), `${host} ${seed}: crane in the depot`).toBe(true);
+      const g = L.levels?.[0]?.grid ?? null;
+      expect(ft!.lane.length, `${host} ${seed}: dolly lanes`).toBeGreaterThan(0);
+      if (g) for (const i of ft!.lane) expect(g.area[i], `${host} ${seed}: lane cell on a depot room`).toSatisfy((a: number) => b.areas.includes(a));
+      if (ft!.exit) expect(b.entrances.map(e => e.id), `${host} ${seed}: exit is a depot entrance`).toContain(ft!.exit);
+    }
+  }, 60_000);
 });

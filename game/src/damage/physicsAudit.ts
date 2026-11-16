@@ -189,6 +189,8 @@ export const PROP_PHYSICS_AUDIT: Readonly<Record<string, PhysAuditRow>> = Object
     : isSurfaceKind(k) ? surfaceRow(k) : subwayRow(k); // (lane ADDON: + the add-on kinds) (lane KIT: + the Surface Run kit)
   return row ? [[k, row]] : [];
 }));
+/** (lane TRUCK follow-up) The vehicle (not a prop kind, so not a row above): the Surface Run truck's body and compartment doors. */
+export {TRUCK_PHYSICS_AUDIT as VEHICLE_PHYSICS_AUDIT} from '../world/surface/truckAudit';
 
 /** Kinds of PROP_DEFS without an audit row (should be empty). */
 export function unclassifiedPhysicsKinds(): string[] {

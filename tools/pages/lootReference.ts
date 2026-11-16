@@ -34,6 +34,7 @@ import {ALL_PURPOSES, ROOM_PURPOSES, STORE_PURPOSES, purposeById, purposeLoot, t
 import {P7_HOLDER_KINDS} from '../../game/src/gen/props07';
 import {OPENABLE_SPECS, containerLoot, isSpillHolderKind, openableSpec, separateCompartmentLoot} from '../../game/src/world/openablesSpec';
 import {LEVELS, LEVEL_IDS, storeyLabel} from '../../game/src/levels/registry';
+import {SURFACE_SECTION, isSurfaceHost} from '../../game/src/gen/surface/surfaceRun'; // (lane ROOMS) the Surface Run hosts' district census
 import type {LevelId} from '../../game/src/levels/types';
 import type {StationLayout} from '../../game/src/gen/stationTypes';
 import {GEAR_MIN_SPAWN_M} from '../../game/src/gen/gearLoot';
@@ -126,6 +127,7 @@ export const GENERATED_FROM: readonly string[] = [
   F.tables, F.items, F.gear, F.loot, F.economy, F.purposes, 'game/src/gen/props07.ts', F.openables, F.registry, F.gearLoot, F.maskLoot,
   F.weaponFinds, F.officeSpawns, F.companies, F.tenants, 'game/src/gen/office/frame.ts', F.starter, F.pistol,
   'game/src/gen/mall/mallTypes.ts', // task track3-eaton-centre-20261031 (lane PROFILES): MALL_RINGS (the mall floor program's runs)
+  'game/src/gen/surface/surfaceRun.ts', // (lane ROOMS) the Surface Run hosts (their district census)
 ].slice().sort();
 
 /**
@@ -237,9 +239,9 @@ export const LOOT_TABLES_EXPORT_ROLES: Readonly<Record<string, string>> = {
   ANNEX_CACHE_GEAR_KEY: 'special: hideout gear piece (pickup reward tag)', ANNEX_CACHE_GEAR: 'special: hideout gear piece (chance, gas-mask weight)',
   annexCacheGearRows: 'special: hideout gear piece (rows API)',
   // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ROOMS): the Surface Run building interiors' loose floor finds (scarce
-  // odds + loose salvage per carved storey, gen/surface/rooms/finish.ts planLoose). The district is a host-level section that the
-  // per-level census does not generate yet, so no floor-program section reads it; one is due when the census gains the district.
-  SURFACE_INTERIOR_FLOOR: 'floor program (Surface Run building interiors, per carved storey; not yet in the per-level census)',
+  // odds + loose salvage per carved storey, gen/surface/rooms/finish.ts planLoose): read by the Surface Run hosts' 'surface-interior'
+  // floor-program variant (floorProgram below); the census samples the district's holders (censusLayout, storey 'Surface district').
+  SURFACE_INTERIOR_FLOOR: 'floor program (Surface Run building interiors, per carved storey: the hosts\' surface-interior variant)',
 };
 
 const SLOT_TEXT: Readonly<Record<SlotCategory, [string, string]>> = {
@@ -354,9 +356,12 @@ export interface CensusHolder { kind: string; areaKey: string; level: number; st
 export interface CensusLayout {
   seed: number;
   holders: CensusHolder[];
-  pickups: {itemId: string; count: number; level: number}[];
+  /** `section`: 'surface' for a Surface Run host's district pickups (its levels are the district's own, not the station's). */
+  pickups: {itemId: string; count: number; level: number; section?: string}[];
   purposes: string[];
 }
+/** (lane ROOMS) the storey context of a Surface Run district's census holders. */
+export const SURFACE_STOREY = 'Surface district';
 
 const censusCache = new Map<string, CensusLayout>();
 
@@ -379,8 +384,13 @@ export function censusLayout(level: LevelId, seed: number): CensusLayout {
   const startWeapon = startWeaponFor(false);
   const out: CensusLayout = {seed, holders: [], pickups: [], purposes: []};
   const purposes = new Set<string>();
-  for (const section of def.sections(seed)) {
+  // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ROOMS): a Surface Run host's census also samples its DISTRICT (the
+  // 'surface' section the station reaches when its roll gives access; LevelDef.sections stays ['main']): its holders roll this level's
+  // profile (game.ts lootProfile(key.level)), tagged with the storey 'Surface district'
+  const sections = [...def.sections(seed), ...(isSurfaceHost(level) ? [SURFACE_SECTION] : [])];
+  for (const section of sections) {
     const layout = def.generate(section, {levelSeed: seed, startWeapon});
+    const district = section === SURFACE_SECTION;
     const tenants = new Map((layout.office?.tenants ?? []).map(t => [t.floor, t.company as string]));
     for (const a of layout.areas) if (a.purpose && purposeById(a.purpose)) purposes.add(a.purpose);
     for (const p of layout.props) {
@@ -391,13 +401,13 @@ export function censusLayout(level: LevelId, seed: number): CensusLayout {
       if (p.purpose && purposeById(p.purpose)) purposes.add(p.purpose); // (a reward key such as 'roof-cache' is not a purpose)
       const lv = p.level ?? area?.level ?? 0;
       const h: CensusHolder = {kind, areaKey, level: lv};
-      const st = storeyName(layout, lv);
+      const st = district ? SURFACE_STOREY : storeyName(layout, lv);
       if (st) h.storey = st;
-      const co = tenants.get(lv);
+      const co = district ? undefined : tenants.get(lv);
       if (co) h.company = co;
       out.holders.push(h);
     }
-    for (const q of layout.pickups) out.pickups.push({itemId: q.itemId, count: q.count, level: q.level ?? 0});
+    for (const q of layout.pickups) out.pickups.push({itemId: q.itemId, count: q.count, level: q.level ?? 0, ...(district ? {section: SURFACE_SECTION} : {})});
   }
   out.purposes = [...purposes].sort();
   censusCache.set(key, out);
@@ -1074,7 +1084,47 @@ function totals(finds: readonly FloorFind[]): {itemId: string; copies: number; u
   return [...m.entries()].map(([itemId, e]) => ({itemId, copies: rd(e.copies), units: rd(e.units)}));
 }
 
+/**
+ * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ROOMS): a SURFACE RUN host's floor program gains the district's variants
+ * (its 'surface' section, reached from the station when the station's roll gives access): the building interiors' loose finds (once per
+ * carved storey of every enterable building: gen/surface/rooms/finish.ts planLoose, items/lootTables.ts SURFACE_INTERIOR_FLOOR — its own
+ * odds, no profile override reaches them) and the checkpoint tent's guaranteed supplies (once per district: gen/surface/checkpoint.ts).
+ * Neither is in the exact per-level totals (the storey count is a seeded census quantity, the district optional).
+ */
 function floorProgram(B: Builder, level: LevelId, P: LootProfile): FloorProgramInfo {
+  const own = floorProgramOwn(B, level, P);
+  if (!isSurfaceHost(level)) return own;
+  const src = `floor:${level}`, at = (s: string) => B.src.at(F.tables, s);
+  const find = (stage: string, itemId: string, chance: number | null, knobs: TuningKnob[], note?: string): FloorFind => {
+    B.addSource(itemId, src);
+    return {stage, itemId, count: 1, copies: null, chance, expectedCopies: rd(chance ?? 1), expectedUnits: rd(chance ?? 1), knobs, ...(note ? {note} : {})};
+  };
+  const S = LT.SURFACE_INTERIOR_FLOOR, d = S.scarce.draws;
+  const k = (what: string, part: 'scarce' | 'salvage'): TuningKnob[] => [{what, value: `SURFACE_INTERIOR_FLOOR.${part}`, at: at('SURFACE_INTERIOR_FLOOR'), overrides: []}];
+  const interior: FloorFind[] = [
+    find('scarce.med', 'medkit', rd(d * S.scarce.med * S.scarce.medkit), k('med chance x first-aid-kit share x draws', 'scarce'),
+      `${d} scarce draw(s): med ${S.scarce.med} each (a first-aid kit in ${S.scarce.medkit}), battery ${S.scarce.battery}, flare ${S.scarce.flare} (chance column = expected finds)`),
+    find('scarce.med', 'bandage', rd(d * S.scarce.med * (1 - S.scarce.medkit)), k('med chance x bandage share x draws', 'scarce')),
+    find('scarce.battery', LT.BATTERY_ID, rd(d * S.scarce.battery), k('battery chance x draws', 'scarce')),
+    find('scarce.flare', LT.FLARE_ID, rd(d * S.scarce.flare), k('flare chance x draws', 'scarce')),
+  ];
+  const rows = S.salvage.items.filter(r => r[1] > 0), tot = rows.reduce((a, r) => a + r[1], 0), mean = meanInt(S.salvage.n[0], S.salvage.n[1]);
+  rows.forEach(([id, w], i) => interior.push(find('salvage', id, rd(mean * w / tot), k('loose salvage pieces per storey', 'salvage'),
+    i === 0 ? `U{${S.salvage.n[0]}..${S.salvage.n[1]}} loose crafting materials per storey (one piece each), item by weight, in the back of house (chance column = expected pieces)` : undefined)));
+  const cp = B.src.at('game/src/gen/surface/checkpoint.ts', 'pickups.push');
+  const tent: FloorFind[] = [GAS_MASK_ID, GAS_FILTER_ID].map(id => find('checkpoint.supply', id, null,
+    [{what: 'guaranteed on the tent\'s supply table', value: 1, at: cp, overrides: []}], id === GAS_MASK_ID ? 'the mask\'s fitted filter charge is seeded like any found mask (MASK_LOOT.foundFilter)' : undefined));
+  return {
+    ...own,
+    variants: [...own.variants,
+      {id: 'surface-interior', label: 'Surface Run district: building interiors (per carved storey)', runs: 'once per carved storey of every enterable district building (gen/surface/rooms/finish.ts planLoose) — not in the per-level totals', finds: interior, totals: totals(interior)},
+      {id: 'surface-checkpoint', label: 'Surface Run district: the checkpoint tent', runs: 'once per district (gen/surface/checkpoint.ts) — not in the per-level totals', finds: tent, totals: totals(tent)}],
+    at: [...own.at, at('SURFACE_INTERIOR_FLOOR'), B.src.at('game/src/gen/surface/rooms/finish.ts', 'planLoose')],
+    notes: [...own.notes, 'Surface Run district (reached from the station when its roll gives access): its building interiors and checkpoint run the "surface-*" variants on the district\'s own streams; its holders roll this level\'s profile and appear in the census with the storey "Surface district".'],
+  };
+}
+
+function floorProgramOwn(B: Builder, level: LevelId, P: LootProfile): FloorProgramInfo {
   const kind = LEVEL_ADAPTER[level].floor;
   const at = (s: string) => B.src.at(F.tables, s);
   const src = `floor:${level}`;

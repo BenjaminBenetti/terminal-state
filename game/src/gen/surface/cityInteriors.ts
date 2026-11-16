@@ -13,7 +13,7 @@ import type {Kit} from '../stationKit';
 import type {LightPlacement, PickupPlacement, Side, SignPlacement, ZombieSpawn} from '../stationTypes';
 import type {PropPlacement} from '../props';
 import type {LevelLink} from '../levels';
-import type {SurfaceBuilding, SurfaceEntrance, SurfaceRecoverable, SurfaceWindowSpan} from './surfaceTypes';
+import type {SurfaceBuilding, SurfaceDepotFeatures, SurfaceEntrance, SurfaceRecoverable, SurfaceWindowSpan} from './surfaceTypes';
 import type {InteriorFloor, InteriorPlan, InteriorPlanner, PlannedEntrance} from './rooms/api';
 import {crH, crW, type CR} from './cityFrame';
 import {KERB, SLAB, type BuildingPlan} from './cityBlocks';
@@ -160,6 +160,8 @@ export interface InteriorsOut {
   windows: SurfaceWindowSpan[];
   links: LevelLink[];
   recoverables: SurfaceRecoverable[] | null;
+  /** (lane ROOMS) the depot plan's `features.depot` (its shed's tracks / pit / crane / dolly lanes), null when it gave none. */
+  depotFeatures: SurfaceDepotFeatures | null;
   /** Interior enemies per building id (the map notes). */
   enemies: Map<number, number>;
   /** Planner time (ms; QA). */
@@ -175,7 +177,7 @@ const VALID_DOORS: ReadonlySet<string> = new Set(['closed', 'open', 'smashed', '
  */
 export function planInteriors(kit: Kit, gm: GroundMap, outdoor: ReadonlySet<number>, plans: BuildingPlan[], rec: SurfaceBuilding[], rng: Rng, planner: InteriorPlanner,
   depot: DepotDoors, props: PropPlacement[]): InteriorsOut {
-  const out: InteriorsOut = {lights: [], signs: [], pickups: [], zombies: [], windows: [], links: [], recoverables: null, enemies: new Map(), ms: 0};
+  const out: InteriorsOut = {lights: [], signs: [], pickups: [], zombies: [], windows: [], links: [], recoverables: null, depotFeatures: null, enemies: new Map(), ms: 0};
   const g = kit.g;
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
   for (const b of plans) {
@@ -226,6 +228,8 @@ export function planInteriors(kit: Kit, gm: GroundMap, outdoor: ReadonlySet<numb
     r.enterable = r.entrances.some(e => e.door !== 'boarded') && plan.areas.length > 0;
     if (!r.enterable) r.destination = false;
     if (b.id === depot.id) out.recoverables = plan.recoverables?.length ? plan.recoverables : null;
+    // (lane ROOMS) the depot's shed gear for LOOK (InteriorPlan.features.depot: pure data, world metres, this layout's ids)
+    if (b.id === depot.id) out.depotFeatures = (plan.features?.depot as SurfaceDepotFeatures | undefined) ?? null;
   }
   return out;
 }
