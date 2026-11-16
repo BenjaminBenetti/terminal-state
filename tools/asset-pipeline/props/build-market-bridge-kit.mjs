@@ -505,6 +505,17 @@ const tris = NODES.reduce((t, n) => t + pieceRec[n].tris, 0);
 console.log(`${ID}: ${raw.tris} source tris; scale ${r6(S)} (y stretch ${r4(SY)}); rail h ${railH} m; L ${r4(L)} m; girder ${girderDepth} m; cable drop ${cableDrop} m; trestle H ${trestleH} m; ` +
   `${NODES.map(n => `${n} ${pieceRec[n].tris} tris ${pieceRec[n].dims.join(' x ')}`).join(' | ')}; ${glb.length} B; maps ${maps.recs.map(t => `${t.slot} ${t.source.size[0]} -> ${t.size[0]} ${t.bytes}`).join(', ')}`);
 
+/**
+ * Span coverage with the End unstretched and every bay x-stretched by one k in STRETCH: 2 * endLength + n * L * k. The gaps between
+ * consecutive n (recorded so a runtime knows to stretch further, stretch the End too or add a landing).
+ */
+const endLength = -pieceRec.End.min[0];
+const spanGaps = [];
+for (let n = 0; n < 8; n++) {
+  const hi = 2 * endLength + n * L * (n ? STRETCH.max : 1), lo = 2 * endLength + (n + 1) * L * STRETCH.min;
+  if (lo > hi + 1e-6) spanGaps.push([r4(hi), r4(lo)]);
+}
+
 // ---------- public provenance (hashes and measurements only) ----------
 const url = `assets/models/${ID}.glb`, provRel = `assets/derivatives/${ID}.json`;
 const prov = {
@@ -520,6 +531,7 @@ const prov = {
     measured: {
       railCentreLineZ: measure.railZ.map(r5), railMidLineZ: r5(measure.zc), railHalfSpacing: r5(measure.half), railTopY: measure.railTop.map(r5),
       railRule: `the top-rail tube band y ${SPEC.rails.y.join(' .. ')} (|x| < ${SPEC.rails.xAbs}) split at z = 0; centre-line z = the median z of each rail's vertices; top = the median over 0.01-wide x bins of the band's highest vertex within 0.02 of the line`,
+      girderFlangeY: 0.14, girderRule: 'the girders\' bottom flanges: the height histogram of the bay\'s vertices under both girders peaks at 0.1400 - 0.1405 (none lower but a pipe-hanger rod and the cable clamps)',
       deckY: r5(measure.deckY), deckRule: `the area-weighted median centroid height of the up-facing (normal y > 0.9) triangles within ${SPEC.deck.zAbs} of the rail mid-line, y ${SPEC.deck.y.join(' .. ')}, |x| < ${SPEC.deck.xAbs}: the board tops`,
       units: 'source units',
     },
@@ -528,7 +540,7 @@ const prov = {
       rotation: 'none: the source\'s +X stays the deck\'s long axis'},
     cuts: {yCutSource: SPEC.cut, jointsSource: SPEC.joints, cablesSource: SPEC.cables, trestleSource: {x: SPEC.trestle.x.map(v => (Number.isFinite(v) ? v : null)), carve: SPEC.trestle.carve.map(c => c.name)},
       rationale: [
-        'girder underside: the girders\' bottom flanges reach down to ~0.137; the cut at 0.134 keeps the whole girders and the end frame\'s lowest cross bar on the deck pieces and takes every cable, the cable tray pipe, the leg nameplate and the hose reels off them (hanging cables over walkways would hang into people\'s heads)',
+        'girder underside: the girders\' bottom flanges are at y 0.1400; the bay is cut just under them (0.1395) and the End / Trestle a little lower (0.134: under the end frame\'s lowest cross bar, so it stays whole on the End). The cuts keep the whole girders on the deck pieces and take every cable, the cable tray pipe, the pipe hangers, the leg nameplate and the hose reels off them (hanging cables over walkways would hang into people\'s heads)',
         'the rail period: the left half\'s two heavy posts (x -0.630 / -0.338: a bay of one heavy post, ~6 balusters, a diagonal brace and a sign plate); cut through their centres, the two half-posts of consecutive bays join into one post; their cross-sections (posts, girders, board top) overlay within a few mm. The board pitch (~0.066) does not divide the bay, so each joint shows one narrow board',
         'the cable festoon: the swags hang leg -> hanger (x ~-0.233) -> hanger (x ~0.232) -> leg; no swag spans the rail period, so the middle swag (the one hung between two identical clamps) is clipped from clamp centre to clamp centre and remapped onto the bay (factor in ops): the clamps land on the joint planes, the festoon connects across copies',
         'the End: the source\'s -X end (its first bay is continuous with the cooked bay); the +X end is a near mirror image',
@@ -539,16 +551,16 @@ const prov = {
     pieceComposition: {End: 'End clip', Mid: 'MidPlain (the identical decimated bay) + the decimated cable festoon', MidPlain: 'MidPlain clip', Trestle: 'Trestle clip minus its carves'},
   },
   output: {url, file: `game/public/${url}`, bytes: glb.length, sha256: sha(glb), triangles: tris, nodes: NODES, pieces: pieceRec,
-    deckY: 0, railZ: RAIL_Z, railH, girderDepth, cableDrop, trestleHeight: trestleH, midLength: r4(L), endTrestleX,
+    deckY: 0, railZ: RAIL_Z, railH, girderDepth, legCutDepth, cableDrop, trestleHeight: trestleH, midLength: r4(L), endLength: r4(endLength), endTrestleX, spanGaps,
     deckSurface: Object.fromEntries(Object.entries(deck).map(([k, d]) => [k, {y: r5(d.y), areaM2: r4(d.area)}])),
     deckRule: 'area-weighted median height of the up-facing (normal y > 0.9) triangles within |z| < 0.6 and |y| < 0.06 (the board tops between the rails)',
     railTops: {End: rails.End.map(r4), Mid: rails.Mid.map(r4)}, joints: sections,
     stretch: STRETCH,
     frames: {
-      End: 'x <= 0: the joint plane at x = 0, the abutment end toward -x; deck top y = 0, rails z = +-1; its leg stubs end at the girder underside (y = -girderDepth); the -X leg frame stands under it at x = endTrestleX',
+      End: 'x <= 0: the joint plane at x = 0, the abutment end toward -x; deck top y = 0, rails z = +-1; girders down to y = -girderDepth, its leg stubs (and the end frame) down to y = -legCutDepth; the source\'s -X leg frame (the Trestle) stood under it at x = endTrestleX, its top at y = -legCutDepth',
       Mid: `x 0 .. ${r4(L)}: tileable (consecutive copies at x += midLength join post half to post half; the cable festoon's clamps sit on both joint planes); deck top y = 0, rails z = +-1; its cables hang to y = -cableDrop`,
-      MidPlain: 'Mid without the cable festoon (nothing below y = -girderDepth): for over walkways',
-      Trestle: 'top y = 0 (meets the girder underside, i.e. placed at y = -girderDepth below a deck top), feet y = -trestleHeight, centred on x; z on the deck\'s rail mid-line (z = 0 under a deck)',
+      MidPlain: 'Mid without the cable festoon (nothing below y = -girderDepth: the girders\' bottom flanges): for over walkways',
+      Trestle: 'top y = 0, feet y = -trestleHeight, centred on x; z on the deck\'s rail mid-line (z = 0 under a deck). Under an End: at End x = endTrestleX, top at y = -legCutDepth (its legs continue the End\'s leg stubs: the source\'s own leg frame). Under a bay (a joint\'s heavy posts): top at y = -girderDepth, against the girders\' bottom flanges (its feet then stand legCutDepth - girderDepth lower relative to the deck; a runtime may stretch it along y to meet a floor)',
     }},
   textures: maps.recs,
   texturePolicy: 'the model\'s own PBR maps kept slot for slot (base colour / metallic-roughness / normal), only downsized + re-encoded: base colour 2048 px (kept: the deck boards and rust read at walking distance), metallic-roughness / normal 2048 -> 1024 px (no recolour, tint, re-texture, projection or new art); the emissive map is DROPPED (emissive factor 0): measured all but black (source.emissive)',
@@ -557,6 +569,9 @@ const prov = {
     'each bay joint shows one narrow deck board (the board pitch does not divide the rail period)',
     'Mid\'s cable festoon is the source\'s middle swag remapped along x onto the shorter bay: it hangs relatively deeper and its two clamps are narrower than in the source',
     'the End has no legs of its own below the girders (the Trestle supplies them); the abutment end\'s end posts and the end frame are the source\'s',
+    'the festoon ends at both joint planes on a clamp\'s centre: where a Mid meets a MidPlain or an End, the half clamp and the cable ends stop open at that plane',
+    'the Trestle\'s X-brace, rust and dents are the source\'s own (one diagonal is broken in the source)',
+    `with the End unstretched and the bays stretched ${STRETCH.min} .. ${STRETCH.max}, spans of ${r4(2 * endLength)} m (two Ends) and up have gaps at ${spanGaps.map(([a, b]) => `${a} .. ${b} m`).join(', ')} (n bays reach 2 * endLength + n * midLength * k): a runtime stretches the bays a little further (renders at 1.25 read fine) or the Ends too`,
   ],
   convention: 'metres, +Y up, the deck along +X, rails along z = +-1, the deck\'s walking surface at y = 0; four mesh nodes with identity transforms and one shared material; geometry in each piece\'s own local frame (see output.frames)',
   licence: TASK.licence, rebuild: `node --max-old-space-size=12000 ${SELF} [--master <the private master glb>]`,
@@ -579,18 +594,20 @@ const registry = `// GENERATED by ${SELF} (task ${TASK.id}) — do not edit.
  * Every piece is a named mesh node with an identity transform, its geometry in its own local frame: metres, +Y up, the deck along +X,
  * the deck's walking surface at y = deckY (0), the two handrail centre-lines at z = +-railZ (1.0), the handrail top railH above the deck.
  *  - End: the abutment end. The joint plane at x = 0, the end toward -x (place it at a span start; turn it 180 deg about Y for the far
- *    end). No legs or cables: its leg stubs end at the girder underside (y = -girderDepth). endTrestleX = where the source's leg frame
- *    stood under it (End-local x).
+ *    end). No cables; girders down to y = -girderDepth, its leg stubs and end frame down to y = -legCutDepth. endTrestleX = where the
+ *    source's own leg frame stood under it (End-local x; the Trestle's top then at y = -legCutDepth continues the stubs).
  *  - Mid: one tileable bay, x 0 .. length (copies at x += length join post half to post half), with a cable festoon whose clamps sit on
  *    both joint planes; its cables hang to y = -cableDrop. Over the chasm.
- *  - MidPlain: the same bay with nothing below the girder underside (no cables): over walkways. Mixes with Mid bay for bay.
- *  - Trestle: a leg frame. Top at y = 0 (meets the girder underside: place at y = deck top - girderDepth), feet at y = -height,
- *    centred on x, z on the deck's mid-line.
- * stretch: the range a runtime may stretch Mid / MidPlain along x to fit a span (checked on assembled renders).
+ *  - MidPlain: the same bay with nothing below the girders' bottom flanges (y = -girderDepth; no cables): over walkways. Mixes with Mid
+ *    bay for bay.
+ *  - Trestle: a leg frame. Top at y = 0, feet at y = -height, centred on x, z on the deck's mid-line. Under an End at endTrestleX: top at
+ *    deck - legCutDepth; under a bay joint: top at deck - girderDepth (against the girders' flanges).
+ * stretch: the range a runtime may stretch Mid / MidPlain along x to fit a span (checked on assembled renders). A span of n bays at
+ * one stretch k measures 2 * End.length + n * Mid.length * k; the gaps that range leaves are listed in the provenance (output.spanGaps).
  */
 export interface MarketBridgePiece {
   node: string; tris: number; min: readonly [number, number, number]; max: readonly [number, number, number];
-  /** Mid / MidPlain: the tiling period along x (m). */
+  /** Mid / MidPlain: the tiling period along x (m). End: its run from the joint plane (x 0) to the abutment end (x -length). */
   length?: number;
   /** Trestle: top (y 0) to feet (m). */
   height?: number;
@@ -598,15 +615,15 @@ export interface MarketBridgePiece {
 export const MARKET_BRIDGE_KIT = {
   key: '${ID}', url: '${url}', bytes: ${glb.length}, sha256: '${sha(glb)}',
   pieces: {
-${pieceTs('End')}
+${pieceTs('End', `, length: ${r4(endLength)}`)}
 ${pieceTs('Mid', `, length: ${r4(L)}`)}
 ${pieceTs('MidPlain', `, length: ${r4(L)}`)}
 ${pieceTs('Trestle', `, height: ${trestleH}`)}
   },
-  deckY: 0, railZ: ${RAIL_Z}, railH: ${railH}, girderDepth: ${girderDepth}, cableDrop: ${cableDrop}, endTrestleX: ${endTrestleX},
+  deckY: 0, railZ: ${RAIL_Z}, railH: ${railH}, girderDepth: ${girderDepth}, legCutDepth: ${legCutDepth}, cableDrop: ${cableDrop}, endTrestleX: ${endTrestleX},
   stretch: {min: ${STRETCH.min}, max: ${STRETCH.max}},
 } as const satisfies {key: string; url: string; bytes: number; sha256: string; pieces: Readonly<Record<'End' | 'Mid' | 'MidPlain' | 'Trestle', MarketBridgePiece>>;
-  deckY: number; railZ: number; railH: number; girderDepth: number; cableDrop: number; endTrestleX: number; stretch: {min: number; max: number}};
+  deckY: number; railZ: number; railH: number; girderDepth: number; legCutDepth: number; cableDrop: number; endTrestleX: number; stretch: {min: number; max: number}};
 `;
 
 const credSection = [CREDITS_BEGIN, '## The Survivor Market bridge kit', '',

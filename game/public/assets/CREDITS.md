@@ -805,6 +805,14 @@ Generated for this project from one Codex INITIAL design image each (the owned C
 - `assets/models/market-corpse-chute.glb` — the corpse buyer's floor body chute: a square welded steel hopper (riveted sloping walls, a rolled rim lip with a hazard band, a dark shaft below the throat), its strap-hinged lid standing open along the back edge; bolted down at the four corners (Meshy task 01a1d826-0dcd-7428-8cc9-24b345c650fd).
 <!-- END corpse-shop-20261114 -->
 
+<!-- BEGIN market-bridge-kit-20261116 (build-market-bridge-kit.mjs) -->
+## The Survivor Market bridge kit
+
+A user-uploaded textured model of a rusty industrial walkway bridge (the user supplied and authorized it for the Survivor Market's crevice layout, with permission to cut its legs and adapt pieces; the upload file name mentions Meshy, but the generator, account, settings and licence are NOT verified and no clearance is implied). The game ships modular runtime derivatives cut from it (End / Mid / MidPlain / Trestle: exact plane clips, the middle cable swag remapped onto one bay, seam-preserving decimation) with the model's own PBR maps downsized and re-encoded (base colour 2048 px, metallic-roughness / normal 1024 px; its all-but-black emissive map dropped). Task studio-survivor-market-crevice-20261116-074419-01. No generation. The original stays outside the repository.
+
+- `assets/models/market-bridge-kit.glb` — the Survivor Market's modular walkway-bridge kit (an abutment end, a tileable bay with and without its cable festoon, a leg frame); runtime derivative by `tools/asset-pipeline/props/build-market-bridge-kit.mjs` (provenance: `assets/derivatives/market-bridge-kit.json`).
+<!-- END market-bridge-kit-20261116 -->
+
 <!-- BEGIN flamethrower-fire-audio-20261114 (fire-build.mjs) -->
 ## Flamethrower and fire audio (jet ignition, roar loop, cut-off, fire bed loop, catching fire, collapse, ember crackle)
 Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the flamethrower
