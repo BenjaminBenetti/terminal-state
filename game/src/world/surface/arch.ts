@@ -14,8 +14,11 @@
 //    frames + sills (NO glass), door frames, boarded doors, fascia signs (runtime text atlas), cornices, string courses, copings,
 //    parapets, roof decks, the step faces of ruined tops, scorch, fire escapes, the cordon coping, the command tent (canvas walls,
 //    pitched roof, guy lines, the door flap as its own object: AIR's open / closed seam, setTentFlap).
-// Geometry merges per (material, 48 m chunk) on level 0 (the culler's distance + frustum work per chunk); roof-top surfaces stand on
-// SOLID columns (no light-field slot there) and use the outdoor look (lookSky.ts: overcast hemisphere + scene fog).
+// Geometry merges per (material, 96 m cell: SURFACE_CHUNK) on level 0 (the culler's distance + frustum work per cell); roof-top
+// surfaces stand on SOLID columns (no light-field slot there) and use the outdoor look (lookSky.ts: overcast hemisphere + scene fog).
+// Follow-up 1 (draws): the facade wall families and the trims draw through their family's SHARED tinted material (archMaterials.ts
+// surfaceTintFamily: one material per family, the building's tint in a 'color' attribute), so a 96 m cell holds one mesh per family —
+// LOOK's own parts and the builder's walls (coarsenSurfaceArch) alike — instead of one per building tint.
 
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
@@ -24,9 +27,9 @@ import type {Level} from '../../gen/levels';
 import type {Area, Side, StationLayout} from '../../gen/stationTypes';
 import type {BuiltFace} from '../levelGeometry';
 import type {WorldMaterials} from '../materials';
-import type {BuildSteps} from '../../core/pacedBuild';
+import {drainSync, type BuildSteps} from '../../core/pacedBuild';
 import {GROUND, GROUND_KEYS, LOOK_TUNE, OWNER, SIDE_NORMAL, entranceFloor, sideOfPlane, streetEndSpans, surfaceLookPlan, topAt, type BuildingLook, type FacadeHole, type SurfaceLookPlan, type TopSeg} from './archPlan';
-import {interiorKeys, surfaceArchMaterial, surfaceArchScale, surfaceSignMaterial, isSurfaceKey} from './archMaterials';
+import {interiorKeys, surfaceArchMaterial, surfaceArchScale, surfaceSignMaterial, surfaceTintFamily, surfaceTintOf, isSurfaceKey} from './archMaterials';
 import {outdoorFlatMaterial} from './lookSky';
 
 /**
@@ -36,12 +39,31 @@ import {outdoorFlatMaterial} from './lookSky';
  */
 export const SURFACE_CHUNK = 96;
 
-/** A quad / triangle accumulator (position, normal, uv; 16- or 32-bit index). */
-class Quads {
+/** Where a part's polygons go: an accumulator, or a tinted family's accumulator seen with one member's tint (TintView). */
+interface QuadSink {
+  quad(p: readonly (readonly number[])[], n: readonly number[], uv: readonly (readonly number[])[]): void;
+  quadFacing(p: readonly (readonly number[])[], facing: readonly number[], n: readonly number[], uv: readonly (readonly number[])[]): void;
+  triFacing(p: readonly (readonly number[])[], facing: readonly number[], n: readonly number[], uv: readonly (readonly number[])[]): void;
+  tri(p: readonly (readonly number[])[], n: readonly number[], uv: readonly (readonly number[])[]): void;
+}
+
+const WHITE: readonly number[] = [1, 1, 1];
+
+/** A quad / triangle accumulator (position, normal, uv, + the linear tint 'color' of a tinted family; 16- or 32-bit index). */
+class Quads implements QuadSink {
   pos: number[] = []; nor: number[] = []; uv: number[] = []; idx: number[] = [];
+  /** A tinted family's per-vertex linear tint (the 'color' attribute); null for every other accumulator. */
+  readonly col: number[] | null;
+  /** The tint the next vertices take (a TintView sets it per call). */
+  tint: readonly number[] = WHITE;
+  constructor(tinted = false) { this.col = tinted ? [] : null; }
+  vert(p: readonly number[], n: readonly number[], uv: readonly number[]): void {
+    this.pos.push(p[0], p[1], p[2]); this.nor.push(n[0], n[1], n[2]); this.uv.push(uv[0], uv[1]);
+    if (this.col) this.col.push(this.tint[0], this.tint[1], this.tint[2]);
+  }
   quad(p: readonly (readonly number[])[], n: readonly number[], uv: readonly (readonly number[])[]): void {
     const b = this.pos.length / 3;
-    for (let i = 0; i < 4; i++) { this.pos.push(p[i][0], p[i][1], p[i][2]); this.nor.push(n[0], n[1], n[2]); this.uv.push(uv[i][0], uv[i][1]); }
+    for (let i = 0; i < 4; i++) this.vert(p[i], n, uv[i]);
     this.idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
   }
   /** A quad wound to face `facing` (its geometric normal), with attribute normal `n` (the light-field lookup direction). */
@@ -55,7 +77,7 @@ class Quads {
   }
   tri(p: readonly (readonly number[])[], n: readonly number[], uv: readonly (readonly number[])[]): void {
     const b = this.pos.length / 3;
-    for (let i = 0; i < 3; i++) { this.pos.push(p[i][0], p[i][1], p[i][2]); this.nor.push(n[0], n[1], n[2]); this.uv.push(uv[i][0], uv[i][1]); }
+    for (let i = 0; i < 3; i++) this.vert(p[i], n, uv[i]);
     this.idx.push(b, b + 1, b + 2);
   }
   geometry(): THREE.BufferGeometry | null {
@@ -64,11 +86,21 @@ class Quads {
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
+    if (this.col) g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
     g.setIndex(this.pos.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(this.idx, 1) : new THREE.Uint16BufferAttribute(this.idx, 1));
     g.computeBoundingSphere();
     g.computeBoundingBox();
     return g;
   }
+}
+
+/** A tinted family's accumulator seen with one member key's tint (every polygon added through it carries that tint). */
+class TintView implements QuadSink {
+  constructor(private readonly q: Quads, private readonly t: readonly number[]) {}
+  quad(p: readonly (readonly number[])[], n: readonly number[], uv: readonly (readonly number[])[]): void { this.q.tint = this.t; this.q.quad(p, n, uv); }
+  quadFacing(p: readonly (readonly number[])[], f: readonly number[], n: readonly number[], uv: readonly (readonly number[])[]): void { this.q.tint = this.t; this.q.quadFacing(p, f, n, uv); }
+  triFacing(p: readonly (readonly number[])[], f: readonly number[], n: readonly number[], uv: readonly (readonly number[])[]): void { this.q.tint = this.t; this.q.triFacing(p, f, n, uv); }
+  tri(p: readonly (readonly number[])[], n: readonly number[], uv: readonly (readonly number[])[]): void { this.q.tint = this.t; this.q.tri(p, n, uv); }
 }
 
 type Hole2 = {s0: number; s1: number; y0: number; y1: number};
@@ -134,11 +166,15 @@ export interface SurfaceArchStats {
   meshes: number; triangles: number; buildMs: number;
   /** The builder's own district architecture meshes before / after coarsenSurfaceArch (its 48 m chunks -> SURFACE_CHUNK cells). */
   builderMeshesBefore: number; builderMeshes: number;
+  /** Of the builder's meshes before: those moved onto their family's shared tinted material (a 'color' attribute added). */
+  builderTinted: number;
+  /** The builder's door-frame trim meshes of the trim family before / after coarsenTrims. */
+  trimMeshesBefore: number; trimMeshes: number;
 }
 
 export class SurfaceArch {
   readonly plan: SurfaceLookPlan;
-  readonly stats: SurfaceArchStats = {faces: {}, holes: 0, airHoles: 0, signs: 0, escapes: 0, decks: 0, meshes: 0, triangles: 0, buildMs: 0, builderMeshesBefore: 0, builderMeshes: 0};
+  readonly stats: SurfaceArchStats = {faces: {}, holes: 0, airHoles: 0, signs: 0, escapes: 0, decks: 0, meshes: 0, triangles: 0, buildMs: 0, builderMeshesBefore: 0, builderMeshes: 0, builderTinted: 0, trimMeshesBefore: 0, trimMeshes: 0};
   /** The meshes this arch built (QA / tests). */
   readonly meshes: THREE.Mesh[] = [];
   /** The tent's door flap (AIR's open / closed seam: setTentFlap) and its hinge pivot. */
@@ -252,6 +288,19 @@ export class SurfaceArch {
     return surfaceArchMaterial(this.mats, key);
   }
   meshName(key: string): string | undefined { return isSurfaceKey(key) ? `surface-arch-${key}` : undefined; }
+  private readonly tints = new Map<string, readonly number[]>();
+  /** The linear tint of a family member key (its own material's colour), memoized; white when it has none. */
+  private tint(key: string): readonly number[] {
+    let t = this.tints.get(key);
+    if (!t) { const c = surfaceTintOf(this.mats, key); this.tints.set(key, (t = c ? [c.r, c.g, c.b] : WHITE)); }
+    return t;
+  }
+  /** A builder mesh's material, when it is a tinted family member: the family's shared material and the member's tint; else null. */
+  private tintOfMaterial(m: THREE.Material): {material: THREE.Material; color: THREE.Color} | null {
+    const key = m.userData.surfaceArch as string | undefined, fam = key ? surfaceTintFamily(key) : null;
+    const shared = fam ? this.material(fam) : undefined, color = (m as THREE.MeshStandardMaterial).color;
+    return shared && color ? {material: shared, color} : null;
+  }
   /** The finish resolver's hooks (world/finishAt.ts): floorKey / ceilKey above. */
 
   /** Wall finishes + clipping + window cuts (see module doc). */
@@ -338,11 +387,13 @@ export class SurfaceArch {
   *buildSteps(group: THREE.Group): BuildSteps<void> {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     const acc = new Map<string, {key: string; q: Quads}>();
-    const A = (key: string, x: number, z: number): Quads => {
-      const k = `${key}@${Math.floor(x / SURFACE_CHUNK)},${Math.floor(z / SURFACE_CHUNK)}`;
+    // a family member's parts go to its family's accumulator of the cell, carrying the member's tint
+    const A = (key: string, x: number, z: number): QuadSink => {
+      const fam = surfaceTintFamily(key), ak = fam ?? key;
+      const k = `${ak}@${Math.floor(x / SURFACE_CHUNK)},${Math.floor(z / SURFACE_CHUNK)}`;
       let e = acc.get(k);
-      if (!e) acc.set(k, (e = {key, q: new Quads()}));
-      return e.q;
+      if (!e) acc.set(k, (e = {key: ak, q: new Quads(fam !== null)}));
+      return fam ? new TintView(e.q, this.tint(key)) : e.q;
     };
     const P = this.plan;
     // the sign atlas (runtime text; browser only)
@@ -357,9 +408,14 @@ export class SurfaceArch {
     try { this.buildTent(group); } catch (e) { console.warn('surface arch: tent skipped', e); }
     this.buildCordonCoping(A);
     yield 'world.surface.coarsen';
-    try { const c = coarsenSurfaceArch(group); this.stats.builderMeshesBefore = c.before; this.stats.builderMeshes = c.after; } catch (e) { console.warn('surface arch: coarsening skipped', e); }
+    try {
+      const c = yield* coarsenSurfaceArchSteps(group, SURFACE_CHUNK, m => this.tintOfMaterial(m));
+      this.stats.builderMeshesBefore = c.before; this.stats.builderMeshes = c.after; this.stats.builderTinted = c.tinted;
+    } catch (e) { console.warn('surface arch: coarsening skipped', e); }
     yield 'world.surface.meshes';
+    let made = 0;
     for (const [name, e] of acc) {
+      if (++made % 32 === 0) yield 'world.surface.meshes';
       const geo = e.q.geometry();
       if (!geo) continue;
       const mat = e.key === 'surface-sign' ? surfaceSignMaterial(this.mats, atlas?.texture ?? null) : this.material(e.key);
@@ -378,7 +434,7 @@ export class SurfaceArch {
     this.stats.buildMs = typeof performance !== 'undefined' ? performance.now() - t0 : 0;
   }
 
-  private buildBuilding(bl: BuildingLook, A: (key: string, x: number, z: number) => Quads, atlas: SignAtlas | null): void {
+  private buildBuilding(bl: BuildingLook, A: (key: string, x: number, z: number) => QuadSink, atlas: SignAtlas | null): void {
     const st = bl.style, trim = bl.trimKey, fac = bl.key;
     const sc = surfaceArchScale(fac) ?? {u: 1, v: 1};
     for (const sd of bl.sides) {
@@ -543,7 +599,7 @@ export class SurfaceArch {
   }
 
   /** The cordon wall's coping and a top rail of the wall (the SOLID ring's inner edge). */
-  private buildCordonCoping(A: (key: string, x: number, z: number) => Quads): void {
+  private buildCordonCoping(A: (key: string, x: number, z: number) => QuadSink): void {
     const r = this.plan.inner, h = LOOK_TUNE.cordonH;
     for (const [x0, x1, z0, z1] of [[r.x0, r.x1, r.z0 - 0.5, r.z0], [r.x0, r.x1, r.z1, r.z1 + 0.5], [r.x0 - 0.5, r.x0, r.z0, r.z1], [r.x1, r.x1 + 0.5, r.z0, r.z1]]) {
       for (const [xa, xb] of spans(x0, x1)) for (const [za, zb] of spans(z0, z1)) boxQuads(A('surface-coping', (xa + xb) / 2, (za + zb) / 2), xa - 0.05, xb + 0.05, h, h + 0.18, za - 0.05, zb + 0.05);
@@ -556,9 +612,10 @@ export class SurfaceArch {
     if (!T) return;
     const r = T.rect, eave = T.eave, ridge = T.ridge;
     const canvas = this.material('surface-canvas');
-    const rope = this.material('surface-trim-3a3a2c');
+    const rope = this.material('surface-trim-tint'); // (the trim family's shared material; the rope's tint in its 'color')
     if (!canvas || !rope) return;
-    const q = new Quads(), ropes = new Quads();
+    const q = new Quads(), ropes = new Quads(true);
+    ropes.tint = this.tint('surface-trim-3a3a2c');
     const sc = surfaceArchScale('surface-canvas') ?? {u: 1, v: 1};
     const uvOf = (p: number[]) => [(p[0] + p[2]) / sc.u, p[1] / sc.v];
     const two = (p: number[][], nrm: number[]) => {
@@ -642,6 +699,17 @@ export class SurfaceArch {
     f.updateMatrixWorld(true);
   }
 
+  /**
+   * The builder's door-frame trims of the trim family ('trim-…' meshes, merged by the builder after the arch's build: builder.ts
+   * world.trimMerge) onto the family's shared material, merged per SURFACE_CHUNK cell (follow-up 1: draws). Other trims untouched.
+   */
+  coarsenTrims(group: THREE.Group): void {
+    try {
+      const c = coarsenSurfaceArch(group, SURFACE_CHUNK, m => this.tintOfMaterial(m), {prefix: 'trim-', tintedOnly: true});
+      this.stats.trimMeshesBefore = c.before; this.stats.trimMeshes = c.after;
+    } catch (e) { console.warn('surface arch: trim coarsening skipped', e); }
+  }
+
   /** Releases what the arch owns beyond the world group's geometry (the sign atlas). */
   dispose(): void {
     for (const r of this.owned.splice(0)) r.dispose();
@@ -665,17 +733,44 @@ function boards(face: (key: string, s0: number, s1: number, y0: number, y1: numb
  * the draw calls (every ground finish in ~120 chunks). Only meshes with the same material, level (+ tagged storeys), attribute layout
  * and 96 m cell merge; the builder's meshes carry world positions (no transform), so the merge is a concatenation. Mesh state
  * (level tags, shadows, render order, layers) is the first piece's. LOOK's own facade parts (userData.surfaceArch) are not touched.
+ * `tint` (follow-up 1): a mesh whose material is a tinted family member moves onto the family's shared material first, its tint
+ * written into a 'color' attribute (Float32 x 3, every vertex: the member material's colour), so a cell's walls of one family merge
+ * across buildings. `o.prefix`: the mesh names taken ('surface-arch-': the builder's architecture; 'trim-' + `tintedOnly`: its door-
+ * frame trims of the trim family, SurfaceArch.coarsenTrims).
  */
-export function coarsenSurfaceArch(group: THREE.Group, chunk = SURFACE_CHUNK): {before: number; after: number} {
+export function coarsenSurfaceArch(
+  group: THREE.Group, chunk = SURFACE_CHUNK, tint?: (m: THREE.Material) => {material: THREE.Material; color: THREE.Color} | null,
+  o: {prefix?: string; tintedOnly?: boolean} = {},
+): {before: number; after: number; tinted: number} {
+  return drainSync(coarsenSurfaceArchSteps(group, chunk, tint, o));
+}
+
+/** coarsenSurfaceArch as build steps (the arch's build: ~50-70 ms on a real district). */
+export function* coarsenSurfaceArchSteps(
+  group: THREE.Group, chunk = SURFACE_CHUNK, tint?: (m: THREE.Material) => {material: THREE.Material; color: THREE.Color} | null,
+  o: {prefix?: string; tintedOnly?: boolean} = {},
+): BuildSteps<{before: number; after: number; tinted: number}> {
   const lists = new Map<string, THREE.Mesh[]>();
   const c = new THREE.Vector3();
-  let before = 0;
-  for (const o of group.children) {
-    const m = o as THREE.Mesh;
-    if (!m.isMesh || (m as unknown as THREE.InstancedMesh).isInstancedMesh || !m.name.startsWith('surface-arch-') || m.userData.surfaceArch !== undefined) continue;
+  const prefix = o.prefix ?? 'surface-arch-';
+  let before = 0, tinted = 0, seen = 0;
+  for (const ob of group.children) {
+    if (++seen % 256 === 0) yield 'world.surface.coarsen';
+    const m = ob as THREE.Mesh;
+    if (!m.isMesh || (m as unknown as THREE.InstancedMesh).isInstancedMesh || !m.name.startsWith(prefix) || m.userData.surfaceArch !== undefined) continue;
     const g = m.geometry;
     if (Array.isArray(m.material) || g.groups.length || !m.matrix.equals(IDENTITY) || m.morphTargetInfluences) continue;
+    const t = tint && !g.attributes.color ? tint(m.material as THREE.Material) : null;
+    if (o.tintedOnly && !t) continue;
     before++;
+    if (t) {
+      const nv = g.attributes.position.count, a = new Float32Array(nv * 3);
+      for (let i = 0; i < nv; i++) { a[3 * i] = t.color.r; a[3 * i + 1] = t.color.g; a[3 * i + 2] = t.color.b; }
+      g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+      m.material = t.material;
+      m.name = `${prefix}${t.material.name}`;
+      tinted++;
+    }
     if (!g.boundingBox) g.computeBoundingBox();
     g.boundingBox!.getCenter(c);
     const attrs = Object.entries(g.attributes).map(([k, a]) => `${k}:${a.itemSize}:${a.normalized ? 1 : 0}:${(a as THREE.BufferAttribute).array?.constructor.name}`).sort().join(',');
@@ -688,6 +783,7 @@ export function coarsenSurfaceArch(group: THREE.Group, chunk = SURFACE_CHUNK): {
   for (const list of lists.values()) {
     after++;
     if (list.length < 2) continue;
+    if (after % 16 === 0) yield 'world.surface.coarsen';
     const merged = mergeGeometries(list.map(m => m.geometry), false);
     if (!merged) { after += list.length - 1; continue; }
     merged.computeBoundingSphere();
@@ -701,7 +797,7 @@ export function coarsenSurfaceArch(group: THREE.Group, chunk = SURFACE_CHUNK): {
     group.add(mesh);
     for (const m of list) { m.removeFromParent(); m.geometry.dispose(); }
   }
-  return {before, after};
+  return {before, after, tinted};
 }
 const IDENTITY = new THREE.Matrix4();
 
@@ -713,7 +809,7 @@ function spans(a: number, b: number): [number, number][] {
 }
 
 /** An axis-aligned box's six faces (outward normals, world-metre UVs). */
-export function boxQuads(q: Quads, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number): void {
+export function boxQuads(q: QuadSink, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number): void {
   if (x1 - x0 < 1e-5 || y1 - y0 < 1e-5 || z1 - z0 < 1e-5) return;
   q.quad([[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]], [0, 1, 0], [[x0, -z1], [x1, -z1], [x1, -z0], [x0, -z0]]);
   q.quad([[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]], [0, -1, 0], [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]);
@@ -734,7 +830,7 @@ function orientedBar(q: Quads, a: readonly number[], b: readonly number[], t: nu
   g.applyMatrix4(m);
   const p = g.attributes.position, nn = g.attributes.normal, ix = g.index!;
   const base = q.pos.length / 3;
-  for (let i = 0; i < p.count; i++) { q.pos.push(p.getX(i), p.getY(i), p.getZ(i)); q.nor.push(nn.getX(i), nn.getY(i), nn.getZ(i)); q.uv.push(0, i / p.count); }
+  for (let i = 0; i < p.count; i++) q.vert([p.getX(i), p.getY(i), p.getZ(i)], [nn.getX(i), nn.getY(i), nn.getZ(i)], [0, i / p.count]);
   for (let i = 0; i < ix.count; i++) q.idx.push(base + ix.getX(i));
   g.dispose();
 }

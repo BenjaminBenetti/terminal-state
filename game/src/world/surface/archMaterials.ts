@@ -12,12 +12,15 @@
 // with the district's asset family); a released material leaves the cache. Office-registry / shape materials are shared (not owned).
 
 import * as THREE from 'three';
+import {materialColor, vec4, vertexColor} from 'three/tsl';
 import {SKYWAYS_ARCH_TEXTURES} from '../../assets/skywaysArchTextures.generated';
 import {REACTOR_TEXTURES as KIT_TEXTURES} from '../../assets/reactorKit.generated';
 import {REACTOR_X_TEXTURES} from '../../assets/reactorExpansionKit.generated';
 import {OFFICE_TEXTURES} from '../../assets/officeAssets';
 import {SurfaceNodeMaterial, surfaceMaterial, thinTrim, worldMapped, type WorldMaterials} from '../materials';
 import {applyDecay, type DecayProfile} from '../decay';
+import {addNodeHook} from '../../render/nodeHooks';
+import {asColor, sharedStage, skipInShadowPass} from '../surfaceNodes';
 import {LOWER, OFFICE_CEIL_SPAN, OFFICE_FLOOR_SPAN, OFFICE_WALL_SPAN, ceilingMaterial, floorMaterial, wallMaterial, type CeilingKind, type FloorKind} from '../officeArch';
 import {shapeMaterial} from '../shapeMaterials';
 import {INTERIOR_LOOKS, type FacadeWall, type InteriorFamily} from './archStyles';
@@ -140,6 +143,59 @@ const decal = <M extends THREE.Material>(m: M, bias = 2): M => {
 /** Facade wall material families -> (texture set, reference tone of its first tint). */
 const FACADE_REF: Readonly<Record<FacadeWall, number>> = {brick: 0xffffff, concrete: 0xffffff, stone: 0xfff4e6, metal: 0xb5c4ba, stucco: 0, curtain: 0, canvas: 0};
 
+/**
+ * Follow-up 1 (lane LOOK; draws): THE FACADE FAMILIES' SHARED TINTED MATERIALS. Every 'surface-facade-<wall>-<hex>' material of one wall
+ * family (brick / concrete / stone / metal / curtain / canvas) and every 'surface-trim-<hex>' differs from the others of its family ONLY
+ * by its colour factor (one building's tint). The family's shared material ('surface-facade-<wall>-tint' / 'surface-trim-tint') is the
+ * same factory material with colour 1 and this TINT STAGE first in its colour chain (order 10: before the world mapping 100, the decay
+ * 200, damage 300), reading the part's linear tint from the geometry's 'color' attribute (Float32 x 3 = the member key's own colour):
+ * (1 x map) x tint = colour x map, so every later stage (the world-mapping shade, decay's absolute grime / streak mixes, craters) gets
+ * the value it got before, on both backends. `vertexColors` stays false: three's own vertex-colour multiply runs AFTER the whole chain
+ * (it would tint decay's grime). Skipped in the shadow pass (no colour there). No uniform is added (the tint is an attribute).
+ * The member keys' own materials stay what the enhanced bake's surface albedo reads (BuiltWorld.drawn.material): unchanged.
+ * Stucco ('surface-facade-stucco-<hex>') is NOT a family: it is the office wall program, whose graphs read the paint colours themselves.
+ */
+export const SURFACE_TINT_HOOK = 'surface-tint';
+export const SURFACE_TINT_ORDER = 10;
+const tintStage = sharedStage(prev => {
+  const c = asColor(prev, materialColor);
+  return skipInShadowPass(vec4(c.rgb.mul(vertexColor().rgb), c.a), c, 'vec4');
+});
+const TINT_WALLS = 'brick|concrete|stone|metal|curtain|canvas';
+const TINT_MEMBER = new RegExp(`^surface-facade-(${TINT_WALLS})-[0-9a-f]{6}$`);
+const TINT_FAMILY = new RegExp(`^surface-(facade-(${TINT_WALLS})|trim)-tint$`);
+
+/** The shared tinted family of a member key ('surface-facade-<wall>-tint' / 'surface-trim-tint'); null: not tinted (stucco, the rest). */
+export function surfaceTintFamily(key: string): string | null {
+  const f = TINT_MEMBER.exec(key);
+  if (f) return `surface-facade-${f[1]}-tint`;
+  return key.startsWith('surface-trim-') && key !== 'surface-trim-tint' ? 'surface-trim-tint' : null;
+}
+/** Whether `key` is a family's shared tinted material key. */
+export const isSurfaceTintFamily = (key: string): boolean => TINT_FAMILY.test(key);
+/** The linear tint of a member key (its own material's colour factor: the value its parts carry in 'color'); null: not a member. */
+export function surfaceTintOf(mats: WorldMaterials, key: string): THREE.Color | null {
+  if (!surfaceTintFamily(key)) return null;
+  return (surfaceArchMaterial(mats, key) as THREE.MeshStandardMaterial | undefined)?.color ?? null;
+}
+
+const trimMaterial = (hex: number): SurfaceNodeMaterial => {
+  const t = thinTrim(surfaceMaterial('paintedSteel', {roughness: 1, metalness: 0.2}, {grime: [0.2, 0.4], macro: 0.1}));
+  t.color.copy(lin(hex));
+  return t;
+};
+
+/** A family's shared material: its members' factory material (they differ only by colour) with colour 1 and the tint stage. */
+function tintFamilyMaterial(fam: string): SurfaceNodeMaterial | null {
+  const wall = TINT_FAMILY.exec(fam)?.[2];
+  const m = (wall ? facadeMaterial(`surface-facade-${wall}-ffffff`) : trimMaterial(0xffffff)) as SurfaceNodeMaterial | null;
+  if (!m) return null;
+  m.color.setRGB(1, 1, 1);
+  addNodeHook(m, {key: SURFACE_TINT_HOOK, stage: 'color', order: SURFACE_TINT_ORDER, fn: tintStage});
+  m.userData.surfaceTint = fam;
+  return m;
+}
+
 /** Every key prefix this module answers (tests). */
 export const SURFACE_KEY_PREFIX = 'surface-';
 export const isSurfaceKey = (k: string): boolean => k.startsWith(SURFACE_KEY_PREFIX);
@@ -206,12 +262,9 @@ export function surfaceArchMaterial(mats: WorldMaterials, key: string): THREE.Ma
   else if (key === 'surface-void') m = new SurfaceNodeMaterial({color: 0x0b0b0c, roughness: 1, metalness: 0});
   else if (key === 'surface-canvas') m = mapped('fabric', rel(0x6b6a4a, 0x8a8a8a), 1) ?? fallback('paintedPanel', 0x5e5d42);
   else if (key === 'surface-sign') m = new SurfaceNodeMaterial({color: 0xffffff, roughness: 0.8, metalness: 0});
-  else if (key.startsWith('surface-trim-')) {
-    const hex = parseInt(key.slice('surface-trim-'.length), 16) || 0x303030;
-    const t = thinTrim(surfaceMaterial('paintedSteel', {roughness: 1, metalness: 0.2}, {grime: [0.2, 0.4], macro: 0.1}));
-    t.color.copy(lin(hex));
-    m = t;
-  } else if (key.startsWith('surface-facade-')) m = facadeMaterial(key);
+  else if (isSurfaceTintFamily(key)) m = tintFamilyMaterial(key);
+  else if (key.startsWith('surface-trim-')) m = trimMaterial(parseInt(key.slice('surface-trim-'.length), 16) || 0x303030);
+  else if (key.startsWith('surface-facade-')) m = facadeMaterial(key);
   if (!m) return undefined;
   if (key.startsWith('surface-facade-')) applyDecay(m, key.includes('-metal-') ? DECAY.metal : DECAY.facade);
   return adopt(mats, key, m);
