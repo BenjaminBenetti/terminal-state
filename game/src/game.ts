@@ -8,7 +8,10 @@ import {CELL, PathFinder, nearestWalkable} from './gen/grid';
 import {BODY_CLEAR, levelsOf, type Levels} from './gen/levels';
 import type {StationLayout} from './gen/station';
 import {PropModelLibrary, loadAssets, type AssetBundle} from './assets/loader';
-import {foreignTo, levelWorkingSet, selectLevelKeys} from './assets/levelAssets'; // Task track3-eaton-centre-20261031 (lane PACKAGE): level-scoped lazy assets
+import {foreignTo, levelWorkingSet, selectLevelKeys} from './assets/levelAssets';
+import {SURFACE_LANE, hostKeyOf, isSurfaceHost, isSurfaceKey, sectionAssetLevel, surfaceKeyOf, surfaceVersionFor} from './gen/surface/surfaceRun';
+import {abortCrossers, arriveCrossers, departCrossers, surfaceCrossRefusal, surfaceCrossers, type SurfaceCrosser, type SurfaceCrossGate, type SurfaceCrossRefusal, type SurfaceCrossResult} from './world/surface/crossing'; // (lane ACCESS: Game.crossSurface)
+import {installSurfaceRun} from './world/surface/install'; // task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN // Task track3-eaton-centre-20261031 (lane PACKAGE): level-scoped lazy assets
 import {adoptStationName} from './campaign/stationName';
 import {LevelResources} from './assets/levelResources'; // lane PACKAGE (track3): level textures / GPU resources released with their level
 import {P7_FILES, dropUnloadedP7, p7ModelKeysFor} from './gen/props07';
@@ -131,6 +134,7 @@ import {installGas, type GasSystem} from './world/gas/system'; // Task gasmask-b
 import {bunkerGasSource} from './world/gas/zones'; // task studio-bunker-level-20261109-072224-01: the Bunker's local gas leaks (a gas zone world)
 import {BUNKER_KIT_MODEL_FILES, bunkerModelKindKeysFor} from './gen/bunker/bunkerKinds'; // (follow-up) the Bunker's model-backed flavour kinds (lazy)
 import {CORPSE_DEN_MODEL_FILES, corpseDenModelKeysFor} from './gen/market/v4/denKinds'; // task studio-corpse-market-shop-20261114-031614-01: the Market den's chute / booth (lazy, level-only market-*)
+import {SURFACE_KIT_MODEL_FILES, surfaceKitModelKeysFor} from './gen/surface/kinds'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT): the Surface Run wrecks' Skyways models (lazy; the 'surface' family may load skyways-*)
 import {installCough, type CoughFeedback} from './audio/cough'; // Task gas-mask-roof-feedback-20261030: the player coughs while gas hurts them
 // task studio-reactor-glowing-zombies-20261115-013245-01: the Reactor's irradiated zombies — green glowing skin, their green light, dose + Geiger
 import {installIrradiation, type Irradiation} from './world/irradiation';
@@ -217,6 +221,7 @@ import {installVomit, type VomitAction} from './player/vomit'; // task studio-ma
 import {installMarketWares, type MarketWares} from './market/wares/wares'; // task studio-market-rework-20261108-074144-01 (lane WARES): the stalls' owned stock on display, the red Steal
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {installSkywaysTrunk} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): the Skyways car's 16-slot trunk
+import {installSurfaceTruck} from './world/surface/truckStorage'; // task surface-run-opus-rebuild-20261116 (lane TRUCK): the Surface Run truck (vehicle definition + storage compartments)
 import {installTrainRide, type TrainRide} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): the moving train (ride mode, transit tunnel)
 import {installRidePortals, type RidePortalRuntime} from './world/ridePortalRuntime'; // task studio-perf-ao-train-continuity-20261110-022206-01: the ride portals (gates / breaches) the moving train uses
 import {installTrainCargo, type TrainCargoSystem} from './world/trainCargo'; // task train-loose-cargo: every loose item / bag aboard travels with the train
@@ -389,7 +394,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES, ...COSPLAY_MODEL_FILES, ...SKYWAYS_KITCHEN_MODEL_FILES, ...SKYWAYS_ADDON_MODEL_FILES, ...SKYWAYS_DEST_MODEL_FILES, ...MARKET_HUMAN_MODEL_FILES, ...MARKET_BRIDGE_MODEL_FILES, ...SHELF_JUNK_MODEL_FILES, ...BUNKER_KIT_MODEL_FILES, ...CORPSE_DEN_MODEL_FILES, ...CORPSE_BUYER_MODEL_FILES}); // (task studio-food-shelf-production-20261109-002816-01: + the shelf-junk atlas, lazy) // (survivor market, lane HUMANS: + the friendly cast, level-only market-*) (skyways destinations, lane LANDMARKS: + the destination kit's built models, level-only skyways-d-*) (skyways lane ADDON: + the convention / prize-car models, level-only skyways-*) (skyways lane FOOD: + the ramen restaurant's range / cookware / mascot, level-only skyways-*) (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES, ...COSPLAY_MODEL_FILES, ...SKYWAYS_KITCHEN_MODEL_FILES, ...SKYWAYS_ADDON_MODEL_FILES, ...SKYWAYS_DEST_MODEL_FILES, ...MARKET_HUMAN_MODEL_FILES, ...MARKET_BRIDGE_MODEL_FILES, ...SHELF_JUNK_MODEL_FILES, ...BUNKER_KIT_MODEL_FILES, ...CORPSE_DEN_MODEL_FILES, ...CORPSE_BUYER_MODEL_FILES, ...SURFACE_KIT_MODEL_FILES}); // (task studio-food-shelf-production-20261109-002816-01: + the shelf-junk atlas, lazy) // (survivor market, lane HUMANS: + the friendly cast, level-only market-*) (skyways destinations, lane LANDMARKS: + the destination kit's built models, level-only skyways-d-*) (skyways lane ADDON: + the convention / prize-car models, level-only skyways-*) (skyways lane FOOD: + the ramen restaurant's range / cookware / mascot, level-only skyways-*) (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
   /** Task track3-eaton-centre-20261031 (lane PACKAGE): textures / GPU resources owned by ONE level, released when the level changes (assets/levelResources.ts). */
   readonly levelResources = new LevelResources();
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
@@ -649,7 +654,7 @@ export class Game {
   // (round 2, R3) + the generated annex genset model on a layout with a genset record (a shared file: every annex-bearing level)
   // (task mall-lingerie-20261102, lane STORE) + the lingerie store's display sets: lane FIT's outfit files they are cut from (lazy, same keys)
   // (task mall-lingerie-20261102-221554, lane CONTEXT) + the lingerie garments on a layout with lingerie-tagged spawns (the mall's lingerie store only)
-  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor, lingerieDisplayModelKeys, lingerieModelKeysFor, cosplayModelKeysFor, shelfJunkModelKeysFor, bunkerModelKindKeysFor, corpseDenModelKeysFor]; // (+ task studio-food-shelf-production-20261109-002816-01: the shelf-junk atlas only on layouts with stockable holders)
+  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor, lingerieDisplayModelKeys, lingerieModelKeysFor, cosplayModelKeysFor, shelfJunkModelKeysFor, bunkerModelKindKeysFor, corpseDenModelKeysFor, surfaceKitModelKeysFor]; // (+ lane KIT, Surface Run: the wreck models a district placed) // (+ task studio-food-shelf-production-20261109-002816-01: the shelf-junk atlas only on layouts with stockable holders)
   /** One lifecycle operation at a time: travel, new game, retry level. */
   private readonly lifecycle = new SingleFlight();
   /** Live pickups that are (what is left of) a generated layout pickup -> its layout.pickups index. */
@@ -934,6 +939,10 @@ export class Game {
     // Task gasmask-breach-20261030 (primary): breach gas spares the player only behind a mask that is on with a working filter.
     // The mask's frame hook runs first (installed earlier), so a filter swapped in this frame already counts.
     this.gas.protection = () => this.gasMask.protects();
+    // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): seated in an ENCLOSED vehicle (the Surface Run truck's cab: the
+    // vehicle controller's `enclosed`) the eye breathes clean air — exposure 0; the gas still renders round it (beyond the cab's glass:
+    // world/surface/air.ts). Open vehicles: no.
+    this.gas.shelter = () => this.skywaysCar?.enclosed === true;
     this.gas.hintFor = protectedNow => {
       const m = this.gasMask;
       if (protectedNow || m.state === 'donning') return '';
@@ -967,6 +976,7 @@ export class Game {
     installReactorCpuCulling(this); hookName('reactorCpuCulling'); // task studio-reactor-submit-roof-fog-20261102 (lane CPU): enemies / pickups behind the Reactor's rock decided by the level culler (inert elsewhere)
     installReactorMapBoards(this); hookName('reactorMapBoards'); // task reactor-expansion-20261101 (lane CONTROLS): floor-map boards beside the instruction boards (X marks, storey buttons; inert off the Reactor) // task reactor-build-20261101 (lane RESTART): E / hold-E controls, prompts, screens, the win sequence, section hooks (inert off the Reactor)
     installBunkerObjective(this); hookName('bunkerObjective'); // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE): fuel + turnkey-start the three auxiliary generators, core map intel once per station (lane 'bunker.state'; inert off the Bunker)
+    installSurfaceRun(this); hookName('surfaceRun'); // task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN (world/surface/install.ts: access, look, air, life; inert elsewhere)
     // Task player-train-shell-20261101-202805 (lane TRAIN): LAST (its build rebuilds game.propIndex over everything already there, after the
     // stalls; its E handler / prompt come after the others): section hooks (the car at game.trainPlacement, interior volume + colliders, built
     // synchronously before the first update), frame hook (doors), E + prompt, the boot-time head / tail / interior lights, warm pool
@@ -1007,6 +1017,7 @@ export class Game {
     installBeerEffects(this);
     hookName('beerEffects');
     installSkywaysTrunk(this); hookName('skywaysTrunk'); // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): after the car (its section hook follows the car's) and the Lockbox; inert without the car
+    installSurfaceTruck(this); hookName('surfaceTruck'); // task surface-run-opus-rebuild-20261116 (lane TRUCK): the truck joins the vehicle controller + its storage compartments (after the controller / Lockbox / trunk); inert outside a Surface Run district
     // task campaign-foundation-20261102 (lane RIDE): the moving train — no frame hook (update() calls it in the player's slot), the
     // transit tunnel (built on the first section build, warm pool 'train-transit'), the gear's no-set-down-while-moving rule
     // (the jostle intensity = the player's Train sway setting 0..1; 0 = off)
@@ -1303,7 +1314,10 @@ export class Game {
     if (layoutVersion !== undefined && versionLane && run.laneStore(versionLane, key) === undefined) run.setLaneStore(versionLane, {v: layoutVersion}, key);
     // (task studio-screacher-production-20261110-221858-01) every level: the enemy-roster version this station was first built with
     // (ai/enemyRoster.ts: a station visited before the roster existed stays at 0 — its enemies and kills exact; an unvisited one gets the current)
-    if (run.laneStore(ROSTER_LANE, key) === undefined) run.setLaneStore(ROSTER_LANE, {v: ctx.rosterVersion ?? 0}, key);
+    if (!isSurfaceKey(key) && run.laneStore(ROSTER_LANE, key) === undefined) run.setLaneStore(ROSTER_LANE, {v: ctx.rosterVersion ?? 0}, key);
+    // (task studio-surface-run-opus-rebuild-20261116-020827-01) a Subway / Office / Mall station: the SURFACE RUN version it was first built
+    // with (gen/surface/surfaceRun.ts: a station visited before the feature stays 0 — no access, its world exact; a new one gets the current)
+    if (ctx.surfaceVersion !== undefined && run.laneStore(SURFACE_LANE, key) === undefined) run.setLaneStore(SURFACE_LANE, {v: ctx.surfaceVersion}, key);
     const node = key.station ? run.node(key.station) : null;
     if (node) adoptStationName(layout, node.name); // campaign: the map's / save's name is the one on the signs and the HUD
     return layout;
@@ -1313,7 +1327,9 @@ export class Game {
   private sectionGenInputs(key: SectionKey, run: RunState): {layoutVersion: number | undefined; ctx: SectionGenContext} {
     const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : key.level === 'market' ? marketLayoutVersionFor(run.peekMemory(key)) : key.level === 'bunker' ? bunkerLayoutVersionFor(run.peekMemory(key)) : undefined;
     return {layoutVersion, ctx: {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {}),
-      rosterVersion: rosterVersionFor(run.peekMemory(key))}}; // (the seeded enemy roster: always explicit — levels/types.ts SectionGenContext.rosterVersion)
+      rosterVersion: rosterVersionFor(run.peekMemory(key)), // (the seeded enemy roster: always explicit — levels/types.ts SectionGenContext.rosterVersion)
+      // (task studio-surface-run-opus-rebuild-20261116-020827-01) a host station's own world: its recorded Surface Run version (explicit)
+      ...(key.section === 'main' && isSurfaceHost(key.level) ? {surfaceVersion: surfaceVersionFor(run.peekMemory(key))} : {})}};
   }
 
   /**
@@ -1351,7 +1367,7 @@ export class Game {
     this.levelResources.beginSection(); // (task train-all-cargo: a carried prop's art, whatever its level, stays with this section)
     const layout = this.generateSection(key, run);
     for (const f of this.sectionLayoutHooks) { try { f(layout, key, run, 'prepare'); } catch (err) { console.warn('train-all-cargo: a layout hook failed', err); } }
-    const lazyKeys = this.modelKeysFor(layout, key.level);
+    const lazyKeys = this.modelKeysFor(layout, sectionAssetLevel(key)); // (Surface Run: the district loads as its own asset family)
     await this.propModels.ensure(lazyKeys, onProgress);
     for (const k of lazyKeys) { const g = this.propModels.get(k); if (g) trackUploads(modelTextures(g)); } // (lane PERF, track3) upload recorder only
     for (const pre of this.sectionPreloads) {
@@ -1408,7 +1424,7 @@ export class Game {
   }
 
   /** Iteration 16: every lazy model key a section uses (p7 props + lane keys, e.g. office models). */
-  private modelKeysFor(layout: StationLayout, level: LevelId): string[] {
+  private modelKeysFor(layout: StationLayout, level: string): string[] {
     // task train-all-cargo: CARRIED props (placement.cargo: the train's, or left in this station) bring their own models whatever their
     // level (a mall cafe chair in the Subway's train): the generated placements under the level rule, the carried ones' keys as well
     const carried = layout.props.filter(p => p.cargo);
@@ -1439,7 +1455,7 @@ export class Game {
   /** Lane PACKAGE (track3): the current level's lazy working set / resident set (QA `__LL.levelAssets()`). */
   levelAssetsQa() {
     if (!this.layout) return null;
-    const level = this.run.current.level;
+    const level = sectionAssetLevel(this.run.current); // (Surface Run: the district's own family)
     return {level, workingSet: levelWorkingSet(level, this.modelKeysFor(this.layout, level), this.propModels.catalogue),
       resident: {models: this.propModels.loadedKeys().length, bytes: this.propModels.residentBytes(),
         foreign: this.propModels.loadedKeys().filter(foreignTo(level, this.propModels.catalogue))}, // another level's own art still resident: should be []
@@ -1551,10 +1567,11 @@ export class Game {
     // task train-all-cargo: the carried props exactly as the installed run has them (Retry / Load installed theirs after the prepare)
     for (const f of this.sectionLayoutHooks) { try { f(layout, key, this.run, 'build'); } catch (err) { console.warn('train-all-cargo: a layout hook failed', err); } }
     // Iteration 07 (Lane P2): the prepared layout (its lazy prop models loaded); placements whose model is missing are dropped.
-    const p7Keys = p7ModelKeysFor(this.layout), keep = new Set(this.modelKeysFor(this.layout, key.level));
+    const assetLevel = sectionAssetLevel(key); // (task studio-surface-run-opus-rebuild-20261116-020827-01: the district is its own asset family)
+    const p7Keys = p7ModelKeysFor(this.layout), keep = new Set(this.modelKeysFor(this.layout, assetLevel));
     dropUnloadedP7(this.layout, new Set(p7Keys.filter(k => this.propModels.has(k))));
-    this.propModels.trim(keep, 16, foreignTo(key.level, this.propModels.catalogue)); // lane PACKAGE (track3): another level's own art never lingers as an extra
-    this.levelResources.retainOnly(key.level, fn => this.retire(fn)); // lane PACKAGE (track3): the previous level's textures now, its owned GPU resources after the warm-up
+    this.propModels.trim(keep, 16, foreignTo(assetLevel, this.propModels.catalogue)); // lane PACKAGE (track3): another level's own art never lingers as an extra
+    this.levelResources.retainOnly(assetLevel, fn => this.retire(fn)); // lane PACKAGE (track3): the previous level's textures now, its owned GPU resources after the warm-up
     // Task track3-eaton-centre-20261031 (lane PERF): the mall's InstancedMeshes share one program per material (render/instancing.ts:
     // three gives every small InstancedMesh its own program; the atrium shows ~740 at once); Subway / Office build as before.
     setAttributeInstancing(!!this.layout.mall || !!this.layout.reactor); // task reactor-build-20261101 (lane ARCH): + the Reactor's open pit (every tier in view)
@@ -1699,8 +1716,10 @@ export class Game {
     // arrival (New game / Travel / Retry) spawns inside it at its interior floor (explicit y). Only the pose is set here: updates run
     // only in 'playing' (after this build and the warm-up), and lane TRAIN's sectionHooks.build below adds the car's floor volume and
     // colliders synchronously, so the player is never simulated before the train exists. The train identity follows the level.
-    this.trainPlacement = playerTrainPlacement(this.layout);
-    this.playerTrain.parkAt(key);
+    // (task studio-surface-run-opus-rebuild-20261116-020827-01, lane ACCESS) a Surface Run district has NO train: nothing of the car is built
+    // there (every train system sees no placement) and the record stays parked at the station below (PlayerTrainRecord.at)
+    this.trainPlacement = isSurfaceKey(key) ? null : playerTrainPlacement(this.layout);
+    if (!isSurfaceKey(key)) this.playerTrain.parkAt(key);
     const pose = arrivalPose(this.layout, arrival, this.trainPlacement);
     const lv = pose.level !== undefined && pose.level > 0 && pose.level < this.levels.count ? pose.level : 0;
     const y = pose.y ?? this.levels.grid(lv).floorAt(pose.x, pose.z); // Lane B: the arrival's own storey
@@ -2162,6 +2181,7 @@ export class Game {
   openTravelMap(mode: 'travel' | 'view' = 'travel'): boolean {
     const run = this.run;
     if (!run.campaign || this.mapBack) return false;
+    if (mode === 'travel' && isSurfaceKey(run.current)) return false; // (lane ACCESS: Surface Run — the train's console is underground)
     if (mode === 'travel') run.campaign = revealAround(run.campaign, run.campaign.current, this.trainEquipment?.routeRadius() ?? 1);
     // (task studio-alpha-survival-controls-20261107-060450-01) E / Tab close the map too: the ones physically down now (the console's E)
     // close it only after a release; the key that closes it is kept from the game until released (no interact / inventory / depart)
@@ -2288,6 +2308,7 @@ export class Game {
     const run = this.run, c0 = run.campaign;
     if (!c0) return {ok: false, error: 'No campaign run.'};
     if (this.lifecycle.busy || this.trainRide.riding) return {ok: false, error: 'The train is busy.'};
+    if (isSurfaceKey(run.current)) return {ok: false, error: 'The train is parked underground — go back down to it first.'}; // (lane ACCESS: Surface Run)
     const plan = travelPlan(c0, to);
     if (!plan) return {ok: false, error: 'That station cannot be reached from here.'};
     const target = run.node(to)!;
@@ -2595,6 +2616,9 @@ export class Game {
       sections: l => LEVELS[l]?.sections(this.run.seeds[l]) ?? null, current: this.run.current.level,
     });
     if (refusal) return Promise.resolve({ok: false, reason: refusal});
+    // (task studio-surface-run-opus-rebuild-20261116-020827-01, lane ACCESS) never from a Surface Run district: the train (and every other
+    // level) is reached only from its station — back down first (Game.crossSurface)
+    if (isSurfaceKey(this.run.current)) return Promise.resolve({ok: false, reason: 'not-ready'});
     const lock = this.beginGesture(); // a menu click: pointer lock is requested inside the gesture
     const flight = this.lifecycle.run(async (): Promise<TravelResult> => {
       const from = {...this.run.current};
@@ -2635,6 +2659,144 @@ export class Game {
       }
     });
     return flight ?? Promise.resolve({ok: false, reason: 'busy'});
+  }
+
+  // ==== Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ACCESS): SURFACE RUN — crossing to / from the district =========
+  // A Subway / Office / Mall station with a Surface Run (layout.surfaceAccess) and its district (section 'surface') are TWO worlds: only
+  // one exists at a time, the other is a run memory. [E] at the way up / out (world/surface/accessRuntime.ts) or at the district's portal
+  // crosses behind the truthful loading screen like a menu travel — the destination prepared (generated, exactly its models / textures
+  // fetched), the crossing participants depart (world/surface/crossing.ts), the old world left (its memory saved) and torn down, the
+  // new one built (sliced), the participants arrive, the complete warm-up, play. The train never comes up: it stays parked at the station
+  // (buildSectionSteps builds no car in a district; PlayerTrainRecord.at stays the station). Nothing about the player is reset, the
+  // Retry snapshot (run.entry: the station's entry, both sections in its scope) is not retaken, and campaign / journey state is untouched.
+
+  /** The crossing in flight (null otherwise): QA and the access prompt read it. */
+  surfaceCrossing: {from: SectionKey; to: SectionKey; phase: 'prepare' | 'depart' | 'build' | 'arrive' | 'warmup' | 'recover'} | null = null;
+  /** Crossings started / completed / refused / failed (QA, tests). */
+  readonly surfaceCrossCounts = {started: 0, done: 0, refused: 0, failed: 0, recovered: 0};
+  /** Set only while a crossing's loading screen replaces play: the [E] press keeps the pointer captured (enterPlay resumes with it). */
+  private holdPointerLock = false;
+
+  /** The way up / down of a section: a host station's district (it has an access), a district's station; null: none. */
+  surfaceCrossTarget(from: SectionKey = this.run.current): SectionKey | null {
+    if (isSurfaceKey(from)) return hostKeyOf(from);
+    return from.section === 'main' && isSurfaceHost(from.level) && !!this.world && !!this.layout?.surfaceAccess ? surfaceKeyOf(from) : null;
+  }
+
+  /** The live inputs of the crossing gate (world/surface/crossing.ts surfaceCrossRefusal). */
+  surfaceCrossGate(): SurfaceCrossGate {
+    return {busy: this.lifecycle.busy, alive: this.player.alive, state: this.state, ready: !!this.world && !!this.gpu,
+      moving: !!this.trainRide?.riding || !!this.run.campaign?.transit || this.transitGap || this.travelling,
+      seated: !!this.skywaysCar?.driving, climbing: !!this.player.climbing, to: this.surfaceCrossTarget()};
+  }
+
+  /** Why the player cannot cross now (null: they can). */
+  surfaceCrossRefusal(): SurfaceCrossRefusal | null {
+    return surfaceCrossRefusal(this.surfaceCrossGate(), this.run.current, surfaceCrossers(this));
+  }
+
+  /** The station's display name of a section (its network node, else the level's seeded name): prompts, the loading screen. */
+  surfaceStationName(k: SectionKey): string {
+    return (k.station ? this.run.node(k.station)?.name : undefined) ?? levelDisplayName(k.level, this.run.seeds[k.level]);
+  }
+
+  /** CROSS to the other world of this station (up / out to its district, back down / in to the station). Single flight. */
+  crossSurface(): Promise<SurfaceCrossResult> {
+    const from: SectionKey = {...this.run.current}, to = this.surfaceCrossTarget(from);
+    const refusal = surfaceCrossRefusal(this.surfaceCrossGate(), from, surfaceCrossers(this));
+    if (refusal || !to) { this.surfaceCrossCounts.refused++; return Promise.resolve({ok: false, reason: refusal?.code ?? 'no-access', error: refusal?.text ?? 'There is no way out here.'}); }
+    const flight = this.lifecycle.run(async (): Promise<SurfaceCrossResult> => {
+      this.surfaceCrossCounts.started++;
+      const up = !isSurfaceKey(from), station = this.surfaceStationName(up ? from : hostKeyOf(from));
+      const crossers = surfaceCrossers(this).slice();
+      this.surfaceCrossing = {from, to, phase: 'depart'};
+      // the participants depart FIRST, still in play (the old world intact, the player as they stood): each takes what it carries out
+      // of it — before the loading screen, whose state change would make a lane let go of what is in the hands (the train equipment's
+      // grabbed dolly). A failure here aborts the ones already departed (departCrossers) and the player simply stays.
+      let departed: SurfaceCrosser[] = [], left: BuiltWorld | null = null;
+      try { departed = departCrossers(crossers, from, to); } catch (err) {
+        console.error('Surface Run: a participant could not depart', err);
+        this.lastError = String((err as Error)?.stack ?? err);
+        this.surfaceCrossCounts.failed++;
+        this.surfaceCrossing = null;
+        return {ok: false, reason: 'failed', error: 'Something you carry cannot come along right now.'};
+      }
+      this.surfaceCrossing.phase = 'prepare';
+      this.cancelUse('surface');
+      this.cancelFlareHold();
+      this.aiming = false;
+      this.holdPointerLock = true; // (setState('loading') would release it: the crossing came from a key press in play, not a menu click)
+      const ui = this.showLoading(up ? `${station} · the street` : station, up ? 'Going up to the street…' : `Back down to ${station}…`);
+      this.holdPointerLock = false;
+      try {
+        await nextPaint();
+        const layout = await this.prepareSection(to, this.run, this.progressTo(ui, up ? 'Going up to the street' : `Back down to ${station}`));
+        if (layout.surface) $('#station-intro').textContent = layout.surface.name; // (the district's own name, once generated)
+        await this.warmRun; // never rebuild under a running warm-up
+        this.surfaceCrossing.phase = 'build';
+        left = this.world; // (the world being left: a recovery tears down only a NEW, half-built one)
+        this.leaveSection(true); // the old world's every delta into its memory; its frame work / audio / lights / resources go with it
+        await this.buildSectionSliced(to, layout, {kind: 'surface'}, false, ui);
+        this.surfaceCrossing.phase = 'arrive';
+        const failed = arriveCrossers(departed, to);
+        departed = [];
+        this.surfaceCrossing.phase = 'warmup';
+        const w = await this.prepareGraphics(ui); // the COMPLETE warm-up of the new world (nothing compiles on its first frames)
+        if (w.status === 'cancelled') return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'};
+        this.readyLine(ui, w);
+        await this.enterPlay();
+        if (this.state === 'paused') $('#pause .fine').textContent = 'The browser did not capture the mouse — click Resume to try again.';
+        this.hud.toast(up ? `${layout.surface?.name ?? 'The street'} — street level` : `${station} — back underground`);
+        if (failed.length) this.hud.toast(`Something you carried did not come with you (${failed.join(', ')})`, true);
+        this.surfaceCrossCounts.done++;
+        return {ok: true, to};
+      } catch (err) {
+        if (err instanceof PacedBuildCancelled) return {ok: false, reason: 'cancelled', error: 'The crossing was interrupted.'}; // (replaced under the build: its replacement owns the screen)
+        console.error('Surface Run: the crossing failed', err);
+        this.lastError = String((err as Error)?.stack ?? err);
+        this.surfaceCrossCounts.failed++;
+        return await this.recoverSurfaceCrossing(from, up, departed, left, ui, err);
+      } finally {
+        this.surfaceCrossing = null;
+      }
+    });
+    return flight ?? Promise.resolve({ok: false, reason: 'busy', error: 'Busy — try again in a moment.'});
+  }
+
+  /**
+   * A crossing that failed: the player stays where they were. Before the old world was left, it is still live (the participants that
+   * departed restore what they took); after, the old section is rebuilt from its just-saved memory with the player at its way up / down
+   * (ArrivalKind 'surface'), then the participants restore. A failure of that rebuild is the error screen (as a failed travel's).
+   */
+  private async recoverSurfaceCrossing(from: SectionKey, up: boolean, departed: SurfaceCrosser[], left: BuiltWorld | null, ui: WarmupUi, err: unknown): Promise<SurfaceCrossResult> {
+    const msg = String((err as Error)?.message ?? err).slice(0, 120);
+    const where = up ? 'The way up' : 'The way down';
+    if (!left) {
+      abortCrossers(departed, from);
+      await this.enterPlay();
+      this.hud.toast(`${where} is blocked — you are still here.`, true);
+      return {ok: false, reason: 'failed', error: msg};
+    }
+    try {
+      if (this.surfaceCrossing) this.surfaceCrossing.phase = 'recover';
+      if (this.world !== left) this.leaveSection(false); // (a half-built destination world: torn down, nothing of it kept)
+      const back = await this.prepareSection(from, this.run, this.progressTo(ui, 'Going back'));
+      await this.buildSectionSliced(from, back, {kind: 'surface'}, false, ui);
+      abortCrossers(departed, from);
+      const w = await this.prepareGraphics(ui);
+      if (w.status === 'cancelled') return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'};
+      this.readyLine(ui, w);
+      await this.enterPlay();
+      this.hud.toast(`${where} could not be reached — you are still here.`, true);
+      this.surfaceCrossCounts.recovered++;
+      return {ok: false, reason: 'failed', error: msg};
+    } catch (err2) {
+      if (err2 instanceof PacedBuildCancelled) return {ok: false, reason: 'cancelled', error: 'The crossing was interrupted.'};
+      console.error('Surface Run: rebuilding the section the crossing left failed', err2);
+      $('#error-msg').textContent = `The crossing failed (${msg}) and the area could not be rebuilt: ${String((err2 as Error)?.message ?? err2).slice(0, 120)}`;
+      this.setState('error');
+      return {ok: false, reason: 'failed', error: msg};
+    }
   }
 
   /**
@@ -3055,10 +3217,13 @@ export class Game {
     return lib;
   }
 
-  spawnEnemy(s: ZombieSpawn, i: number): EnemyActor {
+  spawnEnemy(s: ZombieSpawn, i: number, ownRand?: () => number): EnemyActor {
     // (task studio-reactor-glowing-zombies-20261115-013245-01: an irradiated addition draws its scale / idle phase from its OWN stream, so
     // this.rand — the stream every later spawn and pickup of the section draws from — is exactly what it was without the additions)
-    const irr = isIrradiated(s), rand = irr ? mulberry32(hashString(`irradiated-actor:${i}`, this.currentSeed >>> 0)) : this.rand;
+    // (task studio-surface-run-opus-rebuild-20261116-020827-01, lane LIFE: `ownRand` = a runtime spawner's OWN stream — Surface Run's
+    // outdoor replenisher, world/surface/replenish.ts — so this.rand never moves; such an actor has no layout index: the caller never
+    // puts it into enemyIndex, so it is never in the kill memory)
+    const irr = isIrradiated(s), rand = ownRand ?? (irr ? mulberry32(hashString(`irradiated-actor:${i}`, this.currentSeed >>> 0)) : this.rand);
     const {actor: z, fallback} = this.buildEnemyActor(s, i, this.currentSeed, rand);
     if (fallback) this.enemyFallbacks++;
     this.damage.installZombie(z); // Lane D: own wound-patched material clones (body + every wearable)
@@ -3116,7 +3281,7 @@ export class Game {
     // Only frozen menus silence audio; any other (incl. future overlay) state keeps it running.
     this.sfx.suspend(s === 'paused' || s === 'inventory' || s === 'title' || s === 'loading' || s === 'error');
     if (s === 'inventory') { this.invUI.selected = null; this.invUI.render(); }
-    if (s !== 'playing' && prev === 'playing') this.input.unlock();
+    if (s !== 'playing' && prev === 'playing' && !this.holdPointerLock) this.input.unlock(); // (lane ACCESS: a Surface Run crossing keeps it: Game.crossSurface)
     this.lastFrame = performance.now();
     for (const fn of this.stateListeners) { try { fn(s, prev); } catch (err) { console.warn('Iteration 16: a state listener failed', err); } }
     // task studio-graphics-gpu-materials-toggle-20261114-212239-01: a lighting choice changed while the game was not paused (another tab)
@@ -4040,9 +4205,17 @@ export class Game {
   /** Lane PLAY: enemies still alive (update's clear rule and the HUD count; was a filtered array, twice a frame). */
   private aliveEnemies(): number {
     let n = 0;
-    for (const z of this.zombies) if (z.brain.alive) n++;
+    for (const z of this.zombies) if (z.brain.alive && !this.uncountedEnemies.has(z)) n++; // (Surface Run: never a replenished outdoor zombie)
     return n;
   }
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LIFE): living actors the section's alive / clear / HUD / end-screen
+   * counts never include — Surface Run's REPLENISHED outdoor zombies (world/surface/replenishRuntime.ts adds each one it spawns and
+   * removes it when it retires the actor). They have no layout index either, so they are never in the kill memory (saveSectionMemory).
+   */
+  readonly uncountedEnemies = new WeakSet<EnemyActor>();
+  /** (task studio-surface-run-opus-rebuild-20261116-020827-01, lane LIFE) the layout index of a live-world actor (undefined: a runtime one). */
+  layoutIndexOf(z: EnemyActor): number | undefined { return this.enemyIndex.get(z); }
 
   /**
    * Task studio-alpha-campaign-foundation-20261102-230708-01: THE campaign win (the Reactor's ending; world/reactor/restart.ts calls
@@ -4177,6 +4350,7 @@ export class Game {
       // Lane B (iteration 08): through every level's bands — a slab between shooter and target stops the bullet
       // (lane MERCH: struck open shelving -> the first resting shelf piece on the line inside it: physics/merchOnHost.ts)
       const wh = raycastShot(this.levels, this.layout.props, o, d, def.range, this.layout.trench.floorY);
+      this.skywaysCar?.shotStop(o, d, wh); // (lane TRUCK follow-up) the truck's body stops the shot (wh ends there): nothing behind it is hit
       let bestT = wh.t, bestZ: EnemyActor | null = null, bestPart = 'torso';
       // Lane COMBAT (reactor-playtest-round2): every live enemy's volumes along the full 3D ray, any storey, culled or not (combat/
       // enemyRay.ts: the old cheap reject mis-projected pitched rays and skipped enemies up / down stairs, atria and the pit)
@@ -4792,7 +4966,7 @@ export class Game {
   private showEnd(kind: 'dead' | 'won'): void {
     const s = this.stats, k = this.run.current;
     const acc = s.shots ? Math.round(s.hits / s.shots * 100) : 0;
-    const total = this.layout.zombies.length, down = total - this.zombies.filter(z => z.brain.alive).length;
+    const total = this.layout.zombies.length, down = total - this.aliveEnemies(); // (Surface Run: replenished outdoor zombies are not in either figure)
     // Iteration 16 (RUN): the section / level, its code, this section's kills and the run totals (time, kills, shots, damage)
     const text = `${levelDisplayName(k.level, this.run.seeds[k.level])} · ${sectionLabel(k)} · ${this.layout.name} · code ${seedToCode(this.run.seeds[k.level])}\n`
       + `Run time ${Math.floor(s.time / 60)}:${String(Math.floor(s.time % 60)).padStart(2, '0')} · Infected down here ${down}/${total} · this run ${s.kills}\n`

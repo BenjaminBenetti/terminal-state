@@ -64,6 +64,14 @@ export interface IndirectContext extends GatherGeometry {
 
 export {CUBE_FACES, IND_CIRCUITS, IND_STRIDE};
 
+// (task studio-surface-run-opus-rebuild-20261116-020827-01, lane LOOK P0 — the gather's time: the layout's numbers as module locals.
+// The loops below read them per voxel, per ray and per channel, and an imported binding is not always a plain constant to the engine
+// that runs this unbundled — under the test runner every read was a module getter call, ~1.2 s of a Surface Run district's gather on
+// its own and the loops around them not optimised as tightly. The same values: the same bits, on every thread. world/lightField.ts's
+// encode does the same.)
+const STRIDE = IND_STRIDE, CIRCUITS = IND_CIRCUITS, A_STRIDE = ALBEDO_STRIDE, A_LUT = ALBEDO_LUT, A_FLOOR = ALB_FLOOR, A_CEIL = ALB_CEIL, A_WALL = ALB_WALL;
+const CELL_M = CELL, K_FLOOR = HIT_FLOOR, K_CEIL = HIT_CEIL;
+
 export interface IndirectLight {
   /** Per slot, per voxel (i * layers + k): its row in `data` (-1: a closed cell). */
   index: Int32Array[];
@@ -300,9 +308,9 @@ export function gatherSurfaces(plan: GatherPlan, ctx: IndirectContext, opt: Pick
   const RAD = GATHER_RAD, rad = new Float32Array(count * RAD);
   const range = (c0: number, c1: number): void => {
     for (let c = c0; c < c1; c++) {
-      const s = vs[c], i = vi[c], L = LS[s], hv = i * L + vk[c], A = slots[s], a0 = i * ALBEDO_STRIDE, v0 = c * 9;
+      const s = vs[c], i = vi[c], L = LS[s], hv = i * L + vk[c], A = slots[s], a0 = i * A_STRIDE, v0 = c * 9;
       for (let q = 0; q < 9; q += 3) {
-        let r = ALBEDO_LUT[A[a0 + q]], g = ALBEDO_LUT[A[a0 + q + 1]], b = ALBEDO_LUT[A[a0 + q + 2]];
+        let r = A_LUT[A[a0 + q]], g = A_LUT[A[a0 + q + 1]], b = A_LUT[A[a0 + q + 2]];
         if (sat !== 1) {
           // more chroma at the same luminance (never below nothing, never brighter than white)
           const l = lum(r, g, b);
@@ -327,7 +335,7 @@ export function gatherSurfaces(plan: GatherPlan, ctx: IndirectContext, opt: Pick
       for (let code = 0; code < 6; code++) {
         let ndl = code === 0 ? ddy : code === 1 ? -ddy : code === 2 ? ddx : code === 3 ? -ddx : code === 4 ? ddz : -ddz;
         ndl = ndl > 0 && dmag > 1e-9 ? ndl / dmag : 0;
-        const wg = ((el - dl) * scatter + dl * ndl) / el, ao = v0 + (code === 0 ? ALB_FLOOR : code === 1 ? ALB_CEIL : ALB_WALL);
+        const wg = ((el - dl) * scatter + dl * ndl) / el, ao = v0 + (code === 0 ? A_FLOOR : code === 1 ? A_CEIL : A_WALL);
         rad[o + code * 3] = Es[h3] * wg * va[ao]; rad[o + code * 3 + 1] = Es[h3 + 1] * wg * va[ao + 1]; rad[o + code * 3 + 2] = Es[h3 + 2] * wg * va[ao + 2];
       }
       // column shares for circuits 0 / 1, the voxel's own for the dying one
@@ -377,13 +385,13 @@ export function gatherKernel(plan: GatherPlan, scene: BandScene, reach: number, 
   const R = reach, fade0 = R * 0.6, invFade = 1 / (R - fade0);
   // a face's irradiance from N rays over the sphere: (4 pi / N) x sum of radiance x cosine, radiance = radiosity / pi; the cube's
   // mean weighs a ray by the mean of its three cosines (x 4 / 6)
-  const faceN = 4 / N, meanN = 4 / (6 * N), acc = new Float64Array(IND_STRIDE);
+  const faceN = 4 / N, meanN = 4 / (6 * N), acc = new Float64Array(STRIDE);
   let hits = 0;
   // --- first bounce: trace, and gather what the directly lit surfaces send back ---------------------
   const trace = (from: number, to: number, out: Float32Array, base: number): void => {
     for (let p = from; p < to; p++) {
       const c = P[p], s = vs[c], i = vi[c], k = vk[c], cx = i % W, cz = (i - cx) / W;
-      const ox = (cx + 0.5) * CELL, oz = (cz + 0.5) * CELL, oy = geos[s].layerY[i * LS[s] + k];
+      const ox = (cx + 0.5) * CELL_M, oz = (cz + 0.5) * CELL_M, oy = geos[s].layerY[i * LS[s] + k];
       const so = ((((cx >> setShift) & 1) | (((cz >> setShift) & 1) << 1) | ((k & 3) << 2)) % SETS) * N * 3;
       acc.fill(0);
       for (let j = 0; j < N; j++) {
@@ -392,8 +400,8 @@ export function gatherKernel(plan: GatherPlan, scene: BandScene, reach: number, 
         const t = scene.hitT, band = scene.hitBand, hs = scene.slot[band], hi = scene.hitCol, Lh = LS[hs];
         const kind = scene.hitKind;
         let hk: number, code: number;
-        if (kind === HIT_FLOOR) { hk = 0; code = 0; }
-        else if (kind === HIT_CEIL) { hk = Lh - 1; code = 1; }
+        if (kind === K_FLOOR) { hk = 0; code = 0; }
+        else if (kind === K_CEIL) { hk = Lh - 1; code = 1; }
         else {
           const f = scene.f[band], span = scene.c[band] - 0.13 - f;
           hk = span > 1e-3 ? Math.round((scene.hitY - f - 0.05) / span * (Lh - 1)) : 0;
@@ -420,8 +428,8 @@ export function gatherKernel(plan: GatherPlan, scene: BandScene, reach: number, 
         const lm = l * (ax + ay + az);
         acc[18] += lm * rad[ro + 18]; acc[19] += lm * rad[ro + 19]; acc[20] += lm * rad[ro + 20];
       }
-      const o = (base < 0 ? c : p - base) * IND_STRIDE;
-      for (let q = 0; q < IND_CIRCUITS; q++) out[o + q] = acc[q] * faceN;
+      const o = (base < 0 ? c : p - base) * STRIDE;
+      for (let q = 0; q < CIRCUITS; q++) out[o + q] = acc[q] * faceN;
       out[o + 18] = acc[18] * meanN; out[o + 19] = acc[19] * meanN; out[o + 20] = acc[20] * meanN;
     }
   };
@@ -435,9 +443,9 @@ export function gatherKernel(plan: GatherPlan, scene: BandScene, reach: number, 
         const hx = hitV[q];
         if (hx < 0) continue;
         // irradiance of the hit surface from the bounce before: the cube face of its own normal
-        const h = rep[hx], code = hitC[q], hr = h * IND_STRIDE, ph = hr + code * 3, er = prev[ph], eg = prev[ph + 1], eb = prev[ph + 2];
+        const h = rep[hx], code = hitC[q], hr = h * STRIDE, ph = hr + code * 3, er = prev[ph], eg = prev[ph + 1], eb = prev[ph + 2];
         if (er + eg + eb <= 1e-7) continue;
-        const w = hitW[q] / 255, a0 = hx * 9 + (code === 0 ? ALB_FLOOR : code === 1 ? ALB_CEIL : ALB_WALL);
+        const w = hitW[q] / 255, a0 = hx * 9 + (code === 0 ? A_FLOOR : code === 1 ? A_CEIL : A_WALL);
         const r = er * va[a0] * w, g = eg * va[a0 + 1] * w, b = eb * va[a0 + 2] * w;
         const dx = sets[so + j * 3], dy = sets[so + j * 3 + 1], dz = sets[so + j * 3 + 2];
         const ax = dx < 0 ? -dx : dx, ay = dy < 0 ? -dy : dy, az = dz < 0 ? -dz : dz;
@@ -451,8 +459,8 @@ export function gatherKernel(plan: GatherPlan, scene: BandScene, reach: number, 
         const lm = lum(r, g, b) * (ax + ay + az) / pm;
         acc[18] += lm * prev[hr + 18]; acc[19] += lm * prev[hr + 19]; acc[20] += lm * prev[hr + 20];
       }
-      const o = (base < 0 ? c : p - base) * IND_STRIDE;
-      for (let q = 0; q < IND_CIRCUITS; q++) out[o + q] = acc[q] * faceN;
+      const o = (base < 0 ? c : p - base) * STRIDE;
+      for (let q = 0; q < CIRCUITS; q++) out[o + q] = acc[q] * faceN;
       out[o + 18] = acc[18] * meanN; out[o + 19] = acc[19] * meanN; out[o + 20] = acc[20] * meanN;
     }
   };
@@ -472,7 +480,7 @@ export class GatherRows {
   readonly meanL: Float32Array;
   private readonly m3: [number, number, number] = [0, 0, 0];
   constructor(private readonly plan: GatherPlan) {
-    const n = plan.count * IND_STRIDE;
+    const n = plan.count * STRIDE;
     this.cur = new Float32Array(n); this.prev = new Float32Array(n); this.tot = new Float32Array(n);
     this.meanL = new Float32Array(plan.count);
   }
@@ -482,8 +490,8 @@ export class GatherRows {
   add(p0: number, p1: number): void {
     const P = this.plan.P, tot = this.tot, cur = this.cur, meanL = this.meanL, m3 = this.m3;
     for (let p = p0; p < p1; p++) {
-      const c = P[p], o = c * IND_STRIDE;
-      for (let q = 0; q < IND_STRIDE; q++) tot[o + q] += cur[o + q];
+      const c = P[p], o = c * STRIDE;
+      for (let q = 0; q < STRIDE; q++) tot[o + q] += cur[o + q];
       cubeMean(cur, o, m3);
       meanL[c] = lum(m3[0], m3[1], m3[2]);
     }
@@ -493,7 +501,7 @@ export class GatherRows {
   /** The packed rows of gathering voxels [p0, p1) (a share's result: GatherKernel with `base` = p0) into `cur`, each at its voxel. */
   place(rows: Float32Array, p0: number, p1: number): void {
     const P = this.plan.P, cur = this.cur;
-    for (let p = p0, s = 0; p < p1; p++, s += IND_STRIDE) { const o = P[p] * IND_STRIDE; for (let q = 0; q < IND_STRIDE; q++) cur[o + q] = rows[s + q]; }
+    for (let p = p0, s = 0; p < p1; p++, s += STRIDE) { const o = P[p] * STRIDE; for (let q = 0; q < STRIDE; q++) cur[o + q] = rows[s + q]; }
   }
 }
 
@@ -503,7 +511,7 @@ function smoothAxis(plan: GatherPlan, src: Float32Array, dst: Float32Array, s: n
   for (let i = i0; i < i1; i++) {
     if (!open[i] || (lattice && gt[i] !== 1)) {
       // (a cell that gathers on its own keeps what it gathered)
-      if (lattice && open[i] && gt[i] === 2) for (let k = 0; k < L; k++) { const o = ix[i * L + k] * IND_STRIDE; for (let q = 0; q < IND_STRIDE; q++) dst[o + q] = src[o + q]; }
+      if (lattice && open[i] && gt[i] === 2) for (let k = 0; k < L; k++) { const o = ix[i * L + k] * STRIDE; for (let q = 0; q < STRIDE; q++) dst[o + q] = src[o + q]; }
       continue;
     }
     const cx = i % W, f = floorH[i];
@@ -515,10 +523,10 @@ function smoothAxis(plan: GatherPlan, src: Float32Array, dst: Float32Array, s: n
       okB = okB && gt[b] === 1 && open[i + h] > 0 && Math.abs(floorH[i + h] - f) < STEP_MAX;
     }
     for (let k = 0; k < L; k++) {
-      const o = ix[i * L + k] * IND_STRIDE;
-      if (okA && okB) { const oa = ix[a * L + k] * IND_STRIDE, ob = ix[b * L + k] * IND_STRIDE; for (let q = 0; q < IND_STRIDE; q++) dst[o + q] = (2 * src[o + q] + src[oa + q] + src[ob + q]) * 0.25; }
-      else if (okA || okB) { const oa = ix[(okA ? a : b) * L + k] * IND_STRIDE; for (let q = 0; q < IND_STRIDE; q++) dst[o + q] = (2 * src[o + q] + src[oa + q]) * (1 / 3); }
-      else for (let q = 0; q < IND_STRIDE; q++) dst[o + q] = src[o + q];
+      const o = ix[i * L + k] * STRIDE;
+      if (okA && okB) { const oa = ix[a * L + k] * STRIDE, ob = ix[b * L + k] * STRIDE; for (let q = 0; q < STRIDE; q++) dst[o + q] = (2 * src[o + q] + src[oa + q] + src[ob + q]) * 0.25; }
+      else if (okA || okB) { const oa = ix[(okA ? a : b) * L + k] * STRIDE; for (let q = 0; q < STRIDE; q++) dst[o + q] = (2 * src[o + q] + src[oa + q]) * (1 / 3); }
+      else for (let q = 0; q < STRIDE; q++) dst[o + q] = src[o + q];
     }
   }
 }
@@ -531,14 +539,14 @@ function fillLattice(plan: GatherPlan, buf: Float32Array, s: number, i0: number,
     if (!open[i] || gt[i]) continue;
     const f0 = ff[i * 4], f1 = ff[i * 4 + 1], f2 = ff[i * 4 + 2], f3 = ff[i * 4 + 3];
     for (let k = 0; k < L; k++) {
-      const o = ix[i * L + k] * IND_STRIDE, o0 = ix[f0 * L + k] * IND_STRIDE;
-      if (f1 < 0) { for (let q = 0; q < IND_STRIDE; q++) buf[o + q] = buf[o0 + q]; continue; }
-      const o1 = ix[f1 * L + k] * IND_STRIDE;
-      if (f2 < 0) { for (let q = 0; q < IND_STRIDE; q++) buf[o + q] = (buf[o0 + q] + buf[o1 + q]) * 0.5; continue; }
-      const o2 = ix[f2 * L + k] * IND_STRIDE;
-      if (f3 < 0) { for (let q = 0; q < IND_STRIDE; q++) buf[o + q] = (buf[o0 + q] + buf[o1 + q] + buf[o2 + q]) * (1 / 3); continue; }
-      const o3 = ix[f3 * L + k] * IND_STRIDE;
-      for (let q = 0; q < IND_STRIDE; q++) buf[o + q] = (buf[o0 + q] + buf[o1 + q] + buf[o2 + q] + buf[o3 + q]) * 0.25;
+      const o = ix[i * L + k] * STRIDE, o0 = ix[f0 * L + k] * STRIDE;
+      if (f1 < 0) { for (let q = 0; q < STRIDE; q++) buf[o + q] = buf[o0 + q]; continue; }
+      const o1 = ix[f1 * L + k] * STRIDE;
+      if (f2 < 0) { for (let q = 0; q < STRIDE; q++) buf[o + q] = (buf[o0 + q] + buf[o1 + q]) * 0.5; continue; }
+      const o2 = ix[f2 * L + k] * STRIDE;
+      if (f3 < 0) { for (let q = 0; q < STRIDE; q++) buf[o + q] = (buf[o0 + q] + buf[o1 + q] + buf[o2 + q]) * (1 / 3); continue; }
+      const o3 = ix[f3 * L + k] * STRIDE;
+      for (let q = 0; q < STRIDE; q++) buf[o + q] = (buf[o0 + q] + buf[o1 + q] + buf[o2 + q] + buf[o3 + q]) * 0.25;
     }
   }
 }
@@ -579,8 +587,8 @@ const M3: [number, number, number] = [0, 0, 0];
  */
 export function roundRows(tot: Float32Array, c0: number, c1: number, gain: number, mean: number): number {
   for (let v = c0; v < c1; v++) {
-    const o = v * IND_STRIDE;
-    for (let q = 0; q < IND_STRIDE; q++) tot[o + q] = rowValue(rowBits(tot[o + q] * gain));
+    const o = v * STRIDE;
+    for (let q = 0; q < STRIDE; q++) tot[o + q] = rowValue(rowBits(tot[o + q] * gain));
     cubeMean(tot, o, M3);
     mean += lum(M3[0], M3[1], M3[2]);
   }

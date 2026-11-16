@@ -35,7 +35,10 @@ export type SiteFiles = ReadonlyMap<string, string>;
 // 48 MiB total when the third level arrived. The mall has about twice the Office's holder kinds, so its per-table pages,
 // loot/mall slot pages and data/loot.json grew past the old values (1510 files; loot.json 6.29 MB at 95bb812). Still far
 // below GitHub Pages' own limits; still a hard failure for anything runaway.
-export const SITE_LIMITS = {maxFiles: 3000, maxFileBytes: 12 * 1024 * 1024, maxTotalBytes: 96 * 1024 * 1024} as const;
+// Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ROOMS): per-file 12 -> 16 MiB when the loot census gained the Surface
+// Run district of its three host levels (each host's district adds ~370 holder contexts: every shop / civic programme's back of house):
+// data/loot.json 9.45 MB -> 14.91 MB. Files / total unchanged.
+export const SITE_LIMITS = {maxFiles: 3000, maxFileBytes: 16 * 1024 * 1024, maxTotalBytes: 96 * 1024 * 1024} as const;
 
 /** Allowed output paths. Anything else (another extension, directory or name) is rejected. */
 export const ALLOWED_PATHS: readonly RegExp[] = [

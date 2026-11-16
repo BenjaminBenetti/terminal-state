@@ -973,6 +973,7 @@ export const LIGHT_ODDS: Record<RoomType, readonly [number, number, number]> = {
   'office-elevator': [1, 0, 0], 'office-stair': [0.5, 0.4, 0.1],
   // Task office-overhaul-20261030 (lane STRUCT): the open-sky roof has no fixtures (fixture-less daylight, gen/office/roof.ts).
   'office-roof': [0, 0, 1],
+  street: [0, 0, 1], // (Surface Run: outdoors, daylight / the district's own fixtures)
 };
 
 /**

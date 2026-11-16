@@ -52,6 +52,8 @@ import {buildSkywaysMapBoards} from './skywaysMapBoards'; // task studio-skyways
 import {isSkywaysMapBoardKind} from '../gen/skyways/mapBoardKind';
 import {isSubwayMapKioskKind} from '../gen/subwayMapKioskKind'; // task studio-ui-subway-maps-20261108-074144-01
 import {buildSubwayMapKiosks} from './subwayMapKiosks';
+import {isSurfaceKind} from '../gen/surface/kinds'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT)
+import {buildSurfaceKitProp} from './surface/kit';
 import {OfficeArch} from './officeArch'; // Task office-overhaul-20261030 (lane ARCH): office storeys look like an office
 import {setExteriorRoof} from './exterior'; // Task office-overhaul-20261030 (lane ARCH): roof deck for the outdoor fog / tower shell
 import {levelsOf} from '../gen/levels'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's collision rails
@@ -66,6 +68,9 @@ import {registerReactorArchVisuals} from './reactor/archVisuals'; // task reacto
 import {buildWasteVisuals} from './reactor/wasteVisuals'; // task reactor-expansion-20261101 (lane WASTE): the waste repository's look
 import {SkywaysArch} from './skywaysArch'; // task studio-skyways-level-20261106-054448 (lane VIEW): the Skyways finishes + atrium roofs
 import {MarketArch} from './marketArch'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL): the Survivor Market's corrugated / salvaged finishes
+import {SurfaceArch} from './surface/arch'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): the Surface Run district's streets, facades and interiors
+import {surfaceLookPlanSteps} from './surface/archPlan';
+import {surfaceOcclusionSee} from './surface/lookOcclusion'; // (lane LOOK, follow-up 2: the district culler's see-through structure)
 import {BunkerArch} from './bunkerArch'; // task studio-bunker-level-20261109-072224-01: the Bunker's finishes (the Reactor's arch materials) + the shelter hero models
 import {CORPSE_DEN_MODEL_FOR} from '../gen/market/v4/denKinds'; // task studio-corpse-market-shop-20261114-031614-01: the Market den's chute / booth instanced through MODEL_FOR
 import {BUNKER_MODEL_FOR, isBunkerObjectiveKind} from '../gen/bunker/bunkerKinds'; // task studio-bunker-level-20261109-072224-01: objective kinds drawn by world/bunker; the model-backed flavour kinds instanced through MODEL_FOR
@@ -186,6 +191,8 @@ export interface BuiltWorld {
   marketArch?: MarketArch;
   /** Task studio-bunker-level-20261109-072224-01: the Bunker's finishes + shelter hero models (world/bunkerArch.ts); Bunker layouts only. */
   bunkerArch?: BunkerArch;
+  /** Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): the Surface Run district's arch (world/surface/arch.ts); district layouts only. */
+  surfaceArch?: SurfaceArch;
   /** Task reactor-expansion-20261101 (lane CONTROLS): the arch-owned finish key under a structural hit (world/finishAt.ts; null: none). */
   finishAt?: FinishAt | null;
   /** Task studio-perf-ao-train-continuity-20261110-022206-01: the static ride gates (world/ridePortalView.ts); null / absent: none. */
@@ -281,7 +288,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   // task static-batching-warmup-20261105 (world/staticCohorts.ts): coarse cohorts for cheap models where the culler has no atrium / slab
   // occlusion (the mall / Reactor keep fine chunks: their per-box occlusion is what removes draws there; task studio-skywalk-variety-
   // 20261107-231448-01, lane PERF: + the Skyways, occlusion-culled now)
-  const coarseCohorts = !layout.mall && !(layout as {reactor?: unknown}).reactor && !layout.skyways;
+  const coarseCohorts = !layout.mall && !(layout as {reactor?: unknown}).reactor && !layout.skyways && !layout.surface; // (+ a Surface Run district, lane LOOK follow-up 2: occlusion-culled)
   const instanceModel = (gr: THREE.Group, gltf: GLTF, placements: THREE.Matrix4[], fit: {w: number; h: number; d: number; anchor: 'bottom' | 'top'}, name: string) =>
     addInstancedModel(gr, gltf, placements, fit, name, levelAt, coarseCohorts);
   const group = new THREE.Group();
@@ -336,9 +343,11 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   const sky = office || mall || reactor ? null : SkywaysArch.for(layout, mats, levels); // task studio-skyways-level-20261106-054448 (lane VIEW): null on every other level
   const mkt = office || mall || reactor || sky ? null : MarketArch.for(layout, mats, levels); // task studio-survivor-market-20261108-005807-01 (lane LEVEL): null on every other level
   const bunk = office || mall || reactor || sky || mkt ? null : BunkerArch.for(layout, mats, levels); // task studio-bunker-level-20261109-072224-01: null on every other level
+  if (layout.surface && !(office || mall || reactor || sky || mkt || bunk)) yield* surfaceLookPlanSteps(layout); // (lane LOOK: the district's look plan, ~0.5 s, in slices)
+  const surf = office || mall || reactor || sky || mkt || bunk ? null : SurfaceArch.for(layout, mats, levels); // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): null without layout.surface
   // Track 2 playtest revision (lane ART): + the annexes' board-formed wall finish (world/trackExt/wallFinish.ts), created on first use.
-  const scaleOf = (k: string): {u: number; v: number} => office?.scale(k) ?? mall?.scale(k) ?? reactor?.scale(k) ?? sky?.scale(k) ?? mkt?.scale(k) ?? bunk?.scale(k) ?? (k === ANNEX_WALL ? {u: BOARD_SPAN, v: BOARD_SPAN} : mats.scale[k as MatKey]); // (+ reactor: lane ARCH; + sky: lane VIEW)
-  const matOf = (k: string): THREE.Material => office?.material(k) ?? mall?.material(k) ?? reactor?.material(k) ?? sky?.material(k) ?? mkt?.material(k) ?? bunk?.material(k) ?? (k === ANNEX_WALL ? annexWallMaterial(mats) : mats.get(k as MatKey)); // (+ reactor: lane ARCH; + sky: lane VIEW)
+  const scaleOf = (k: string): {u: number; v: number} => office?.scale(k) ?? mall?.scale(k) ?? reactor?.scale(k) ?? sky?.scale(k) ?? mkt?.scale(k) ?? bunk?.scale(k) ?? surf?.scale(k) ?? (k === ANNEX_WALL ? {u: BOARD_SPAN, v: BOARD_SPAN} : mats.scale[k as MatKey]); // (+ reactor: lane ARCH; + sky: lane VIEW)
+  const matOf = (k: string): THREE.Material => office?.material(k) ?? mall?.material(k) ?? reactor?.material(k) ?? sky?.material(k) ?? mkt?.material(k) ?? bunk?.material(k) ?? surf?.material(k) ?? (k === ANNEX_WALL ? annexWallMaterial(mats) : mats.get(k as MatKey)); // (+ reactor: lane ARCH; + sky: lane VIEW)
 
   yield 'world.walls';
   // --- Walls: union-of-open-columns faces, merged per straight run and level band ----------
@@ -349,7 +358,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   const cutFaces: BuiltFace[] = cutSkywaysWindows(cutOfficeWindows(extracted, layout), layout);
   yield 'world.faces.remap';
   // Task office-overhaul-20261030 (lane ARCH): office storey walls get office finishes (drywall, accent, wet-room tile, core, roof).
-  const remapped: BuiltFace[] = office ? office.remapFaces(cutFaces, mats.tileLowerHeight) : mall ? mall.remapFaces(cutFaces, mats.tileLowerHeight) : reactor ? reactor.remapFaces(cutFaces) : sky ? sky.remapFaces(cutFaces, mats.tileLowerHeight) : mkt ? mkt.remapFaces(cutFaces) : bunk ? bunk.remapFaces(cutFaces) : cutFaces; // (+ reactor: lane ARCH; + sky: lane VIEW)
+  const remapped: BuiltFace[] = office ? office.remapFaces(cutFaces, mats.tileLowerHeight) : mall ? mall.remapFaces(cutFaces, mats.tileLowerHeight) : reactor ? reactor.remapFaces(cutFaces) : sky ? sky.remapFaces(cutFaces, mats.tileLowerHeight) : mkt ? mkt.remapFaces(cutFaces) : bunk ? bunk.remapFaces(cutFaces) : surf ? surf.remapFaces(cutFaces) : cutFaces; // (+ reactor: lane ARCH; + sky: lane VIEW)
   // Track 2 (VIS): where a track tunnel continues a bed, its smooth shell replaces the grid geometry inside the corridor
   // (no stair-stepped walls, bed end-face stubs or door reveals inside the shell; world/trackExt/view.ts). Null = unchanged.
   yield 'world.faces.clip';
@@ -466,7 +475,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
       const f = g.floorOf(i);
       for (let k = 0; k < cols.count(i); k++) { const M = cols.level(i, k); if (M !== L && Math.abs(cellCeilAt(levels[M].grid, i) - f) < 0.02) return null; }
       // Task office-overhaul-20261030 (lane ARCH): office storey floors (carpet tiles, vinyl, tile, stone, concrete, roof deck ...).
-      const of = office ? office.floorKey(L, i) : mall ? mall.floorKey(L, i) : (reactor ?? sky ?? mkt ?? bunk)?.floorKey(L, i); // task track3 (lane ARCH): + the mall's floors (reactor-build: + the Reactor's; skyways lane VIEW: + the Skyways')
+      const of = office ? office.floorKey(L, i) : mall ? mall.floorKey(L, i) : (reactor ?? sky ?? mkt ?? bunk ?? surf)?.floorKey(L, i); // task track3 (lane ARCH): + the mall's floors (reactor-build: + the Reactor's; skyways lane VIEW: + the Skyways')
       if (of) return of;
       const dm = doorFloor.get(L * n0 + i);
       if (dm) return dm;
@@ -502,7 +511,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     // The opening head d.height above a door standing at its storey's base (iteration 08: level 0 at y 0; task
     // office-seamless-20261029: any storey's baseY in a tower world), else the carved cell ceiling.
     const atBase = L === 0 ? df === 0 : storeyDoors && Math.abs(df - levels[L].baseY) < 1e-4;
-    const dk = office?.doorCeilKey(L, a, b) ?? mall?.doorCeilKey(L, a, b) ?? reactor?.doorCeilKey(L, a, b) ?? sky?.doorCeilKey(L, a, b) ?? mkt?.doorCeilKey(L, a, b) ?? bunk?.doorCeilKey(L, a, b) ?? (b.publicSpace ? 'ceiling' : 'ceilingService'), dy = atBase ? df + d.height : g.ceil[i]; // (+ reactor: lane ARCH; + sky: lane VIEW)
+    const dk = office?.doorCeilKey(L, a, b) ?? mall?.doorCeilKey(L, a, b) ?? reactor?.doorCeilKey(L, a, b) ?? sky?.doorCeilKey(L, a, b) ?? mkt?.doorCeilKey(L, a, b) ?? bunk?.doorCeilKey(L, a, b) ?? surf?.doorCeilKey(L, a, b) ?? (b.publicSpace ? 'ceiling' : 'ceilingService'), dy = atBase ? df + d.height : g.ceil[i]; // (+ reactor: lane ARCH; + sky: lane VIEW)
     // Track 2 (VIS): a tunnel door's cells inside the shell take the shell ceiling; the rest keep the door head.
     let owned = false;
     if (ext) for (let y = d.y; y < d.y + d.h && !owned; y++) for (let x = d.x; x < d.x + d.w; x++) if (ext.ownsCell(L, y * g0.w + x)) { owned = true; break; }
@@ -517,7 +526,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     // Task track3-eaton-centre-20261031 (lane ARCH): the mall's ceilings; none over the void (the glass vault), track bed included.
     // (task studio-survivor-market-crevice-20261116-074419, lane ARCH: + the market crevice's chasm / track-bed ceilings and the run's cell /
     // height for its rooms and bridge decks — versions 1-4 answer exactly as before)
-    const oc = r.voidCell ? (mall?.ceilKey(r.level, -1, r.row * g0.w + r.x0, r.y) ?? reactor?.ceilKey(r.level, -1, r.row * g0.w + r.x0, r.y) ?? mkt?.voidCeilKey(r.level, r.row * g0.w + r.x0, r.y) ?? null) : office?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? mall?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? reactor?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? sky?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? mkt?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? bunk?.ceilKey(r.level, r.area) ?? null; // (+ reactor: lane ARCH; + sky: lane VIEW, none inside an atrium opening)
+    const oc = r.voidCell ? (mall?.ceilKey(r.level, -1, r.row * g0.w + r.x0, r.y) ?? reactor?.ceilKey(r.level, -1, r.row * g0.w + r.x0, r.y) ?? mkt?.voidCeilKey(r.level, r.row * g0.w + r.x0, r.y) ?? null) : office?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? mall?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? reactor?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? sky?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? mkt?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? bunk?.ceilKey(r.level, r.area) ?? surf?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? null; // (+ reactor: lane ARCH; + sky: lane VIEW, none inside an atrium opening)
     if (oc === false) { drawnCeils.push(levels[r.level].id, r.x0 * CELL, r.row * CELL, r.x1 * CELL, (r.row + 1) * CELL, r.y, -1); continue; }
     ceilRect(oc ?? (r.voidCell || !a || a.publicSpace ? 'ceiling' : 'ceilingService'), levels[r.level].id, r.x0 * CELL, r.row * CELL, r.x1 * CELL, (r.row + 1) * CELL, r.y);
     if (++step % 128 === 0) yield;
@@ -535,7 +544,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     const geo = e.a.geometry();
     if (!geo) continue;
     const mesh = new THREE.Mesh(geo, matOf(e.k));
-    mesh.name = office?.meshName(e.k) ?? mall?.meshName(e.k) ?? reactor?.meshName(e.k) ?? `arch-${key}`; // (+ reactor: lane ARCH)
+    mesh.name = office?.meshName(e.k) ?? mall?.meshName(e.k) ?? reactor?.meshName(e.k) ?? surf?.meshName(e.k) ?? `arch-${key}`; // (+ reactor: lane ARCH)
     mesh.userData.level = e.level;
     if (e.levels) mesh.userData.levels = e.levels;
     mesh.matrixAutoUpdate = false;
@@ -623,7 +632,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     const fm = office?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a])
       ?? mall?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a])
       ?? reactor?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a])
-      ?? sky?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? mkt?.doorTrimKey() ?? bunk?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? 'steel'; // task track3 (lane ARCH) (+ reactor-build: lane ARCH; + sky: lane VIEW)
+      ?? sky?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? mkt?.doorTrimKey() ?? bunk?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? surf?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? 'steel'; // task track3 (lane ARCH) (+ reactor-build: lane ARCH; + sky: lane VIEW)
     // Task studio-bunker-rework-20261109-205115-01: a THICK opening (both spans > 1 cell: the 2-row vault / Reactor bulkhead lanes) runs
     // along the wall its two areas share — areas apart in Z = a wall along X — and its jambs / head span its whole depth. (Before, it
     // was framed as a wall along Z through its first column: two steel slabs and a bar standing across the lane, walked through.)
@@ -764,6 +773,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     if (isSkywaysMapBoardKind(kind)) { instances += buildSkywaysMapBoards(group, list, mats, layout); continue; } // task studio-skyways-rework-20261107-054512-01 (lane MAPS)
     if (isBunkerObjectiveKind(kind)) continue; // task studio-bunker-level-20261109-072224-01: the Bunker's generators / core cluster are drawn by world/bunker (the objective lane)
     if (isSubwayMapKioskKind(kind)) { instances += buildSubwayMapKiosks(group, list, mats, layout); continue; } // task studio-ui-subway-maps-20261108-074144-01 (procedural, no model)
+    if (isSurfaceKind(kind)) { instances += buildSurfaceKitProp(group, kind, list, mats, instanceModel, models, layout); continue; } // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT): the Surface Run kit (procedural parts, wreck models; its crate is a container above)
     // Storefront furniture / glazing / shutters: built by storefrontBuilder.
     if (SHOP_FURNITURE.includes(kind) || SHOP_BLOCKERS.includes(kind)) continue;
     const def = PROP_DEFS[kind];
@@ -849,6 +859,8 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   registerReactorArchVisuals(reactor ? reactor.visuals : null);
   yield 'world.levelKit.bunker';
   if (bunk) bunk.build(group, models); // task studio-bunker-level-20261109-072224-01: the shelter's hero props (REACTOR_X_KIT models)
+  yield 'world.levelKit.surface';
+  if (surf) yield* surf.buildSteps(group); // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): facades, shopfronts, roofs, the tent
 
   yield 'world.trimMerge';
   for (const [key, e] of boxes) {
@@ -861,6 +873,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     mesh.matrixAutoUpdate = false;
     group.add(mesh);
   }
+  surf?.coarsenTrims(group); // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): the trim family's door frames, one material per 96 m cell
 
   yield 'world.finish';
   group.updateMatrixWorld(true);
@@ -891,14 +904,15 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   const culler = yield* LevelCuller.steps(levels, cols, levelAt, mall ? {atrium: mall.atrium, slabs: {see: (layout.mall?.elevators ?? []).map(e => e.shaft)}}
     : reactor ? {atrium: reactor.pitMask, slabs: {see: reactor.occlusionSee(), glass: []}}
     : layout.skyways ? {slabs: {see: skywaysOcclusionSee(layout), windows: skywaysWindowSpans(layout)}}
+    : layout.surface ? {slabs: {see: surfaceOcclusionSee(layout)}} // (lane LOOK follow-up 2: a Surface Run district — interiors behind its facades; world/surface/lookOcclusion.ts)
     : mkt ? {atrium: mkt.atrium} : undefined); // (task studio-survivor-market-20261108-005807-01: the open shed as atrium tiles, no slabs)
   culler.register(group);
   return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: treatFaces, rails, levelAt, culler,
-    ...(office ? {officeArch: office} : {}), ...(mall ? {mallArch: mall} : {}), ...(trackExt ? {trackExt} : {}), ...(reactor ? {reactorArch: reactor} : {}), ...(sky ? {skywaysArch: sky} : {}), ...(mkt ? {marketArch: mkt} : {}), ...(bunk ? {bunkerArch: bunk} : {}),
+    ...(office ? {officeArch: office} : {}), ...(mall ? {mallArch: mall} : {}), ...(trackExt ? {trackExt} : {}), ...(reactor ? {reactorArch: reactor} : {}), ...(sky ? {skywaysArch: sky} : {}), ...(mkt ? {marketArch: mkt} : {}), ...(bunk ? {bunkerArch: bunk} : {}), ...(surf ? {surfaceArch: surf} : {}),
     ...(rideGates ? {rideGates} : {}),
     drawn: {keys: drawnKeys, floors: drawnFloors, ceils: drawnCeils, faces, // task studio-baked-lighting-reflections-20261114-050258-01
       material: k => (k.startsWith('shop:') ? shapeMaterial(mats, k.slice(5)) : matOf(k.includes('|') ? splitFinishKey(k).base : k))},
-    finishAt: finishResolver(levels, faces, office ?? mall ?? reactor ?? sky ?? mkt ?? bunk ?? null)}; // task reactor-expansion-20261101 (lane CONTROLS): bullet impacts take the drawn finish (+ sky: lane VIEW)
+    finishAt: finishResolver(levels, faces, office ?? mall ?? reactor ?? sky ?? mkt ?? bunk ?? surf ?? null)}; // task reactor-expansion-20261101 (lane CONTROLS): bullet impacts take the drawn finish (+ sky: lane VIEW)
 }
 
 const UP = new THREE.Vector3(0, 1, 0);

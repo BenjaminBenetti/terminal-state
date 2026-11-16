@@ -101,6 +101,9 @@ export async function loadRuntime() {
     // task studio-corpse-market-shop-20261114-031614-01 (lane ASSET): the Market den's model-backed kinds are spread into builder.ts
     // MODEL_FOR (`...CORPSE_DEN_MODEL_FOR`, which the literal scan below cannot read) and load from their own lazy file map
     `export {CORPSE_DEN_MODEL_FOR, CORPSE_DEN_MODEL_FILES} from '${G}/gen/market/v4/denKinds';`,
+    // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT): the Surface Run kit — its procedural triangle meshes, wreck models, crate
+    `export {surfaceKitMesh, KIT_MAT_RGB} from '${G}/gen/surface/kitMesh';`,
+    `export {isSurfaceKind, isSurfaceDrawnKind, isSurfaceWreckKind, SURFACE_WRECK_MODEL} from '${G}/gen/surface/kinds';`,
   ].join('\n');
   const bundle = await rolldown({
     input: 'scale-check-entry', platform: 'node', logLevel: 'silent',
@@ -146,6 +149,22 @@ export async function resolveKind(kind, variantArg = 0) { // (+ variantArg: lane
   if (rt.isContainerKind(kind) && rt.MODEL_FILES[kind]) {
     const file = modelFileOf(rt, kind);
     if (file) return {kind, file, path: 'container (world/containers.ts fittedMeshes)', fit: {type: 'box', ...box}, turn: false, lift: 0, def, modelKey: kind};
+  }
+  // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT): the Surface Run kit — a wreck renders its model at the builder's box fit
+  // (world/surface/kit.ts instanceModel: the measured bounds, scale ~1); a drawn kind its exact runtime triangles (gen/surface/kitMesh.ts,
+  // `--variant`); the crate its authored openable boxes, closed (world/openablesSpec.ts srMilitaryCrate: body + lid)
+  if (rt.isSurfaceWreckKind?.(kind)) {
+    const m = rt.SURFACE_WRECK_MODEL[kind], file = path.join(PUBLIC, m.url);
+    if (fs.existsSync(file)) return {kind, file, path: 'Surface Run wreck (world/surface/kit.ts instanceModel box fit)', fit: {type: 'box', ...box}, turn: false, lift: 0, def, modelKey: m.key};
+  }
+  if (rt.isSurfaceDrawnKind?.(kind)) {
+    return {kind, file: path.join(GAME, 'src/gen/surface/kitMesh.ts'), mesh: rt.surfaceKitMesh(kind, variantArg), path: `Surface Run kit mesh (gen/surface/kitMesh.ts, variant ${variantArg}; world/surface/kit.ts)`,
+      fit: null, turn: false, lift: 0, def, modelKey: null, notes: ['exact runtime triangles (no model file): flat stand-in colours per material']};
+  }
+  if (rt.isSurfaceKind?.(kind) && spec?.body === 'authored' && spec.bodyBoxes?.length) {
+    const parts = [...spec.bodyBoxes, ...spec.parts.flatMap(q => q.boxes ?? [])].map(q => ({m: q.m, s: [q.b[3] - q.b[0], q.b[4] - q.b[1], q.b[5] - q.b[2]], p: [(q.b[0] + q.b[3]) / 2, (q.b[1] + q.b[4]) / 2, (q.b[2] + q.b[5]) / 2]}));
+    return {kind, file: path.join(GAME, 'src/world/openablesSpec.ts'), parts, accent: 0x8a8f94, path: 'authored openable, closed (world/openablesSpec.ts bodyBoxes + part boxes; world/openables.ts)',
+      fit: null, turn: false, lift: 0, def, modelKey: null, notes: ['authored boxes (no model file): flat stand-in colours per material role']};
   }
   const asset = rt.officeKindAsset(kind);
   if (asset && (rt.isOfficeKind(kind) || kind === 'desk')) {
@@ -231,6 +250,17 @@ function partsModel(kind, parts, def, accent) {
       tris.push({p: [v[a], v[b], v[c]], uv: null, img: null, bc, blend: false, name: `${kind}/${part.m}`});
       tris.push({p: [v[a], v[c], v[d]], uv: null, img: null, bc, blend: false, name: `${kind}/${part.m}`});
     }
+  }
+  return {file: `procedural:${kind}`, tris, fitBox: {min: [-def.w / 2, 0, -def.d / 2], max: [def.w / 2, def.h, def.d / 2]}};
+}
+
+/** (lane KIT, Surface Run) A kit mesh's triangles (gen/surface/kitMesh.ts: per material {pos, nor, idx}) as a loadModel() result. */
+function kitMeshModel(kind, mesh, def, rgbOwn) {
+  const tris = [];
+  const rgb = hex => [((hex >> 16) & 255) / 200, ((hex >> 8) & 255) / 200, (hex & 255) / 200, 1];
+  for (const [m, q] of mesh) {
+    const bc = rgb(PART_RGB[m] ?? rgbOwn?.[m] ?? 0x9a9a9a), v = i => [q.pos[i * 3], q.pos[i * 3 + 1], q.pos[i * 3 + 2]];
+    for (let i = 0; i + 2 < q.idx.length; i += 3) tris.push({p: [v(q.idx[i]), v(q.idx[i + 1]), v(q.idx[i + 2])], uv: null, img: null, bc, blend: false, name: `${kind}/${m}`});
   }
   return {file: `procedural:${kind}`, tris, fitBox: {min: [-def.w / 2, 0, -def.d / 2], max: [def.w / 2, def.h, def.d / 2]}};
 }
@@ -676,7 +706,8 @@ export async function measureProp(spec) {
   }
   const file = spec.model ?? spec.file ?? base.file;
   // (lane CACHE, R5) an authored procedural purpose shape: its box parts, unless a --model GLB is swapped in
-  const model = base.parts && !spec.model ? partsModel(spec.kind, base.parts, base.def, base.accent) : await loadModel(path.resolve(file));
+  const model = base.mesh && !spec.model ? kitMeshModel(spec.kind, base.mesh, base.def, (await loadRuntime()).KIT_MAT_RGB) // (lane KIT: the Surface Run kit's triangles)
+    : base.parts && !spec.model ? partsModel(spec.kind, base.parts, base.def, base.accent) : await loadModel(path.resolve(file));
   const o = {
     fit: spec.fit ?? base.fit ?? null, scale: spec.scale ?? null,
     turn: spec.turn ?? base.turn ?? false, lift: spec.lift ?? base.lift ?? 0,

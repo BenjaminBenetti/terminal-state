@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 94986,
-      "sha256": "6ad376dd195eff7d49c24407f498c2f245fd4a8b9c0193097e6aa21c138cb026"
+      "bytes": 96109,
+      "sha256": "59d2fe40b30cde88106e14cc371bf7045ab17352afa8de1f12b0d626e4ed4452"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -3054,6 +3054,11 @@
       "sha256": "50abde035753fad48aab8779a12817435178c1a5d720eecf4105c22a4d3dbdf9"
     },
     {
+      "path": "assets/derivatives/surface-military-truck.json",
+      "bytes": 30184,
+      "sha256": "7a368e16e106fc732340aa5ed0804105ffdb9ed4386d49430435eae4a61fcbcd"
+    },
+    {
       "path": "assets/derivatives/train-armor-makeover-20261113.json",
       "bytes": 20568,
       "sha256": "74d5f8084f2f8361ff04275ec2d7241d0dceab5f6710070beca431ae141261d2"
@@ -5522,6 +5527,11 @@
       "path": "assets/models/stall-t25.glb",
       "bytes": 646764,
       "sha256": "f3d8902c1c6c5dafd795ad18178012bfa4bcce90c606c009ddd1b6421cfa147c"
+    },
+    {
+      "path": "assets/models/surface-military-truck.glb",
+      "bytes": 6559388,
+      "sha256": "0ab5226b07226aca0a9d0b8264665a0f295df96f0afdc6dda202fea7188aa676"
     },
     {
       "path": "assets/models/tech-display-t25.glb",

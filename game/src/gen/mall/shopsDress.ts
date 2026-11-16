@@ -1187,8 +1187,11 @@ const RECIPES: Record<MallRecipe, Recipe> = {
 };
 const OPP_ROT: Record<Side, number> = {N: Math.PI, S: 0, W: -Math.PI / 2, E: Math.PI / 2};
 
-/** Stock-room recipe by program (shelving runs on the long walls, cartons, crates, the program's extras). */
-function dressBack(d: ShopDresser, f: MallShopFit): void {
+/**
+ * Stock-room recipe by program (shelving runs on the long walls, cartons, crates, the program's extras). Exported for the Surface Run
+ * building interiors (task studio-surface-run-opus-rebuild-20261116-020827-01, lane ROOMS: gen/surface/rooms/dress.ts backRoom).
+ */
+export function dressBack(d: ShopDresser, f: MallShopFit): void {
   const {W, D} = d;
   // a stock room the station dresser already furnished (its 'stock-room' purpose rules: shelving runs, cartons, crates) keeps that
   // and only gains the program's own pieces (the gun shop's desk / safe / lockers, the dispensary's cabinets / specimen fridge …)

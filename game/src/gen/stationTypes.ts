@@ -16,6 +16,7 @@ import type {MarketLayout} from './market/marketTypes'; // task studio-survivor-
 import type {WasteDecor} from './reactor/complex/wasteTypes'; // task reactor-expansion-20261101 (lane WASTE): the waste repository decor
 import type {HordeGroupSpec} from '../ai/hordeSpec'; // Task track3-eaton-centre-20261031 (lane HORDE)
 import type {TrackExtensions} from './trackExt/types';
+import type {SurfaceAccessInfo, SurfaceInfo} from './surface/surfaceTypes'; // task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN
 
 export type AreaKind = 'platform' | 'passage' | 'concourse' | 'service' | 'room' | 'closet';
 /** Deliberate mixed lighting: public pockets lit, back-of-house dim or dark (no working light). */
@@ -33,7 +34,10 @@ export type RoomType =
   // cab and the stairwell vestibule. Never produced by generateStation.
   | 'office-lobby' | 'office-corridor' | 'office-open' | 'office-room' | 'office-elevator' | 'office-stair'
   // Task office-overhaul-20261030 (lane STRUCT): the tower's open-sky roof deck (layout level 9).
-  | 'office-roof';
+  | 'office-roof'
+  // Task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN's outdoor ground (streets, sidewalks, lots, plazas, the checkpoint
+  // compound: gen/surface). Never produced by any other generator; its interiors reuse the room types above.
+  | 'street';
 
 /**
  * Macro station archetype (iteration 04): recognisably different structures, not one template.
@@ -403,6 +407,16 @@ export interface StationLayout {
    * (gen/trackExt); absent on levels without them ('none').
    */
   extensions?: TrackExtensions;
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN — the ruined district's own layout (section 'surface' of a
+   * Subway / Office / Mall station: gen/surface). Absent on every other layout.
+   */
+  surface?: SurfaceInfo;
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01: the way up / out to the station's Surface Run district (the host station's
+   * 'main' layout of a station whose surface roll and version allow it: gen/surface/access.ts). Absent on every other layout.
+   */
+  surfaceAccess?: SurfaceAccessInfo;
 }
 
 // ---------------------------------------------------------------------------------------

@@ -19,9 +19,12 @@ export interface EquipmentUnit {
   readonly kind: EquipmentKind;
   readonly def: EquipmentDef;
   /**
-   * 'world': standing in the level or in the parked car; 'cargo': riding the moving car; 'held': carried in the player's hands.
+   * 'world': standing in the level or in the parked car; 'cargo': riding the moving car; 'held': carried in the player's hands;
+   * 'mount' (task studio-surface-run-opus-rebuild-20261116-020827-01, lane CARGO): secured to a mount point of the section (Surface Run:
+   * one of the truck's attachment points) — it follows the point rigidly, no body in the world, never plugged; the section's, not the
+   * train's.
    */
-  readonly mode: 'world' | 'cargo' | 'held';
+  readonly mode: 'world' | 'cargo' | 'held' | 'mount';
   /** The train plug it is connected to right now (craft/trainFixtures.ts equipmentPlugs index), or null. */
   readonly plug: number | null;
   /**

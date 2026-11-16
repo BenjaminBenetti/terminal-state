@@ -23,6 +23,7 @@ export const ROOM_LABEL: Record<RoomType, string> = {
   'office-elevator': 'Elevator', 'office-stair': 'Stairwell',
   // Task office-overhaul-20261030 (lane STRUCT): the open-sky roof deck of the tower.
   'office-roof': 'Roof',
+  street: 'Street', // (Surface Run)
 };
 
 export type Wing = 'food' | 'north' | 'agent' | 'misc';

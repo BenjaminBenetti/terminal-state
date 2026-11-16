@@ -43,6 +43,7 @@ import {genericAmmo} from '../items/calibers';
 import {REACTOR_BUNKER_PURPOSES} from './reactor/complex/bunkerPurposes'; // task reactor-expansion-20261101 (lane BUNKER)
 import {SKYWAYS_RAMEN_PURPOSES} from './skyways/ramenPurposes'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {SKYWAYS_EVENT_LOOT_PURPOSES} from './skyways/events/eventLootPurposes'; // task studio-skywalk-loot-performance-20261116-022934-01 (lane LOOT)
+import {SURFACE_ROOM_PURPOSES} from './surface/rooms/lootPurposes'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ROOMS)
 
 // ---------------------------------------------------------------------------------------
 // Types
@@ -638,6 +639,9 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
   ...REACTOR_BUNKER_PURPOSES(),
   // task studio-skyways-level-20261106-054448 (lane FOOD): the Skyways ramen restaurant's dining room / kitchen ('skyways-ramen*', preset; weight 0, appended last)
   ...SKYWAYS_RAMEN_PURPOSES(),
+  // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ROOMS): the Surface Run buildings' back-of-house loot keys ('surface-*', preset; weight 0;
+  // before the Skyways event keys, which tests/skyways-event-loot.test.ts pins as the last entries)
+  ...SURFACE_ROOM_PURPOSES(),
   // task studio-skywalk-loot-performance-20261116-022934-01 (lane LOOT): the new Skyways events' supply holders ('skyways-expo-* / golf-* / evac-*', prop-level keys; weight 0, appended last)
   ...SKYWAYS_EVENT_LOOT_PURPOSES(),
 };

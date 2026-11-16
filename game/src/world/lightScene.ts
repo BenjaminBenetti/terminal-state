@@ -11,6 +11,9 @@
 import {CELL} from '../gen/grid';
 import type {ColumnGeometry} from './lightField';
 
+/** (lane LOOK P0: the cell size as a module local — read per ray step; see world/lightFieldGather.ts) */
+const CELL_M = CELL;
+
 /** A hit surface's kind. */
 export const HIT_FLOOR = 0, HIT_CEIL = 1, HIT_WALL = 2;
 
@@ -78,7 +81,7 @@ export class BandScene {
 
   /** The band of the column holding world (x, z) at height y, or -1 (outside the grid / inside the solid). */
   bandAtPoint(x: number, y: number, z: number): number {
-    const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
+    const cx = Math.floor(x / CELL_M), cz = Math.floor(z / CELL_M);
     if (cx < 0 || cz < 0 || cx >= this.W || cz >= this.H) return -1;
     return this.bandAt(cz * this.W + cx, y);
   }
@@ -89,7 +92,7 @@ export class BandScene {
    */
   trace(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxT: number): boolean {
     const {W, H, start, f, c} = this;
-    let cx = Math.floor(ox / CELL), cz = Math.floor(oz / CELL);
+    let cx = Math.floor(ox / CELL_M), cz = Math.floor(oz / CELL_M);
     if (cx < 0 || cz < 0 || cx >= W || cz >= H) return false;
     let col = cz * W + cx;
     let b = -1;
@@ -100,9 +103,9 @@ export class BandScene {
     // (task studio-baked-gi-visual-uplift-20261115-004324-01, lane BOUNCE: NEVER as the bare global `Infinity` — V8 then keeps these
     // four as boxed numbers and allocates one for every cell a ray crosses, in a function that must not allocate. The same value.)
     const NEVER = Number.POSITIVE_INFINITY;
-    const tDX = adx > 1e-9 ? CELL / adx : NEVER, tDZ = adz > 1e-9 ? CELL / adz : NEVER;
-    let tMaxX = adx > 1e-9 ? (dx > 0 ? (cx + 1) * CELL - ox : ox - cx * CELL) / adx : NEVER;
-    let tMaxZ = adz > 1e-9 ? (dz > 0 ? (cz + 1) * CELL - oz : oz - cz * CELL) / adz : NEVER;
+    const tDX = adx > 1e-9 ? CELL_M / adx : NEVER, tDZ = adz > 1e-9 ? CELL_M / adz : NEVER;
+    let tMaxX = adx > 1e-9 ? (dx > 0 ? (cx + 1) * CELL_M - ox : ox - cx * CELL_M) / adx : NEVER;
+    let tMaxZ = adz > 1e-9 ? (dz > 0 ? (cz + 1) * CELL_M - oz : oz - cz * CELL_M) / adz : NEVER;
     const down = dy < 0, level = dy === 0, invDy = level ? 0 : 1 / dy;
     for (let guard = 0; guard < 4096; guard++) {
       const tExit = tMaxX < tMaxZ ? tMaxX : tMaxZ;

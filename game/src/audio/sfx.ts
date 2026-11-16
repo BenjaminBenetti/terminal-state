@@ -88,6 +88,9 @@ const BEDS: Record<string, BedProfile> = {
   'crew-room': BED(0, 0.2, 0.2, 0.4, 0.3, 0.2, 0.2, 0.3, 0.2),
   'supply-closet': BED(0, 0.18, 0.05, 0, 0.25, 0.3, 0.3, 0.25, 0.3),
   'janitor-closet': BED(0, 0.18, 0.05, 0, 0.25, 0.6, 0.3, 0.25, 0.3),
+  // task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN's outdoors — open-air wind over a dead city (no machinery
+  // hum, no drips; the odd creak / distant rumble); its interiors take their own room types' beds
+  'street': BED(1, 0.2, 0, 0, 0, 0, 0.35, 0.25, 0),
 };
 const BEDS_BY_KIND: Record<RoomKind, BedProfile> = {
   tunnel: BEDS['platform'], large: BEDS['concourse'], medium: BEDS['passage'], small: BEDS['storage'],
@@ -225,6 +228,7 @@ const TILE_FLOOR = new Set(['passage', 'fare-hall', 'concourse', 'food-court', '
 export function roomKindFor(area: {type: string; kind?: string; w?: number; h?: number}): RoomKind {
   // Track 2 (VIS): the track tunnels beyond the beds ring like the bed itself; service annexes go by their room types.
   if ((area as {ext?: string}).ext === 'tunnel') return 'tunnel';
+  if (area.type === 'street') return 'small'; // (Surface Run) open air: a short, dry tail whatever the area's size — never a hall's bloom
   const m2 = (area.w ?? 0) * (area.h ?? 0) * 0.25; // cells are 0.5 m
   const known = TYPE_ROOM[area.type];
   if (known === 'large' && m2 > 0 && m2 < 90) return 'medium';

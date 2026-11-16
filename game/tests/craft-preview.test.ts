@@ -53,8 +53,11 @@ beforeEach(async () => { M = await load(); shotNo = 0; });
 afterEach(() => { vi.restoreAllMocks(); });
 
 const ids = () => M.recipes.RECIPES.map(r => M.view.craftPreviewId(r.kind));
-const dollyKinds = () => M.equipment.EQUIPMENT_KINDS.filter(k => M.equipment.EQUIPMENT[k].move === 'dolly');
-const carryKinds = () => M.equipment.EQUIPMENT_KINDS.filter(k => M.equipment.EQUIPMENT[k].move === 'carry');
+// (re-pin, task studio-surface-run-opus-rebuild-20261116-020827-01, lane CARGO: the recipe list's kinds — an upgrade kit, kind
+// 'armor-kit', is a found unit with no bench recipe of its own, so it has no recipe row / preview; its look is the equipment's own)
+const craftable = (k: string) => M.recipes.RECIPES.some(r => r.kind === k);
+const dollyKinds = () => M.equipment.EQUIPMENT_KINDS.filter(k => M.equipment.EQUIPMENT[k].move === 'dolly' && craftable(k));
+const carryKinds = () => M.equipment.EQUIPMENT_KINDS.filter(k => M.equipment.EQUIPMENT[k].move === 'carry' && craftable(k));
 
 /** A stub cooked scene: one mesh; its geometry / material count their 'dispose' events (they must never get one). */
 function stubScene(name: string, size: [number, number, number], disposed: string[]): THREE.Group {
@@ -149,7 +152,7 @@ describe('recipe previews: the object is the real unit — or nothing', () => {
     const S = M.look.equipmentMaterials();
     expect(dollyKinds().length).toBeGreaterThan(0);
     expect(carryKinds().length).toBeGreaterThan(0);
-    for (const k of M.equipment.EQUIPMENT_KINDS) {
+    for (const k of M.equipment.EQUIPMENT_KINDS.filter(craftable)) { // (re-pin, lane CARGO: the kinds a recipe previews — see craftable)
       const def = M.equipment.EQUIPMENT[k], a = M.preview.previewObject(look, def)!, b = M.preview.previewObject(look, def)!;
       expect(a, k).toBeTruthy();
       expect(a).not.toBe(b); // never one object handed out twice (never a live unit's view)
@@ -202,7 +205,9 @@ describe('recipe previews: through the inventory\'s icon pass and cache', () => 
     const {look, disposed} = models();
     const previews = new M.preview.CraftPreviews({look: () => look}).install();
     expect(previews.ids).toEqual(ids());
-    expect(previews.ids).toEqual(M.equipment.EQUIPMENT_KINDS.map(k => `equipment:${k}`)); // every kind has a recipe, so every kind a preview
+    // every craftable kind has a recipe, so every one a preview (re-pin, lane CARGO: not the found upgrade kit — no recipe of its own)
+    expect(previews.ids).toEqual(M.equipment.EQUIPMENT_KINDS.filter(craftable).map(k => `equipment:${k}`));
+    expect(M.equipment.EQUIPMENT_KINDS.filter(k => !craftable(k)).every(k => M.equipment.EQUIPMENT[k].upgrade !== null)).toBe(true);
     expect(previews.missing()).toEqual(ids());
     const {renderer, log} = recorder();
     const changed: string[][] = [];

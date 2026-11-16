@@ -46,6 +46,14 @@
 // reuse existing cues (the metal crash, the flesh slap). Round 2 (task skyways-vehicle-20261107, lane AUDIO; audio/sfx.ts CAR_AUDIO has
 // the root cause: the round-1 engine loops were sub-bass only): the engine START on getting in, mid-range engine loops rising with the
 // speed / pedal, the reverse-gear whine while reversing, the brake-to-stop (CAR_SOUND), and Sfx.carImpact for the contacts.
+//
+// Task surface-run-opus-rebuild-20261116-020827 (lane TRUCK): ONE CONTROLLER, PER-VEHICLE DEFINITIONS (world/skywaysCarVehicle.ts
+// VehicleDef). Each world build picks the first registered definition whose spawn the layout has: CAR_DEF (the Skyways add-on's car:
+// CAR_SPEC / CAR_RT / CAR_TEXT / CAR_PHYS, its record lane, model and lamps — exactly as before) or a definition another lane registers
+// with addVehicle() (world/surface/truckVehicle.ts TRUCK_DEF: the Surface Run truck). Everything above (controls, enter / exit, the
+// seat, collisions, run-over, prop shoves, glass, bullets, audio, persistence moments) is shared; the anchors, tuning, texts, record,
+// model and lamps come from the definition. `enclosed` (seated in a closed cab), the attachment points (cargo) and the body transform /
+// move listeners are generic seams; the car has no attachment points and is not enclosed.
 
 import * as THREE from 'three';
 import type {Game} from '../game';
@@ -61,11 +69,13 @@ import {STAMINA_PCT_PER_UNIT, STAMINA_REGEN, STAND_EYE} from '../player/player';
 import {paneCentre, type PaneRef} from './windowBreach';
 import {rayBox, type Box3Like} from './towerShared';
 import {CAR_SPEC, carToWorld, worldToCar, type CarSpec} from './skywaysCarSpec';
-import {CAR_PHYS, CAR_STAIRS, NO_CONTROLS, carPose, nearestCircle, settlePose, stepCar, wrapAngle, type CarBody, type CarControls, type CarImpact, type CarPose, type CarStep, type CarWorld} from './skywaysCarPhysics';
+import {CAR_PHYS, CAR_STAIRS, NO_CONTROLS, carPose, nearestCircle, settlePose, stepCar, wrapAngle, type CarBody, type CarControls, type CarImpact, type CarPhys, type CarPose, type CarStep, type CarWorld} from './skywaysCarPhysics';
 import {SKYWAYS_CAR_LANE, emptyTrunk, skywaysCarProblem, skywaysCarRecord, upgradeCarRecord, type SkywaysCarRecord, type SkywaysCarRecordV1} from './skywaysCarStore';
 import type {StackJSON} from '../items/inventory';
+import type {WorldHit} from '../combat/hitscan';
 import {buildCarView, carModelsGen, loadSkywaysCarModel, refreshCarView, releaseSkywaysCarModel, setWheel, type CarView} from './skywaysCarModel';
 import {attachCarBeam, createCarBeam, setCarLamps, type CarBeam} from './skywaysCarLights';
+import type {VehicleAttachPoint, VehicleDef, VehicleRecordPose, VehicleRt, VehicleText, VehicleTransform} from './skywaysCarVehicle';
 
 export const CAR_RT = {
   /** Aim reach to the car's body (eye -> hit, m) and the most a player may stand from a door's side point (m, horizontal). */
@@ -180,6 +190,52 @@ export function sfxCarAudio(sfx: () => unknown): CarAudio {
   };
 }
 
+/**
+ * (lane TRUCK) The Skyways car as a vehicle definition: its spec (the physics steps the spec itself: CAR_PHYS, the stairs rule), CAR_RT,
+ * CAR_TEXT, the 'skyways.car' record (v2; a v1 record upgrades: lamps off, an empty trunk), its model / lamps — every value as before.
+ */
+export function carDef(spec: CarSpec): VehicleDef {
+  return {
+    id: 'car',
+    name: 'skyways-car',
+    spec,
+    geom: spec,
+    rt: CAR_RT,
+    text: CAR_TEXT,
+    enclosed: false,
+    spawnOf: layout => layout?.skyways?.addon?.car ?? null,
+    model: {
+      load: s => loadSkywaysCarModel(s),
+      release: releaseSkywaysCarModel,
+      build: s => buildCarView(s),
+      refresh: (v, s) => refreshCarView(v, s),
+      gen: () => carModelsGen,
+      sync: (v, b, dt) => setWheel(v, b.steer, dt),
+    },
+    lamps: {createBeam: createCarBeam, set: setCarLamps},
+    record: {
+      lane: SKYWAYS_CAR_LANE,
+      read: (raw: unknown): VehicleRecordPose | null => (raw !== undefined && skywaysCarProblem(raw) === null ? upgradeCarRecord(raw as SkywaysCarRecordV1 | SkywaysCarRecord) : null),
+      load(car, rec) {
+        const r = rec as SkywaysCarRecord | null;
+        // (record v2) the car's own state comes back with it even when its pose fell back to the spawn (never lost, never doubled)
+        car.lights = r?.lights ?? false;
+        car.trunkJSON = r ? structuredClone(r.trunk) : emptyTrunk();
+      },
+      write(car, b) {
+        if (car.trunkSource) car.trunkJSON = car.trunkSource();
+        return skywaysCarRecord(b.x, b.y, b.z, b.yaw, b.level, {lights: car.lights, trunk: car.trunkJSON});
+      },
+    },
+  };
+}
+
+/** The Skyways car's definition (the controller's default vehicle). */
+export const CAR_DEF: VehicleDef = carDef(CAR_SPEC);
+
+/** (lane TRUCK, the cargo seam) Cargo may be secured / taken off only with the vehicle at rest (|v| at most this, m/s). */
+export const CARGO_STILL = 0.3;
+
 interface ZombieLike {
   brain: {x: number; y: number; z: number; hp: number; readonly alive: boolean; readonly climbing?: boolean; stats: {radius: number; height?: number};
     damage(amount: number, fromX: number, fromZ: number, fromY?: number, o?: {stagger?: boolean}): boolean};
@@ -241,7 +297,9 @@ const clamp = (v: number, a: number, b: number): number => (v < a ? a : v > b ? 
 export class SkywaysCar {
   /** The car's view root lives here (one car per world). */
   readonly root = new THREE.Group();
-  readonly spec: CarSpec;
+  /** (lane TRUCK) The vehicle of this world (the last built; the car's until another vehicle's world is built) and the registered ones. */
+  private def: VehicleDef;
+  private readonly vehicles: VehicleDef[];
   /** The car's controller state (null: no car in this world). */
   body: CarBody | null = null;
   view: CarView | null = null;
@@ -270,6 +328,23 @@ export class SkywaysCar {
    * its prompt shows and [E] opens it instead of the doors rule (one action per press; never while seated: E gets out first).
    */
   rear: {aimed(): boolean; interact(): boolean; readonly prompt: string} | null = null;
+  /**
+   * (lane TRUCK) More [E] targets on the parked vehicle, after `rear` (the truck's storage compartments: world/surface/truckStorage.ts):
+   * the first aimed one's prompt shows and [E] opens it instead of the doors rule; each is inert on a vehicle it does not belong to.
+   */
+  readonly access: {aimed(): boolean; interact(): boolean; readonly prompt: string}[] = [];
+  /**
+   * (lane TRUCK) The vehicle's storage compartments' slots (StackJSON, uids kept), read from its record at the build; the live store
+   * (storageSource) supplies them whenever the record is written. Empty for a vehicle without compartments (the car: its trunk above).
+   */
+  storageJSON: (StackJSON | null)[][] = [];
+  storageSource: (() => (StackJSON | null)[][]) | null = null;
+  /** (lane TRUCK, the cargo seam) Called with the body transform whenever the vehicle's pose changes (no allocation per call: reused). */
+  readonly moveListeners: ((t: Readonly<VehicleTransform>) => void)[] = [];
+  /** (lane TRUCK, the cargo seam) Whether a cargo owner holds an attachment point (the owner sets it; absent = all free). */
+  attachOccupied: ((id: string) => boolean) | null = null;
+  /** (lane TRUCK follow-up) The world hit shotStop last made (bulletHit claims exactly that object; null: none pending). */
+  private stopHit: WorldHit | null = null;
   /** QA / tests. */
   readonly counts = {builds: 0, teardowns: 0, enters: 0, exits: 0, exitRefused: 0, forced: 0, kills: 0, crushed: 0, pushes: 0, propKicks: 0,
     impacts: 0, panes: 0, propGlass: 0, stores: 0, bullets: 0, released: 0, notes: 0};
@@ -279,6 +354,11 @@ export class SkywaysCar {
    * build (before the warm-up) to its teardown; `lights` only sets its intensity (and the lenses' glow). Null: no car world built yet.
    */
   beam: CarBeam | null = null;
+  /** (lane TRUCK) One beam per vehicle definition (each a stable light for its visits' programs); `beam` = this world's. */
+  private readonly beams = new Map<VehicleDef, CarBeam>();
+  /** (lane TRUCK) Where the view was last synced (the wheels roll by the distance along the heading since) and the reused transform. */
+  private syncedAt: {x: number; z: number} | null = null;
+  private readonly xf: VehicleTransform = {x: 0, y: 0, z: 0, yaw: 0, pitch: 0, level: 0};
   readonly ctl: CarControls = {...NO_CONTROLS};
   private yawSeen = 0;
   private clock = 0;
@@ -304,10 +384,51 @@ export class SkywaysCar {
   private readonly box: Box3Like = {min: {x: 0, y: 0, z: 0}, max: {x: 0, y: 0, z: 0}};
 
   constructor(readonly host: SkywaysCarHost, spec: CarSpec = CAR_SPEC) {
-    this.spec = spec;
+    this.def = spec === CAR_SPEC ? CAR_DEF : carDef(spec);
+    this.vehicles = [this.def];
     this.root.name = 'skyways-car-root';
     this.audio = sfxCarAudio(() => this.host.sfx);
     this.walkerIds = spec.circles.map(() => ({}));
+  }
+
+  /** (lane TRUCK) This world's vehicle anchors (the car's until another vehicle's world is built). */
+  get spec(): CarSpec {
+    return this.def.spec;
+  }
+
+  /** (lane TRUCK) This world's vehicle tuning: the runtime rules, the texts, the physics. */
+  get rt(): VehicleRt {
+    return this.def.rt;
+  }
+
+  get text(): VehicleText {
+    return this.def.text;
+  }
+
+  private get phys(): CarPhys {
+    return this.def.geom.phys ?? CAR_PHYS;
+  }
+
+  /** (lane TRUCK) Which vehicle stands in this world ('car' | 'truck'; null: none). */
+  get vehicle(): VehicleDef['id'] | null {
+    return this.worldLive && this.body ? this.def.id : null;
+  }
+
+  /** (lane TRUCK, for lane AIR) The player is seated in a closed cab (the truck; never the car). */
+  get enclosed(): boolean {
+    return this.driving && this.worldLive && this.def.enclosed;
+  }
+
+  /** (lane TRUCK) Registers another vehicle (picked at a build whose layout has its spawn; the first match wins). Idempotent. */
+  addVehicle(def: VehicleDef): this {
+    if (!this.vehicles.includes(def)) this.vehicles.push(def);
+    return this;
+  }
+
+  /** The registered vehicle a layout has (null: none). */
+  private defFor(layout: StationLayout | null): VehicleDef | null {
+    for (const d of this.vehicles) if (d.spawnOf(layout)) return d;
+    return null;
   }
 
   // ---------------------------------------------------------------------------------------------------------------------
@@ -322,12 +443,15 @@ export class SkywaysCar {
     h.inputOwners?.push(this.ownsInput);
     h.stateListeners?.push(((s: string) => this.onState(s)) as (s: never, p: never) => void);
     h.sectionHooks.push({build: ((layout: StationLayout) => this.onBuild(layout)) as (l: never) => void, teardown: () => this.onTeardown()});
-    h.sectionPreloads?.push(((layout: StationLayout) => (layout.skyways?.addon?.car
-      ? Promise.race([loadSkywaysCarModel(this.spec).then(() => undefined), new Promise<void>(r => setTimeout(r, CAR_RT.modelWaitMs))])
-      : Promise.resolve())) as (l: never) => Promise<void>);
+    h.sectionPreloads?.push(((layout: StationLayout) => {
+      const d = this.defFor(layout); // (lane TRUCK: the layout's vehicle; the car's as before)
+      return d
+        ? Promise.race([d.model.load(d.spec).then(() => undefined), new Promise<void>(r => setTimeout(r, d.rt.modelWaitMs))])
+        : Promise.resolve();
+    }) as (l: never) => Promise<void>);
     h.warmRegistry.addPool('skyways-car', () => (this.view ? [this.view.group] : []));
     h.bulletHitHandlers?.push(((wh: {t: number}, point: THREE.Vector3, dir: THREE.Vector3) => this.bulletHit(wh, point, dir)) as never);
-    h.gear?.placeRules?.push(() => (this.driving ? CAR_TEXT.placeRule : null));
+    h.gear?.placeRules?.push(() => (this.driving ? this.text.placeRule : null));
     return this;
   }
 
@@ -336,32 +460,39 @@ export class SkywaysCar {
 
   onBuild(layout: StationLayout): void {
     if (this.worldLive) this.onTeardown();
-    const spawn = layout?.skyways?.addon?.car;
+    // (lane TRUCK) this layout's vehicle (the car: layout.skyways.addon.car as before); the other vehicles' models are released
+    const def = this.defFor(layout);
+    const spawn = def?.spawnOf(layout);
     const L = this.host.levels;
-    if (!spawn || !L) { if (releaseSkywaysCarModel()) this.counts.released++; return; }
+    if (!def || !spawn || !L) { this.releaseModels(null); return; }
+    this.releaseModels(def);
+    this.def = def;
     const rec = this.readRecord();
-    // (stairs) a stored pose may stand on a flight: tried flat, then up / down a flight's pitch
+    // (stairs) a stored pose may stand on a flight: tried flat, then up / down a flight's pitch ((lane TRUCK) a vehicle that never takes
+    // a flight: flat only)
+    const pitches = def.geom.stairs === false ? [0] : CAR_STAIRS.loadPitches;
     const fit = (p: {x: number; y: number; z: number; yaw: number; level: number}): CarPose | null => {
       if (p.level < 0 || p.level >= L.count) return null;
-      for (const pitch of CAR_STAIRS.loadPitches) { const q = carPose(L, p.x, p.z, p.yaw, p.y, pitch, p.level, this.spec); if (q) return q; }
+      for (const pitch of pitches) { const q = carPose(L, p.x, p.z, p.yaw, p.y, pitch, p.level, def.geom); if (q) return q; }
       return null;
     };
     const fromRec = rec ? fit(rec) : null;
     const pose = fromRec ? rec! : spawn;
-    // (record v2) the car's own state comes back with it even when its pose fell back to the spawn (never lost, never doubled)
-    this.lights = rec?.lights ?? false;
-    this.trunkJSON = rec ? structuredClone(rec.trunk) : emptyTrunk();
+    def.record.load(this, rec); // (record v2: the car's lamps + trunk; the truck's lamps + compartments)
     this.source = pose === rec ? 'record' : 'spawn';
     const at = fromRec ?? fit(spawn);
     this.body = {x: pose.x, y: at?.y ?? pose.y, z: pose.z, yaw: wrapAngle(pose.yaw), v: 0, steer: 0, level: at?.level ?? pose.level, yawRate: 0, pitch: at?.pitch ?? 0};
-    this.view = buildCarView(this.spec);
-    this.view.group.name = 'skyways-car';
-    if (this.view.standIn && typeof document !== 'undefined') console.warn('skyways car: the model is not loaded — a stand-in body is drawn');
+    this.view = def.model.build(this.spec);
+    this.view.group.name = def.name;
+    if (this.view.standIn && typeof document !== 'undefined') console.warn(`${def.name.replace('-', ' ')}: the model is not loaded — a stand-in body is drawn`);
     this.root.add(this.view.group);
     // (lane VIS) the beam joins this world now, before the warm-up (the view group is the 'skyways-car' warm pool): on / off from here
-    // on is its intensity only — the scene's light set never changes during play
-    this.beam ??= createCarBeam();
+    // on is its intensity only — the scene's light set never changes during play ((lane TRUCK) one beam per vehicle definition)
+    let beam = this.beams.get(def);
+    if (!beam) { beam = def.lamps.createBeam(); this.beams.set(def, beam); }
+    this.beam = beam;
     attachCarBeam(this.beam, this.view.group);
+    this.syncedAt = null;
     this.decorateView();
     this.syncView();
     // the layout props the car can shove (dynamic kinds) / shatter (glazed kinds), by their layout index (shootProp / hitWorld need it)
@@ -400,22 +531,28 @@ export class SkywaysCar {
     this.counts.teardowns++;
   }
 
-  /** The station's car record (valid, else null), as v2 (a v1 record: lamps off, an empty trunk). */
-  readRecord(): SkywaysCarRecord | null {
-    let raw: unknown;
-    try { raw = this.host.run.laneStore(SKYWAYS_CAR_LANE); } catch { raw = undefined; }
-    return raw !== undefined && skywaysCarProblem(raw) === null ? upgradeCarRecord(raw as SkywaysCarRecordV1 | SkywaysCarRecord) : null;
+  /** (lane TRUCK) The registered vehicles' models other than `keep`'s are released (a world without them); counted once per build. */
+  private releaseModels(keep: VehicleDef | null): void {
+    let released = false;
+    for (const d of this.vehicles) if (d !== keep && d.model.release()) released = true;
+    if (released) this.counts.released++;
   }
 
-  /** Where the car stands now -> this station's lane store. */
+  /** The station's vehicle record (valid, else null); the car's as v2 (a v1 record: lamps off, an empty trunk). */
+  readRecord(): VehicleRecordPose | null {
+    let raw: unknown;
+    try { raw = this.host.run.laneStore(this.def.record.lane); } catch { raw = undefined; }
+    return this.def.record.read(raw);
+  }
+
+  /** Where the vehicle stands now -> this station's (section's) lane store. */
   store(): void {
     const b = this.body;
     if (!b || !this.worldLive) return;
     try {
-      if (this.trunkSource) this.trunkJSON = this.trunkSource();
-      this.host.run.setLaneStore(SKYWAYS_CAR_LANE, skywaysCarRecord(b.x, b.y, b.z, b.yaw, b.level, {lights: this.lights, trunk: this.trunkJSON}));
+      this.host.run.setLaneStore(this.def.record.lane, this.def.record.write(this, b));
       this.counts.stores++;
-    } catch (err) { console.warn('skyways car: storing the record failed', err); }
+    } catch (err) { console.warn(`${this.def.name.replace('-', ' ')}: storing the record failed`, err); }
   }
 
   private onState(s: string): void {
@@ -435,9 +572,17 @@ export class SkywaysCar {
     if (!this.worldLive || !this.body || h.state !== 'playing') return false;
     if (this.driving) { this.tryExit(); return true; }
     if (this.rear?.aimed() && this.rear.interact()) return true;
+    for (const a of this.access) if (a.aimed() && a.interact()) return true; // (lane TRUCK: the truck's storage compartments)
     if (!this.canEnter() || !this.pickAim()) return false;
     this.enter();
     return true;
+  }
+
+  /** (lane TRUCK) The aimed [E] target on the parked vehicle (the trunk first, then the access list), else null. */
+  private aimedAccess(): {readonly prompt: string} | null {
+    if (this.rear?.aimed()) return this.rear;
+    for (const a of this.access) if (a.aimed()) return a;
+    return null;
   }
 
   canEnter(): boolean {
@@ -451,7 +596,7 @@ export class SkywaysCar {
     if (!b || !L) return null;
     // standing by a door (either side: the driver slides over to the left seat)
     const doors = [carToWorld(b.x, b.z, b.yaw, -S.width / 2, S.exits.left.z), carToWorld(b.x, b.z, b.yaw, S.width / 2, S.exits.right.z)];
-    if (Math.min(...doors.map(d => Math.hypot(d.x - P.x, d.z - P.z))) > CAR_RT.doorReach) return null;
+    if (Math.min(...doors.map(d => Math.hypot(d.x - P.x, d.z - P.z))) > this.rt.doorReach) return null;
     h.camera.getWorldPosition(tv);
     h.camera.getWorldDirection(tv2);
     const lo = worldToCar(b.x, b.z, b.yaw, tv.x, tv.z), c = Math.cos(b.yaw), s = Math.sin(b.yaw);
@@ -459,7 +604,7 @@ export class SkywaysCar {
     const B = this.box;
     B.min.x = -S.width / 2; B.min.y = 0.1; B.min.z = -S.length / 2;
     B.max.x = S.width / 2; B.max.y = S.height; B.max.z = S.length / 2;
-    const t = rayBox({x: lo.x, y: tv.y - b.y, z: lo.z}, ld, B, CAR_RT.enterReach);
+    const t = rayBox({x: lo.x, y: tv.y - b.y, z: lo.z}, ld, B, this.rt.enterReach);
     if (t === null) return null;
     const hit = {x: tv.x + tv2.x * t, y: tv.y + tv2.y * t, z: tv.z + tv2.z * t};
     if (!L.lineOfSight({x: tv.x, y: tv.y, z: tv.z}, hit, {slack: 0.15})) return null;
@@ -470,7 +615,7 @@ export class SkywaysCar {
     const b = this.body!, P = this.host.player;
     this.driving = true;
     this.counts.enters++;
-    this.lookYaw = clamp(wrapAngle(P.yaw - b.yaw), -CAR_RT.lookYaw, CAR_RT.lookYaw);
+    this.lookYaw = clamp(wrapAngle(P.yaw - b.yaw), -this.rt.lookYaw, this.rt.lookYaw);
     this.yawSeen = b.yaw;
     b.v = 0; b.steer = 0; b.yawRate = 0;
     Object.assign(this.ctl, NO_CONTROLS);
@@ -481,17 +626,17 @@ export class SkywaysCar {
     this.audio.start(en.x, en.y, en.z);
     this.skidding = false;
     this.brakeFrom = 0;
-    this.prompt = CAR_TEXT.driving;
+    this.prompt = this.text.driving;
   }
 
   /** E while driving: out at the first free stand point once (nearly) stopped. */
   tryExit(): boolean {
     const b = this.body!;
-    if (Math.abs(b.v) > CAR_RT.exitSpeed) { this.note(CAR_TEXT.slowDown); return false; }
+    if (Math.abs(b.v) > this.rt.exitSpeed) { this.note(this.text.slowDown); return false; }
     const spot = this.exitSpot();
     if (!spot) {
       this.counts.exitRefused++;
-      this.host.hud.toast(CAR_TEXT.noRoom, true);
+      this.host.hud.toast(this.text.noRoom, true);
       (this.host.sfx as CarSfx | null)?.denied?.();
       return false;
     }
@@ -567,18 +712,18 @@ export class SkywaysCar {
   stepPlayer(dt: number, input: DriveInput): boolean {
     const h = this.host, b = this.body, P = h.player;
     if (!b || !h.levels || !this.worldLive) { this.forceOut('lost', true); return false; }
-    this.lookYaw = clamp(wrapAngle(P.yaw - this.yawSeen), -CAR_RT.lookYaw, CAR_RT.lookYaw);
+    this.lookYaw = clamp(wrapAngle(P.yaw - this.yawSeen), -this.rt.lookYaw, this.rt.lookYaw);
     const c = this.ctl;
     c.forward = input.down('KeyW') || input.down('ArrowUp');
     c.back = input.down('KeyS') || input.down('ArrowDown');
     c.left = input.down('KeyA') || input.down('ArrowLeft');
     c.right = input.down('KeyD') || input.down('ArrowRight');
     c.handbrake = input.down('Space');
-    if (input.mousePressed?.[0] || input.hit('KeyR') || input.hit('KeyG') || input.hit('KeyT')) this.note(CAR_TEXT.hands);
+    if (input.mousePressed?.[0] || input.hit('KeyR') || input.hit('KeyG') || input.hit('KeyT')) this.note(this.text.hands);
     this.world.levels = h.levels;
     this.world.props = h.propIndex;
     this.kickProps(dt);
-    const r = stepCar(b, this.world, this.spec, c, dt, this.step);
+    const r = stepCar(b, this.world, this.def.geom, c, dt, this.step); // (lane TRUCK: the vehicle's geometry + tuning; the car's = its spec)
     if (r.impact) this.onImpact(r.impact);
     this.writePlayer(dt);
     return false;
@@ -620,12 +765,12 @@ export class SkywaysCar {
   /** Game.startUse: no item use while driving (true = refused, with the note). */
   refuseUse(): boolean {
     if (!this.driving) return false;
-    this.note(CAR_TEXT.hands);
+    this.note(this.text.hands);
     return true;
   }
 
   private note(text: string): void {
-    if (this.noteT < CAR_RT.noteEvery) return;
+    if (this.noteT < this.rt.noteEvery) return;
     this.noteT = 0;
     this.counts.notes++;
     this.host.hud.toast(text);
@@ -639,47 +784,48 @@ export class SkywaysCar {
     if (!this.worldLive || !b || !L) { this.prompt = null; return; }
     this.clock += dt;
     this.noteT += dt;
-    if (this.view && this.view.gen !== carModelsGen) { refreshCarView(this.view, this.spec); this.decorateView(); }
+    if (this.view && this.view.gen !== this.def.model.gen()) { this.def.model.refresh(this.view, this.spec); this.decorateView(); }
     if (this.driving && (!P.alive || h.trainRide?.riding)) this.forceOut('death', false);
-    this.holster = clamp(this.holster + (this.driving ? 1 : -1) * dt / CAR_RT.holsterTime, 0, 1);
+    this.holster = clamp(this.holster + (this.driving ? 1 : -1) * dt / this.rt.holsterTime, 0, 1);
     this.world.levels = L;
     this.world.props = h.propIndex;
     this.zombieContacts(dt);
     if (!this.driving && P.alive && Math.abs(P.y - b.y) < 1.2) this.separatePlayer();
     this.syncView(dt);
     if (this.driving) this.driveAudio();
-    if (this.driving) this.prompt = CAR_TEXT.driving;
-    else this.prompt = h.state !== 'playing' || !this.canEnter() ? null : this.rear?.aimed() ? this.rear.prompt : this.pickAim() ? CAR_TEXT.getIn : null;
+    if (this.driving) this.prompt = this.text.driving;
+    else if (h.state !== 'playing' || !this.canEnter()) this.prompt = null;
+    else { const a = this.aimedAccess(); this.prompt = a ? a.prompt : this.pickAim() ? this.text.getIn : null; } // (the trunk; (lane TRUCK) the compartments)
   }
 
-  /** (lane CAR2) The engine's world position (CAR_RT.engineAt under the bonnet). */
+  /** (lane CAR2) The engine's world position (the vehicle's rt.engineAt: the car's under the bonnet). */
   private enginePos(): {x: number; y: number; z: number} {
-    const b = this.body!, A = CAR_RT.engineAt, p = carToWorld(b.x, b.z, b.yaw, A.x, A.z);
+    const b = this.body!, A = this.rt.engineAt, p = carToWorld(b.x, b.z, b.yaw, A.x, A.z);
     return {x: p.x, y: b.y + A.y, z: p.z};
   }
 
   /**
    * (lane CAR2) The driver's sounds each frame: the engine (speed / the pedal held in the direction of travel; round 2: + how fast it
    * reverses — the gearbox whine), the tyre skid when a hard brake (the pedal against the travel) or the handbrake BEGINS above
-   * CAR_RT.skidSpeed (at most every CAR_RT.skidEvery s), (round 2) the brake-to-stop when a brake from >= CAR_SOUND.brakeMin brings the
+   * rt.skidSpeed (at most every rt.skidEvery s), (round 2) the brake-to-stop when a brake from >= CAR_SOUND.brakeMin brings the
    * car under CAR_SOUND.brakeStopAt (once per stop; a crash that stopped it already sounded).
    */
   private driveAudio(): void {
-    const b = this.body!, c = this.ctl, v = b.v, sp = Math.abs(v), stop = CAR_PHYS.stopSpeed;
+    const b = this.body!, c = this.ctl, v = b.v, sp = Math.abs(v), stop = this.phys.stopSpeed;
     const throttle = (c.forward && v > -stop) || (c.back && v < stop) ? 1 : 0;
     const en = this.enginePos();
-    this.audio.engine(Math.min(1, sp / CAR_PHYS.forwardMax), throttle, en.x, en.y, en.z, v < -stop ? Math.min(1, sp / CAR_PHYS.reverseMax) : 0);
-    const hard = sp > CAR_RT.skidSpeed && (c.handbrake || (c.back && v > 0) || (c.forward && v < 0));
-    if (hard && !this.skidding && this.clock - this.skidT >= CAR_RT.skidEvery) {
+    this.audio.engine(Math.min(1, sp / this.phys.forwardMax), throttle, en.x, en.y, en.z, v < -stop ? Math.min(1, sp / this.phys.reverseMax) : 0);
+    const hard = sp > this.rt.skidSpeed && (c.handbrake || (c.back && v > 0) || (c.forward && v < 0));
+    if (hard && !this.skidding && this.clock - this.skidT >= this.rt.skidEvery) {
       this.skidT = this.clock;
       this.audio.skid(b.x, b.y + 0.3, b.z);
     }
     this.skidding = hard;
     const braking = c.handbrake || (c.back && v > stop) || (c.forward && v < -stop);
-    const crashed = !!this.step.impact && this.step.impact.speed >= CAR_RT.impactSfx;
+    const crashed = !!this.step.impact && this.step.impact.speed >= this.rt.impactSfx;
     if (sp > CAR_SOUND.brakeStopAt) this.brakeFrom = braking && !crashed ? Math.max(this.brakeFrom, sp) : 0;
     else if (this.brakeFrom > 0) {
-      if (this.brakeFrom >= CAR_SOUND.brakeMin && !crashed) this.audio.brake(b.x, b.y + 0.3, b.z, Math.min(1, this.brakeFrom / CAR_PHYS.forwardMax));
+      if (this.brakeFrom >= CAR_SOUND.brakeMin && !crashed) this.audio.brake(b.x, b.y + 0.3, b.z, Math.min(1, this.brakeFrom / this.phys.forwardMax));
       this.brakeFrom = 0;
     }
   }
@@ -690,13 +836,75 @@ export class SkywaysCar {
     if (!v || !b) return;
     const g = v.group;
     const pitch = b.pitch ?? 0;
+    let changed = false;
     if (g.position.x !== b.x || g.position.y !== b.y || g.position.z !== b.z || g.rotation.y !== b.yaw || g.rotation.x !== pitch) {
       g.position.set(b.x, b.y, b.z);
       g.rotation.set(pitch, b.yaw, 0, 'YXZ'); // (stairs: the yaw, then the pitch about the car's own lateral axis; nose -Z up for > 0)
       g.updateMatrixWorld(true);
+      changed = true;
     }
-    setWheel(v, b.steer, dt);
-    setCarLamps(this.lights, v.lens, this.beam);
+    // (lane TRUCK) the distance along the heading since the last sync (the road wheels roll by it; the car's wheels are static)
+    const at = this.syncedAt, moved = at ? (b.x - at.x) * -Math.sin(b.yaw) + (b.z - at.z) * -Math.cos(b.yaw) : 0;
+    if (at) { at.x = b.x; at.z = b.z; } else this.syncedAt = {x: b.x, z: b.z};
+    this.def.model.sync(v, b, dt, moved);
+    this.def.lamps.set(this.lights, v.lens, this.beam);
+    if (changed && this.moveListeners.length) { const t = this.transform()!; for (const f of this.moveListeners) f(t); }
+  }
+
+  /** (lane TRUCK, the cargo seam) The vehicle body's world transform (reused object; null: no vehicle in this world). */
+  transform(): Readonly<VehicleTransform> | null {
+    const b = this.body;
+    if (!b || !this.worldLive) return null;
+    const t = this.xf;
+    t.x = b.x; t.y = b.y; t.z = b.z; t.yaw = b.yaw; t.pitch = b.pitch ?? 0; t.level = b.level;
+    return t;
+  }
+
+  /** (lane TRUCK, for lane CARGO) The truck's body transform (null: no truck in this world). */
+  truckTransform(): Readonly<VehicleTransform> | null {
+    return this.vehicle === 'truck' ? this.transform() : null;
+  }
+
+  /**
+   * (lane TRUCK, the cargo seam) The vehicle's secure attachment points in the WORLD (the body's pose now, its pitch included): id, the
+   * floor centre a unit stands on, the unit's facing, the storey, the tilt, the free box (w across / d along / h clear) and `occupied`
+   * (something of the vehicle's own takes it: attachOccupied; the cargo owner tracks its units itself). Empty without a vehicle or for
+   * one without points (the car). A fresh list per call.
+   */
+  attachPoints(): VehicleAttachPoint[] {
+    const b = this.body, A = this.def.attach;
+    if (!b || !this.worldLive || !A) return [];
+    const pt = b.pitch ?? 0, cp = Math.cos(pt), sp = Math.sin(pt), occ = this.attachOccupied;
+    return A.map(a => {
+      const p = carToWorld(b.x, b.z, b.yaw, a.x, a.y * sp + a.z * cp);
+      return {id: a.id, x: p.x, y: b.y + a.y * cp - a.z * sp, z: p.z, yaw: wrapAngle(b.yaw + a.yaw), level: b.level, pitch: pt, roll: 0,
+        size: {w: a.w, d: a.d, h: a.h}, occupied: occ ? occ(a.id) : false};
+    });
+  }
+
+  /**
+   * (lane TRUCK, for lane CARGO: world/surface/cargoTypes.ts TruckCargoSource, found on game.skywaysCar) The truck's attachment points
+   * (the bed under the canvas cover; empty: no truck in this world).
+   */
+  truckAttachPoints(): VehicleAttachPoint[] {
+    return this.vehicle === 'truck' ? this.attachPoints() : [];
+  }
+
+  /** (lane CARGO's TruckCargoSource) The prompt name of the vehicle carrying the points. */
+  get label(): string {
+    return this.def.cargo?.label ?? 'the vehicle';
+  }
+
+  /**
+   * (lane CARGO's TruckCargoSource) Why nothing may be secured on / taken off the truck now: someone in its seat, or it is moving
+   * (|v| > CARGO_STILL m/s); null = it may (also: no truck here — it offers no points then).
+   */
+  cargoBlock(): string | null {
+    const b = this.body, C = this.def.cargo;
+    if (this.vehicle !== 'truck' || !b || !C) return null;
+    if (this.driving) return C.seated;
+    if (Math.abs(b.v) > CARGO_STILL) return C.moving;
+    return null;
   }
 
   /**
@@ -706,7 +914,7 @@ export class SkywaysCar {
   onLightKey(): boolean {
     if (!this.driving || !this.worldLive || !this.body) return false;
     this.lights = !this.lights;
-    setCarLamps(this.lights, this.view?.lens ?? null, this.beam);
+    this.def.lamps.set(this.lights, this.view?.lens ?? null, this.beam);
     (this.host.sfx as CarSfx | null)?.click?.(this.lights ? 1.2 : 0.9);
     return true;
   }
@@ -724,10 +932,13 @@ export class SkywaysCar {
     });
   }
 
-  /** The moving car's body circles as dynamicItems walkers (stable ids). */
+  /** The moving car's body circles as dynamicItems walkers (stable ids; (lane TRUCK) more ids as a vehicle with more circles needs, circles off the centre line). */
   private walkers(): {id: object; x: number; z: number; y: number; r: number}[] {
     const b = this.body!, s = Math.sin(b.yaw), c = Math.cos(b.yaw);
-    return this.spec.circles.map((k, i) => ({id: this.walkerIds[i], x: b.x + k.z * s, z: b.z + k.z * c, y: b.y, r: k.r}));
+    return this.spec.circles.map((k, i) => {
+      const kx = k.x ?? 0;
+      return {id: (this.walkerIds[i] ??= {}), x: b.x + kx * c + k.z * s, z: b.z - kx * s + k.z * c, y: b.y, r: k.r};
+    });
   }
 
   // ---------------------------------------------------------------------------------------------------------------------
@@ -743,7 +954,7 @@ export class SkywaysCar {
       if (!q.alive || q.climbing || z.ragdolled) continue;
       const r = q.stats.radius, dx = q.x - b.x, dz = q.z - b.z;
       // (stairs) the same storey = near the body line's height at the body (on a flight it rises along the car)
-      if (Math.abs(q.y - (b.y - worldToCar(b.x, b.z, b.yaw, q.x, q.z).z * Math.tan(b.pitch ?? 0))) > CAR_RT.storeyY) continue;
+      if (Math.abs(q.y - (b.y - worldToCar(b.x, b.z, b.yaw, q.x, q.z).z * Math.tan(b.pitch ?? 0))) > this.rt.storeyY) continue;
       if (dx * dx + dz * dz > (reach + r) ** 2) continue;
       const n = nearestCircle(S, b.x, b.z, b.yaw, q.x, q.z), overlap = r - n.d;
       if (overlap <= 0) continue;
@@ -751,17 +962,17 @@ export class SkywaysCar {
       const k = S.circles[n.i].r, px = n.cx + n.nx * k - b.x, pz = n.cz + n.nz * k - b.z;
       const vx = moving ? fx * b.v + b.yawRate * pz : 0, vz = moving ? fz * b.v - b.yawRate * px : 0;
       const closing = vx * n.nx + vz * n.nz;
-      if (closing > CAR_RT.killSpeed) { this.kill(z, vx, vz, closing, false); continue; }
+      if (closing > this.rt.killSpeed) { this.kill(z, vx, vz, closing, false); continue; }
       const [nx, nz] = moveCircle(L, h.propIndex, q.x, q.z, n.nx * overlap, n.nz * overlap, r, q.y, q.stats.height ?? BODY_CLEAR);
       q.x = nx; q.z = nz;
       this.syncZombie(z);
       if (!moving || closing <= 0.05) continue;
       this.counts.pushes++;
-      b.v = approach(b.v, 0, CAR_RT.pushDecel * dt);
-      if (r - nearestCircle(S, b.x, b.z, b.yaw, q.x, q.z).d > CAR_RT.pinned) {
+      b.v = approach(b.v, 0, this.rt.pushDecel * dt);
+      if (r - nearestCircle(S, b.x, b.z, b.yaw, q.x, q.z).d > this.rt.pinned) {
         // pinned against something while the car presses on: crushed (the car stalls against the body meanwhile)
         b.v *= 0.5;
-        if (q.damage(CAR_RT.crushDps * dt, b.x, b.z, b.y, {stagger: false})) { this.counts.crushed++; this.kill(z, vx, vz, closing, true); }
+        if (q.damage(this.rt.crushDps * dt, b.x, b.z, b.y, {stagger: false})) { this.counts.crushed++; this.kill(z, vx, vz, closing, true); }
       }
     }
   }
@@ -774,7 +985,7 @@ export class SkywaysCar {
     const sp = Math.hypot(vx, vz);
     const dir = sp > 1e-4 ? new THREE.Vector3(vx / sp, 0.35, vz / sp).normalize() : new THREE.Vector3(q.x - b.x, 0.35, q.z - b.z).normalize();
     h.blastKill?.(z as never, dir, new THREE.Vector3(q.x, q.y + 1.0, q.z));
-    if (!dead) b.v *= 1 - CAR_RT.killSlow;
+    if (!dead) b.v *= 1 - this.rt.killSlow;
     this.audio.impact(q.x, q.y + 0.8, q.z, closing, 'flesh');
   }
 
@@ -806,11 +1017,11 @@ export class SkywaysCar {
     const sp = Math.abs(b.v);
     if (!di || !props || !this.dynIdx?.size || sp < 0.3) return;
     const sg = b.v >= 0 ? 1 : -1, fx = -Math.sin(b.yaw) * sg, fz = -Math.cos(b.yaw) * sg;
-    const ahead = sp * Math.min(dt, CAR_PHYS.maxDt) + 0.15, cx = b.x + fx * ahead, cz = b.z + fz * ahead, R = S.length / 2 + 0.3;
-    const dv = Math.min(MAX_SHOT_DV, CAR_RT.kick.gain * sp);
+    const ahead = sp * Math.min(dt, this.phys.maxDt) + 0.15, cx = b.x + fx * ahead, cz = b.z + fz * ahead, R = S.length / 2 + 0.3;
+    const dv = Math.min(MAX_SHOT_DV, this.rt.kick.gain * sp);
     let n = 0;
     for (const i of props.near(cx - R, cz - R, cx + R, cz + R, near)) {
-      if (n >= CAR_RT.kick.perFrame) break;
+      if (n >= this.rt.kick.perFrame) break;
       const pr = props.props[i], li = this.dynIdx.get(pr);
       if (li === undefined || pr.h <= 0.02 || pr.y > b.y + 0.5 || pr.y + pr.h < b.y + 0.05) continue;
       const qx = clamp(cx, pr.x - pr.hx, pr.x + pr.hx), qz = clamp(cz, pr.z - pr.hz, pr.z + pr.hz);
@@ -818,21 +1029,21 @@ export class SkywaysCar {
       // the box's nearest point to that circle, at the look-ahead pose
       const bx = clamp(c.cx, pr.x - pr.hx, pr.x + pr.hx), bz = clamp(c.cz, pr.z - pr.hz, pr.z + pr.hz);
       if (Math.hypot(bx - c.cx, bz - c.cz) > S.circles[c.i].r + 0.05) continue;
-      if (this.clock - (this.kickT.get(pr) ?? -1e9) < CAR_RT.kick.cooldown) continue;
+      if (this.clock - (this.kickT.get(pr) ?? -1e9) < this.rt.kick.cooldown) continue;
       tn.set(bx - c.cx, 0, bz - c.cz).normalize();
       const dir = tv2.set(fx * 0.75 + tn.x * 0.25, 0, fz * 0.75 + tn.z * 0.25).normalize();
       const point = tv.set(bx, clamp(b.y + 0.45, pr.y + 0.05, pr.y + pr.h), bz);
       if (di.shootProp(pr, li, point, dir, propPhysics(pr.kind).mass * dv)) { this.kickT.set(pr, this.clock); this.counts.propKicks++; n++; }
     }
-    // loose props already in front (faster than the walker shove takes: CAR_RT.kick.rayAbove)
-    if (sp < CAR_RT.kick.rayAbove || !di.rayHits || n >= CAR_RT.kick.perFrame) return;
+    // loose props already in front (faster than the walker shove takes: this.rt.kick.rayAbove)
+    if (sp < this.rt.kick.rayAbove || !di.rayHits || n >= this.rt.kick.perFrame) return;
     const k = S.circles.reduce((a, q) => (sg > 0 ? (q.z < a.z ? q : a) : (q.z > a.z ? q : a)));
     const lead = carToWorld(b.x, b.z, b.yaw, 0, k.z), rx = Math.cos(b.yaw), rz = -Math.sin(b.yaw), len = sp * dt + k.r + 0.4;
     for (const off of [-0.7, 0, 0.7]) {
       const o = {x: lead.x + rx * off * (S.width / 2), y: b.y + 0.5, z: lead.z + rz * off * (S.width / 2)};
       for (const hit of di.rayHits(o, {x: fx, y: 0, z: fz}, len, [])) {
-        if (!hit.prop || hit.propIndex === undefined || n >= CAR_RT.kick.perFrame) continue;
-        if (this.clock - (this.kickT.get(hit.prop) ?? -1e9) < CAR_RT.kick.cooldown) continue;
+        if (!hit.prop || hit.propIndex === undefined || n >= this.rt.kick.perFrame) continue;
+        if (this.clock - (this.kickT.get(hit.prop) ?? -1e9) < this.rt.kick.cooldown) continue;
         if (di.shootProp(hit.prop, hit.propIndex, hit.point, tv2.set(fx, 0, fz), propPhysics(hit.prop.kind).mass * dv)) { this.kickT.set(hit.prop, this.clock); this.counts.propKicks++; n++; }
       }
     }
@@ -842,8 +1053,8 @@ export class SkywaysCar {
     const b = this.body!;
     this.lastImpact = {...imp};
     this.counts.impacts++;
-    if (imp.speed >= CAR_RT.impactSfx) this.audio.impact(imp.x, b.y + 0.6, imp.z, imp.speed, 'car');
-    if (imp.speed < CAR_RT.glassSpeed) return;
+    if (imp.speed >= this.rt.impactSfx) this.audio.impact(imp.x, b.y + 0.6, imp.z, imp.speed, 'car');
+    if (imp.speed < this.rt.glassSpeed) return;
     this.breakPanes(imp);
     this.breakPropGlass(imp);
   }
@@ -860,12 +1071,12 @@ export class SkywaysCar {
       const along = p.along === 'x' ? imp.x : imp.z, across = p.along === 'x' ? imp.z : imp.x;
       const da = along < ref.pane.a0 ? ref.pane.a0 - along : along > ref.pane.a1 ? along - ref.pane.a1 : 0;
       const dc = Math.abs(across - p.glass);
-      if (da > CAR_RT.paneReach || dc > CAR_RT.paneDepth) continue;
+      if (da > this.rt.paneReach || dc > this.rt.paneDepth) continue;
       const c = paneCentre(ref);
       hits.push({id, d: Math.hypot(c.x - imp.x, c.z - imp.z)});
     }
     hits.sort((a, c) => a.d - c.d);
-    for (const x of hits.slice(0, CAR_RT.maxPanes)) if (G.breakPane(x.id)) this.counts.panes++;
+    for (const x of hits.slice(0, this.rt.maxPanes)) if (G.breakPane(x.id)) this.counts.panes++;
   }
 
   /** A glazed prop at the contact (shop glazing, showcases …) takes the hit through the damage system (its glass shatters). */
@@ -878,21 +1089,60 @@ export class SkywaysCar {
       if (li === undefined || pr.h <= 0.02 || pr.y > b.y + this.spec.height || pr.y + pr.h < b.y + 0.1) continue;
       const qx = clamp(imp.x, pr.x - pr.hx, pr.x + pr.hx), qz = clamp(imp.z, pr.z - pr.hz, pr.z + pr.hz);
       if (Math.hypot(qx - imp.x, qz - imp.z) > 0.25) continue;
-      if (this.clock - (this.glassT.get(pr) ?? -1e9) < CAR_RT.glassCooldown) continue;
+      if (this.clock - (this.glassT.get(pr) ?? -1e9) < this.rt.glassCooldown) continue;
       this.glassT.set(pr, this.clock);
       const dir = new THREE.Vector3(-imp.nx, 0, -imp.nz);
       for (const y of [0.6, 1.0]) {
         const py = clamp(b.y + y, pr.y + 0.05, pr.y + pr.h - 0.05);
         dmg.hitWorld({t: 0, kind: 'prop', nx: imp.nx, ny: 0, nz: imp.nz, prop: li, level: b.level}, new THREE.Vector3(qx, py, qz), dir,
-          {damage: CAR_RT.glassDamage + CAR_RT.glassPerMs * imp.speed, pellet: false, weapon: 'vehicle'});
+          {damage: this.rt.glassDamage + this.rt.glassPerMs * imp.speed, pellet: false, weapon: 'vehicle'});
       }
       this.counts.propGlass++;
     }
   }
 
+  /**
+   * (lane TRUCK follow-up: bullets vs the truck) Game.fire's shot ray (origin `o`, unit direction `d`) against a vehicle that stops shots
+   * (VehicleDef.stopsShots: the truck): when its body box lies on the ray before the world hit `wh` (or with no world hit in range), the
+   * shot ends THERE — `wh` (the ray's own fresh hit object) is rewritten IN PLACE to a hit at the body (so nothing past it is hit: no
+   * enemy, person, corpse or prop behind the cab / body), which bulletHit below claims (a metal impact on the body). False (wh as it
+   * was): no such vehicle in this world, the ray misses it first, or the shooter stands inside its box. The car (stopsShots unset) is
+   * untouched: its world hits behind it are bulletHit's as before.
+   */
+  shotStop(o: {x: number; y: number; z: number}, d: {x: number; y: number; z: number}, wh: WorldHit): boolean {
+    const b = this.body;
+    if (!this.def.stopsShots || !this.worldLive || !b) return false;
+    const lo = worldToCar(b.x, b.z, b.yaw, o.x, o.z), c = Math.cos(b.yaw), s = Math.sin(b.yaw);
+    const ld = {x: d.x * c - d.z * s, y: d.y, z: d.x * s + d.z * c}, ly = o.y - b.y, B = this.shotBox();
+    if (lo.x > B.min.x && lo.x < B.max.x && ly > B.min.y && ly < B.max.y && lo.z > B.min.z && lo.z < B.max.z) return false;
+    const t = rayBox({x: lo.x, y: ly, z: lo.z}, ld, B, wh.kind === 'none' ? wh.t : wh.t - 0.01);
+    if (t === null) return false;
+    wh.t = t; wh.kind = 'wall'; wh.nx = -d.x; wh.ny = -d.y; wh.nz = -d.z; wh.level = -1; // (no storey band: never a window pane's wall)
+    delete wh.prop;
+    delete wh.cell;
+    this.stopHit = wh;
+    return true;
+  }
+
+  /** The body's bullet box (vehicle frame, the floor at y 0): the spec's footprint and height, a little inside. */
+  private shotBox(): Box3Like {
+    const S = this.spec, B = this.box;
+    B.min.x = -S.width / 2 + 0.06; B.min.y = 0.15; B.min.z = -S.length / 2 + 0.1;
+    B.max.x = S.width / 2 - 0.06; B.max.y = S.height - 0.04; B.max.z = S.length / 2 - 0.1;
+    return B;
+  }
+
   /** A bullet whose world hit lies behind the car stops on its body (a metal impact; no crater behind). */
   bulletHit(wh: {t: number}, point: THREE.Vector3, dir: THREE.Vector3): boolean {
     const b = this.body, S = this.spec;
+    if (wh === this.stopHit) { // (lane TRUCK follow-up) the shot shotStop ended on the body: its impact, nothing behind
+      this.stopHit = null;
+      if (!this.worldLive || !b) return false;
+      this.host.fx?.impact(point, new THREE.Vector3(-dir.x, -dir.y, -dir.z), 'metal', {decal: false, chips: 1});
+      (this.host.sfx as CarSfx | null)?.impact?.(point.x, point.y, point.z, 'metal');
+      this.counts.bullets++;
+      return true;
+    }
     if (!this.worldLive || !b || !(wh.t > 0)) return false;
     const ox = point.x - dir.x * wh.t, oy = point.y - dir.y * wh.t, oz = point.z - dir.z * wh.t;
     const lo = worldToCar(b.x, b.z, b.yaw, ox, oz), c = Math.cos(b.yaw), s = Math.sin(b.yaw);
@@ -919,6 +1169,7 @@ export class SkywaysCar {
       worldLive: this.worldLive, driving: this.driving, source: this.source, prompt: this.prompt, holster: +this.holster.toFixed(3),
       body: b ? {x: +b.x.toFixed(3), y: +b.y.toFixed(3), z: +b.z.toFixed(3), yaw: +b.yaw.toFixed(4), v: +b.v.toFixed(3), steer: +b.steer.toFixed(3), level: b.level} : null,
       standIn: this.view?.standIn ?? null, lookYaw: +this.lookYaw.toFixed(4), lastImpact: this.lastImpact, counts: {...this.counts},
+      vehicle: this.vehicle, enclosed: this.enclosed, lights: this.lights, // (lane TRUCK)
     };
   }
 
@@ -927,7 +1178,7 @@ export class SkywaysCar {
     const b = this.body, L = this.host.levels;
     if (!b || !L) return false;
     const o = {x: 0, z: 0, sx: 0, sz: 0, circle: -1};
-    return settlePose({levels: L, props: this.host.propIndex}, this.spec, b.x, b.z, b.yaw, b.y, o) && Math.hypot(o.sx, o.sz) < 1e-6;
+    return settlePose({levels: L, props: this.host.propIndex}, this.def.geom, b.x, b.z, b.yaw, b.y, o) && Math.hypot(o.sx, o.sz) < 1e-6;
   }
 }
 

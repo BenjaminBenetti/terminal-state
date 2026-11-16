@@ -853,3 +853,18 @@ commercial clearance. Not reviewed by ear on the build worker. The 48 kHz master
 - `assets/audio/geiger-cluster-02.mp3` — geigerCluster (3 discharges; seed 15110202)
 - `assets/audio/geiger-cluster-03.mp3` — geigerCluster (4 discharges; seed 15110203)
 <!-- END geiger-audio-20261115 -->
+
+<!-- BEGIN surface-military-truck-20261116 (build-surface-truck.mjs) -->
+## Surface Run military truck
+
+A user-supplied model: the user supplied this textured eight-wheeled military cargo truck model for the project (task
+surface-run-opus-rebuild-20261116). Its origin, authorship and licence are NOT verified and no licence or clearance is implied.
+The game ships a re-oriented, uniformly re-scaled (x 4: 7.54 m long), cut (eight wheel nodes; the cab windows opened
+and fitted with flat clear panes; the canvas cover's rear opened) and simplified derivative with the model's own PBR maps
+re-encoded (base colour / normal 2048 px, metallic-roughness 1024 px). Real-world markings in its
+texture (a manufacturer's lettering, number plates) are kept as supplied (trade-dress caveat). The original stays outside the
+repository. No generation.
+
+- `assets/models/surface-military-truck.glb` — the truck (body, glass, wheel-0 … wheel-7); runtime derivative by
+  `tools/asset-pipeline/props/build-surface-truck.mjs` (provenance: `assets/derivatives/surface-military-truck.json`).
+<!-- END surface-military-truck-20261116 -->

@@ -265,6 +265,9 @@ const cache = new WeakMap<StationLayout, TrainPlacement | null>();
  * Memoized per layout for the default spec (the same frozen object for the spawn and lane TRAIN's runtime).
  */
 export function playerTrainPlacement(layout: StationLayout, spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC): TrainPlacement | null {
+  // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ACCESS): a Surface Run district (layout.surface) never parks the car —
+  // the train stays at its station below; every train system (cargo, props, equipment, carts, models) reads this one answer
+  if (layout.surface) return null;
   const useCache = spec === PLAYER_TRAIN_SPEC;
   if (useCache && cache.has(layout)) return cache.get(layout)!;
   const p = place(layout, spec, TRAIN_CLEAR.ladder) ?? place(layout, spec, TRAIN_CLEAR.ladderMin);
