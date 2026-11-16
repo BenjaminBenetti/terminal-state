@@ -7,8 +7,9 @@
 //  - GAS (one source of truth): the roof is OUTDOOR air above its surface (surfaceOutdoorGasAt: what hurts and what the march draws), the
 //    store under it and the bulkhead stay indoors; the roof door is a real door (planSurfaceDoors) whose breach gasses the bulkhead's
 //    landing on the roof level, and the building's field never covers the open sky (the zone's closed cells on that level only);
-//  - LOOK: the builder's roof floor ('surface-roof'), no ceiling over it, the bulkhead's walls clipped at its top, the roof cells' faces
-//    against the parapet dropped, the view's parts (rim, cap, walls, door frame), no look clutter on a walkable roof.
+//  - LOOK: the builder's roof floor ('surface-roof'), no ceiling over it, the roof cells' own wall faces dropped (the parapet's inner face
+//    and the bulkhead are LOOK's level-0 parts: the view's rim, walls, cap and door frame), no look clutter on a walkable roof; the level
+//    culler shows the street from the roof (a sky volume) exactly as from the street below it.
 
 import {describe, expect, it} from 'vitest';
 import {CELL, FLOOR, SOLID} from '../src/gen/grid';
@@ -19,16 +20,20 @@ import {SURFACE_AIR, surfaceOutdoorGasAt, surfaceOutdoorMap} from '../src/world/
 import {SurfaceGasField, surfaceGasZones} from '../src/world/surface/airField';
 import {doorBreachId, facadeLine, planSurfaceDoors} from '../src/world/surface/airDoors';
 import {GasField} from '../src/world/gas/field';
-import {surfaceLookPlan} from '../src/world/surface/archPlan';
+import {SIDE_NORMAL, surfaceLookPlan} from '../src/world/surface/archPlan';
 import {SurfaceArch} from '../src/world/surface/arch';
-import {buildRoofAccess} from '../src/world/surface/roofAccessView';
+import {buildRoofAccess, surfaceSkyVolumes} from '../src/world/surface/roofAccessView';
 import {LevelColumns, extractWallFaces, stationLevels} from '../src/world/levelGeometry';
+import {buildWorld} from '../src/world/builder';
+import {CULL_LAYER} from '../src/world/levelCulling';
+import * as THREE from 'three';
 import {WorldMaterials} from '../src/world/materials';
 import {fakeEnvTextures} from './helpers/openablesFixture';
 import {installCanvasShim} from './helpers/canvas2d';
 import {DEEP_HOSTS, areaCellsOf, deepCases, deepDistrict} from './helpers/surfaceDeepDistricts';
 
 installCanvasShim(false);
+const CULL_MASK = (1 << CULL_LAYER | 0) >>> 0;
 
 const roofs = (L: StationLayout): SurfaceBuilding[] => L.surface!.buildings.filter(b => b.roofAccess);
 const cellsIn = (L: StationLayout, r: {x0: number; z0: number; x1: number; z1: number}): number[] => {
@@ -151,7 +156,7 @@ describe('Surface Run v2: the roof is outdoor gas; the roof door is a breach doo
 });
 
 describe('Surface Run v2: the roof look', () => {
-  it('roof floor, no ceiling, bulkhead walls clipped at its top, parapet faces dropped; the view draws rim, cap, walls and the door frame', () => {
+  it('roof floor, no ceiling, the roof cells\' faces dropped; the view draws rim, cap, walls and the door frame', () => {
     const {L} = deepDistrict('subway', 3), S = L.surface!, W = L.grid.w;
     const m = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
     const levels = stationLevels(L), cols = new LevelColumns(levels);
@@ -163,16 +168,14 @@ describe('Surface Run v2: the roof look', () => {
       const cell = areaCellsOf(L, ra.areas![0])[0];
       expect(arch.floorKey(lvIdx, cell), b.name).toBe('surface-roof');
       expect(arch.ceilKey(lvIdx, ra.areas![0], cell), b.name).toBe(false);
-      const mine = faces.filter(f => ra.areas!.includes(f.area));
-      expect(mine.length, `${b.name}: bulkhead faces`).toBeGreaterThan(0);
-      for (const f of mine) {
-        expect(f.y1, `${b.name}: face top`).toBeLessThanOrEqual(ra.y + B.h + 1e-6);
-        expect(f.finish, b.name).toBe(plan.buildings[b.id].key);
-        // the face's back cell is the bulkhead (never the parapet ring: its inner face is LOOK's)
-        const alongX = Math.abs(f.z0 - f.z1) < 1e-9, plane = alongX ? f.z0 : f.x0, sign = Math.sign(alongX ? f.nz : f.nx), mid = alongX ? (f.x0 + f.x1) / 2 : (f.z0 + f.z1) / 2;
-        const bx = alongX ? mid : plane - sign * CELL / 2, bz = alongX ? plane - sign * CELL / 2 : mid;
-        expect(bx > B.x0 && bx < B.x1 && bz > B.z0 && bz < B.z1, `${b.name}: face backed by the bulkhead`).toBe(true);
-      }
+      // the roof cells' own wall faces drop (the parapet's inner face and the bulkhead's walls are LOOK's level-0 parts); the doorway's
+      // jambs stay the builder's (the landing's)
+      expect(faces.filter(f => ra.areas!.includes(f.area)), `${b.name}: roof-cell faces`).toEqual([]);
+      const jambs = faces.filter(f => f.area === ra.door!.inner && f.level === ra.level && ra.door!.cells.some(i => {
+        const x = (i % W + 0.5) * CELL, z = (Math.floor(i / W) + 0.5) * CELL;
+        return Math.abs(x - (f.x0 + f.x1) / 2) < CELL && Math.abs(z - (f.z0 + f.z1) / 2) < CELL;
+      }));
+      expect(jambs.length, `${b.name}: doorway jambs`).toBeGreaterThan(0);
       // the view's parts for this roof
       const keys = new Set<string>();
       const sink = {quad() {}, quadFacing() {}};
@@ -189,4 +192,32 @@ describe('Surface Run v2: the roof look', () => {
     expect(S.buildings.some(b => b.roofAccess)).toBe(true);
     void W;
   }, 300_000);
+
+  it('the level culler shows the street from a roof (its sky volume): the street storey is current up there, not only near a stair', () => {
+    const {L} = deepDistrict('subway', 3);
+    const m = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
+    const w = buildWorld(L, m, {});
+    const sky = surfaceSkyVolumes(L);
+    expect(sky.length).toBe(roofs(L).length);
+    const b = roofs(L)[0], ra = b.roofAccess!, e = ra.door!;
+    const n = SIDE_NORMAL[e.side], nx = n.alongX ? 0 : n.n, nz = n.alongX ? n.n : 0;
+    const cam = new THREE.PerspectiveCamera(70, 16 / 9, 0.05, 400);
+    const look = (x: number, y: number, z: number) => {
+      cam.position.set(x, y, z);
+      cam.rotation.set(-0.25, Math.atan2(-nx, -nz), 0, 'YXZ'); // facing out over the roof's front (away from the bulkhead door)
+      cam.updateMatrixWorld(true);
+      w.culler.update(cam, true);
+      let l0 = 0;
+      w.group.traverse(o => { const mm = o as THREE.Mesh; if (mm.isMesh && mm.layers.mask !== CULL_MASK && (mm.userData.level ?? 0) === 0) l0++; });
+      return {l0, levels: [...w.culler.stats.levels].sort()};
+    };
+    // on the roof, 2 m out of the bulkhead door: both storeys current, the district's street-storey architecture drawn
+    const onRoof = look(e.x + nx * 2, ra.y + 1.6, e.z + nz * 2);
+    expect(onRoof.levels).toEqual([0, 1]);
+    expect(onRoof.l0, 'street-storey meshes drawn from the roof').toBeGreaterThan(150);
+    // the same building's street below its roof: the street storey only (a sky volume starts at its roof)
+    const st = b.entrances[0], m2 = SIDE_NORMAL[st.side], sx = m2.alongX ? 0 : m2.n, sz = m2.alongX ? m2.n : 0;
+    expect(look(st.x + sx * 3, L.levels![0].grid.floorAt(st.x + sx * 3, st.z + sz * 3) + 1.6, st.z + sz * 3).levels).toEqual([0]);
+  }, 300_000);
 });
+
