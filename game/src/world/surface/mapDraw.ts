@@ -25,7 +25,8 @@ export function sheetBox(m: PlanningMap): {x: number; y: number; w: number; h: n
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const n = (v: number) => (Math.round(v * 10) / 10).toString();
-const rect = (r: SRect, attrs: string) => `<rect x="${n(r.x0)}" y="${n(r.z0)}" width="${n(r.x1 - r.x0)}" height="${n(r.z1 - r.z0)}" ${attrs}/>`;
+// (' />', not '/>': a template piece that starts with '/' reads as a root-absolute URL to the release packager)
+const rect = (r: SRect, attrs: string) => `<rect x="${n(r.x0)}" y="${n(r.z0)}" width="${n(r.x1 - r.x0)}" height="${n(r.z1 - r.z0)}" ${attrs} />`;
 
 /** A destination's type glyph (inside its frame, centred on 0,0, about 10 m across). */
 function glyph(kind: string): string {
@@ -62,7 +63,9 @@ export function headingDeg(yaw: number): number {
 /** The full overlay sheet (an <svg> string; its viewBox is the sheet box in world metres). */
 export function renderPlanningSvg(m: PlanningMap): string {
   const B = sheetBox(m), E = m.extent, out: string[] = [];
-  out.push(`<svg xmlns="http://www.w3.org/2000/svg" class="spm-svg" viewBox="${n(B.x)} ${n(B.y)} ${n(B.w)} ${n(B.h)}" width="${n(B.w)}" height="${n(B.h)}" font-family="'Arial Narrow', 'Roboto Condensed', Arial, sans-serif">`);
+  // (no xmlns: the sheet is parsed as inline HTML, where <svg> is in the SVG namespace already — and the release packager rejects URL
+  // literals in the bundle)
+  out.push(`<svg class="spm-svg" viewBox="${n(B.x)} ${n(B.y)} ${n(B.w)} ${n(B.h)}" width="${n(B.w)}" height="${n(B.h)}" font-family="'Arial Narrow', 'Roboto Condensed', Arial, sans-serif">`);
   out.push(`<defs><pattern id="spm-fog" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#58564c" fill-opacity="0.26"/><path d="M0 0 V6" stroke="#3f3d36" stroke-width="1.1" stroke-opacity="0.45"/></pattern>`
     + `<pattern id="spm-block" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><path d="M0 0 V5" stroke="${RED}" stroke-width="1.2"/></pattern>`
     + `<pattern id="spm-gutted" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0 V4" stroke="${PENCIL}" stroke-width="0.6" stroke-opacity="0.7"/></pattern></defs>`);
