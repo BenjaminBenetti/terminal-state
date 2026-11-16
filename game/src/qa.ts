@@ -4,6 +4,7 @@
 
 import {fuelQaApi} from './fuel/fuelQa'; // task train-fuel-system
 import {surfaceAccessQaApi} from './world/surface/accessQa'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ACCESS)
+import {surfaceRoofQaApi} from './world/surface/roofQa'; // task studio-surface-run-field-followup-20261116-211729-01 (lane INTERIOR)
 import {surfaceMapOf} from './world/surface/mapRuntime'; // (Surface Run, lane LIFE: the planning map)
 import {surfaceReplenishOf} from './world/surface/replenishRuntime'; // (Surface Run, lane LIFE: the outdoor replenisher)
 import {isP7Kind, p7ModelKeysFor} from './gen/props07';
@@ -445,6 +446,8 @@ export function installQaHooks(game: Game): void {
     ...trunkQaApi(game), // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): trunk(), trunkOpen(), trunkClose(), trunkQuick(spec), trunkMove(from, to, n?), trunkStow()
     ...truckQaApi(game), // task surface-run-opus-rebuild-20261116 (lane TRUCK): truck() (state, transform, attachment points, compartments), truckOpen(id), truckClose(), truckQuick(spec), truckMove(from, to, n?)
     ...scannerQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane SCANNER): scanner() — active / scope open / seconds to the next sweep / blip counts; DEBUG scannerSweep() — a sweep now
+    // task studio-surface-run-field-followup-20261116-211729-01 (lane INTERIOR): surfaceRoof() — the v2 district's reachable roofs; surfaceRoof(i, 'roof' | 'landing' | 'street') — stand there
+    ...surfaceRoofQaApi(game, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     ...surfaceAirQaApi(), // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): surfaceAir() — outdoor air / cab / panes / doors / zones; surfaceDoor(id, 'open' | 'close'); DEBUG surfaceSettle()
     // Task office-overhaul-20261030 (lane STRUCT): stand at the roof access ladder (then the game's own "[E] Climb ladder") or on a transit-hall lane (0 / 2 escalators, 1 stair)
     goRoofLadder: (end: 'bottom' | 'top' = 'bottom') => {

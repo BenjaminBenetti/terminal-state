@@ -31,6 +31,7 @@ import {drainSync, type BuildSteps} from '../../core/pacedBuild';
 import {GROUND, GROUND_KEYS, LOOK_TUNE, OWNER, SIDE_NORMAL, entranceFloor, sideOfPlane, streetEndSpans, surfaceLookPlan, topAt, type BuildingLook, type FacadeHole, type SurfaceLookPlan, type TopSeg} from './archPlan';
 import {interiorKeys, surfaceArchMaterial, surfaceArchScale, surfaceSignMaterial, surfaceTintFamily, surfaceTintOf, isSurfaceKey} from './archMaterials';
 import {outdoorFlatMaterial} from './lookSky';
+import {buildRoofAccess} from './roofAccessView';
 
 /**
  * Geometry chunk (m) of the facade parts: twice the builder's architecture chunk (CHUNK_M 48). A district is ~530 m square and its
@@ -191,6 +192,8 @@ export class SurfaceArch {
   private readonly levelIdx = new Map<number, number>();
   /** AIR's span cuts by wall plane ('z<cm>' / 'x<cm>'): both planes of each span, with the face normal sign that takes them. */
   private readonly airCuts = new Map<string, (Hole2 & {sign: number})[]>();
+  /** (v2, lane INTERIOR, task studio-surface-run-field-followup-20261116-211729-01) A reachable roof's areas -> its building id (roofAccessView.ts). */
+  private readonly roofs = new Map<number, number>();
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): SurfaceArch | null {
     const plan = layout.surface && levels.length ? surfaceLookPlan(layout) : null;
@@ -212,6 +215,7 @@ export class SurfaceArch {
         l.push({...h, sign});
       }
     }
+    for (const b of layout.surface?.buildings ?? []) for (const a of b.roofAccess?.areas ?? []) this.roofs.set(a, b.id);
   }
 
   private count(k: string): void { this.stats.faces[k] = (this.stats.faces[k] ?? 0) + 1; }
@@ -260,6 +264,7 @@ export class SurfaceArch {
     const lvl = this.levels[L];
     if (!lvl) return null;
     const a = lvl.grid.area[i];
+    if (this.roofs.has(a)) return 'surface-roof'; // (v2: a reachable roof's walking surface, the outdoor flat look)
     if (this.plan.tentAreas.has(a)) return GROUND_KEYS[GROUND.tent];
     const b = this.plan.areaBuilding.get(a);
     if (b !== undefined) return interiorKeys(this.plan.buildings[b].family).floor;
@@ -269,7 +274,7 @@ export class SurfaceArch {
 
   /** Ceiling key of a run: none outdoors / over the tent (false), the programme's indoors, else the builder's rule. */
   ceilKey(_L: number, areaId: number, i?: number): string | false | null {
-    if (this.isOutdoorArea(areaId) || this.plan.tentAreas.has(areaId)) return false;
+    if (this.isOutdoorArea(areaId) || this.plan.tentAreas.has(areaId) || this.roofs.has(areaId)) return false; // (v2 roof: open sky)
     if (i !== undefined && _L === 0 && this.plan.ground[i] === GROUND.tent) return false;
     const b = this.plan.areaBuilding.get(areaId);
     return b !== undefined ? interiorKeys(this.plan.buildings[b].family).ceil : null;
@@ -284,7 +289,7 @@ export class SurfaceArch {
 
   /** Door frame trim: the building's trim colour. */
   doorTrimKey(_level: number, a: Area | undefined): string | null {
-    const id = a ? this.plan.areaBuilding.get(a.id) : undefined;
+    const id = a ? this.plan.areaBuilding.get(a.id) ?? this.roofs.get(a.id) : undefined;
     return id !== undefined ? this.plan.buildings[id].trimKey : 'surface-trim-2f3133';
   }
 
@@ -329,6 +334,9 @@ export class SurfaceArch {
       const ci = (x: number, z: number) => { const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL); return cx < 0 || cz < 0 || cx >= W || cz >= P.H ? -1 : cz * W + cx; };
       const bi = ci(bx, bz), fi = ci(fx, fz);
       const own = bi >= 0 ? P.owner[bi] : OWNER.cordon;
+      // (v2, lane INTERIOR) a reachable roof's cell faces drop: against the parapet ring stands LOOK's parapet inner face, against the
+      // stair bulkhead its level-0 walls (roofAccessView.ts: seen from the street like the facade they stand on)
+      if (this.roofs.has(f.area)) continue;
       // the floor in front of the face: low walls (cordon, tent canvas, debris) cap at base + their height (the builder splits a
       // tall face into bands, so a band's own y0 is not the floor)
       const lv = this.levels.find(l => l.id === f.level) ?? this.levels[0];
@@ -568,6 +576,10 @@ export class SurfaceArch {
       // fire escapes
       for (const fe of bl.escapes) if (fe.side === sd.side) this.fireEscape(fe, box);
     }
+    // (v2, lane INTERIOR, task studio-surface-run-field-followup-20261116-211729-01) a reachable roof: the builder draws its walking
+    // surface; the deck's rim, the stair bulkhead and the roof door's frame are roofAccessView.ts's
+    const ra = bl.b.roofAccess;
+    if (ra && bl.decks.length === 1) { this.stats.decks++; buildRoofAccess(bl, ra, bl.decks[0], A); return; }
     // roof decks (the outdoor flat look: SOLID columns have no light-field slot)
     for (const d of bl.decks) {
       if (d.x1 - d.x0 < 0.2 || d.z1 - d.z0 < 0.2) continue;

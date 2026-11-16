@@ -88,6 +88,9 @@ export function surfaceDaylightDigest(layout: StationLayout): string {
   return JSON.stringify(['surface-daylight-2', DAYLIGHT, LOOK_TUNE, new ContentHasher().str(JSON.stringify(read)).digest()]);
 }
 
+/** (v2, lane INTERIOR) The stair bulkhead's cap over its walls (m: world/surface/roofAccessView.ts CAP). */
+const ROOF_CAP = 0.15;
+
 /** Per-cell obstruction top (absolute y) of the district: roofs (ruin profiles), the cordon, the tent, debris; open ground = its floor. */
 export function obstructionTops(layout: StationLayout, plan: SurfaceLookPlan): Float32Array {
   const g = layout.grid, W = g.w, H = g.h, out = new Float32Array(W * H);
@@ -104,6 +107,12 @@ export function obstructionTops(layout: StationLayout, plan: SurfaceLookPlan): F
       const side = m === dN ? 'N' : m === dS ? 'S' : m === dW ? 'W' : 'E';
       const sd = b.sides.find(s => s.side === side)!;
       out[i] = topAt(sd, SIDE_NORMAL[side].alongX ? x : z, b.top);
+      // (v2, lane INTERIOR) a reachable roof: open inside the parapet down to its surface, the stair bulkhead to its cap
+      const ra = b.b.roofAccess;
+      if (ra && x > ra.walk.x0 && x < ra.walk.x1 && z > ra.walk.z0 && z < ra.walk.z1) {
+        const B = ra.bulkhead;
+        out[i] = x > B.x0 && x < B.x1 && z > B.z0 && z < B.z1 ? ra.y + B.h + ROOF_CAP : ra.y;
+      }
     } else if (o === OWNER.cordon) out[i] = LOOK_TUNE.cordonH + 0.2;
     else if (o === OWNER.tent) out[i] = tent ? tent.eave : LOOK_TUNE.tentEave;
     else if (o === OWNER.debris) out[i] = LOOK_TUNE.debrisH;
@@ -144,63 +153,84 @@ function* bakeDaylight(layout: StationLayout, plan: SurfaceLookPlan, ctx: Ctx): 
     for (let j = 0; j < NA; j++) for (let q = 0; q < NS; q++) { ox[j * NS + q] = Math.floor(f + ux[j] * dists[q] / CELL); oz[j * NS + q] = Math.floor(f + uz[j] * dists[q] / CELL); }
     return {ox, oz};
   });
-  const s0 = 0, geo = ctx.geos[s0], Ls = ctx.layers[s0], E = ctx.E[s0], Dv = ctx.D[s0], EL = ctx.EL[s0];
   const R = Math.max(1, DAYLIGHT.rep);
-  const ys = new Float64Array(Ls), slope = new Float64Array(Ls), res = new Float64Array(Ls * 4);
+  const maxLs = Math.max(1, ...ctx.layers);
+  const ys = new Float64Array(maxLs), slope = new Float64Array(maxLs), res = new Float64Array(maxLs * 4);
   let sumE = 0, nE = 0;
   const group: number[] = [];
+  /** The sky over the receivers in `group` (one block of slot s; origin = the block's centre when whole, else its first receiver's). */
+  const skyOver = (s: number, bx: number, by: number) => {
+    const geo = ctx.geos[s], Ls = ctx.layers[s], E = ctx.E[s], Dv = ctx.D[s], EL = ctx.EL[s];
+    stats.receivers += group.length;
+    const rep = group[0], whole = group.length === R * R && R % 2 === 0;
+    const mx = whole ? bx + R / 2 : rep % W, mz = whole ? by + R / 2 : Math.floor(rep / W), {ox, oz} = offs[whole ? 0 : 1];
+    for (let k = 0; k < Ls; k++) ys[k] = geo.layerY[rep * Ls + k];
+    res.fill(0);
+    for (let j = 0; j < NA; j++) {
+      stats.marches++;
+      slope.fill(0);
+      for (let q = 0, o = j * NS; q < NS; q++, o++) {
+        const x = mx + ox[o], z = mz + oz[o];
+        if (x < 0 || z < 0 || x >= W || z >= H) break;
+        const t = TIER[q], h = t === 0 ? tops[z * W + x] : t === 1 ? mid[Math.floor(z / C) * Wc + Math.floor(x / C)] : far[Math.floor(z / C2) * Wf + Math.floor(x / C2)];
+        const id = invD[q];
+        let done = true;
+        for (let k = 0; k < Ls; k++) {
+          const sl = (h - ys[k]) * id;
+          if (sl > slope[k]) slope[k] = sl;
+          // nothing further out can rise above this layer's horizon (the district's tallest top at this distance)
+          if ((hmax - ys[k]) * id > slope[k]) done = false;
+        }
+        if (done) break;
+      }
+      for (let k = 0; k < Ls; k++) {
+        const th = Math.atan(slope[k]), st = Math.sin(th);
+        const om = dphi * (1 - st);
+        const hor = dphi * (Math.PI / 4 - (th / 2 + Math.sin(2 * th) / 4));
+        res[k * 4] += L * om; res[k * 4 + 1] += L * hor * ux[j]; res[k * 4 + 3] += L * hor * uz[j]; res[k * 4 + 2] += L * dphi * (1 - st * st) / 2;
+      }
+    }
+    for (let k = 0; k < Ls; k++) {
+      const e = res[k * 4];
+      if (e <= 0) continue;
+      for (const i of group) {
+        const vi = (i * Ls + k) * 3;
+        E[vi] += e * tr; E[vi + 1] += e * tg; E[vi + 2] += e * tb;
+        Dv[vi] += res[k * 4 + 1] * tl; Dv[vi + 1] += res[k * 4 + 2] * tl; Dv[vi + 2] += res[k * 4 + 3] * tl;
+        EL[i * Ls + k] += e * tl;
+      }
+      if (k === 0 && s === 0) { sumE += e * tl; nE++; }
+      if (e * tl > stats.maxE) stats.maxE = e * tl;
+    }
+  };
   // --- outdoors (a step every few block rows) ---
+  const geo0 = ctx.geos[0];
   for (let by = 0; by < H; by += R) {
     if ((by / R) % DAYLIGHT.rowsPerStep === 0) yield;
     for (let bx = 0; bx < W; bx += R) {
       group.length = 0;
       for (let yy = by; yy < Math.min(H, by + R); yy++) for (let xx = bx; xx < Math.min(W, bx + R); xx++) {
         const i = yy * W + xx;
-        if (geo.open[i] && OUTDOOR.has(plan.ground[i])) group.push(i);
+        if (geo0.open[i] && OUTDOOR.has(plan.ground[i])) group.push(i);
       }
-      if (!group.length) continue;
-      stats.receivers += group.length;
-      // the origin: the block's centre (a cell corner) when the block is whole, else its first receiver's centre
-      const rep = group[0], whole = group.length === R * R && R % 2 === 0;
-      const mx = whole ? bx + R / 2 : rep % W, mz = whole ? by + R / 2 : Math.floor(rep / W), {ox, oz} = offs[whole ? 0 : 1];
-      for (let k = 0; k < Ls; k++) ys[k] = geo.layerY[rep * Ls + k];
-      res.fill(0);
-      for (let j = 0; j < NA; j++) {
-        stats.marches++;
-        slope.fill(0);
-        for (let q = 0, o = j * NS; q < NS; q++, o++) {
-          const x = mx + ox[o], z = mz + oz[o];
-          if (x < 0 || z < 0 || x >= W || z >= H) break;
-          const t = TIER[q], h = t === 0 ? tops[z * W + x] : t === 1 ? mid[Math.floor(z / C) * Wc + Math.floor(x / C)] : far[Math.floor(z / C2) * Wf + Math.floor(x / C2)];
-          const id = invD[q];
-          let done = true;
-          for (let k = 0; k < Ls; k++) {
-            const sl = (h - ys[k]) * id;
-            if (sl > slope[k]) slope[k] = sl;
-            // nothing further out can rise above this layer's horizon (the district's tallest top at this distance)
-            if ((hmax - ys[k]) * id > slope[k]) done = false;
-          }
-          if (done) break;
-        }
-        for (let k = 0; k < Ls; k++) {
-          const th = Math.atan(slope[k]), st = Math.sin(th);
-          const om = dphi * (1 - st);
-          const hor = dphi * (Math.PI / 4 - (th / 2 + Math.sin(2 * th) / 4));
-          res[k * 4] += L * om; res[k * 4 + 1] += L * hor * ux[j]; res[k * 4 + 3] += L * hor * uz[j]; res[k * 4 + 2] += L * dphi * (1 - st * st) / 2;
-        }
+      if (group.length) skyOver(0, bx, by);
+    }
+  }
+  // --- (v2, lane INTERIOR, task studio-surface-run-field-followup-20261116-211729-01) a reachable roof's open cells on the roof's slot:
+  // the same sky over the parapet and the district round it (obstructionTops: the roof's own surface and bulkhead) ---
+  for (const b of layout.surface?.buildings ?? []) {
+    const ra = b.roofAccess, s = ra ? ra.level : -1;
+    if (!ra || !ra.areas?.length || s < 1 || s >= ctx.geos.length) continue;
+    yield;
+    const geo = ctx.geos[s], roofAreas = new Set(ra.areas), g = layout.levels[s].grid;
+    const cx0 = Math.floor(ra.walk.x0 / CELL), cy0 = Math.floor(ra.walk.z0 / CELL), cx1 = Math.ceil(ra.walk.x1 / CELL), cy1 = Math.ceil(ra.walk.z1 / CELL);
+    for (let by = cy0; by < cy1; by += R) for (let bx = cx0; bx < cx1; bx += R) {
+      group.length = 0;
+      for (let yy = by; yy < Math.min(cy1, by + R); yy++) for (let xx = bx; xx < Math.min(cx1, bx + R); xx++) {
+        const i = yy * W + xx;
+        if (geo.open[i] && roofAreas.has(g.area[i])) group.push(i);
       }
-      for (let k = 0; k < Ls; k++) {
-        const e = res[k * 4];
-        if (e <= 0) continue;
-        for (const i of group) {
-          const vi = (i * Ls + k) * 3;
-          E[vi] += e * tr; E[vi + 1] += e * tg; E[vi + 2] += e * tb;
-          Dv[vi] += res[k * 4 + 1] * tl; Dv[vi + 1] += res[k * 4 + 2] * tl; Dv[vi + 2] += res[k * 4 + 3] * tl;
-          EL[i * Ls + k] += e * tl;
-        }
-        if (k === 0) { sumE += e * tl; nE++; }
-        if (e * tl > stats.maxE) stats.maxE = e * tl;
-      }
+      if (group.length) skyOver(s, bx, by);
     }
   }
   stats.outdoorMeanE = nE ? sumE / nE : 0;
