@@ -861,7 +861,7 @@ export class RtScene {
     if (this.matRecords.length < (slot + 1) * 4) { const a = new Float32Array(Math.max((slot + 1) * 4, this.matRecords.length * 2)); a.set(this.matRecords); this.matRecords = a; }
     const MR = this.matRecords;
     MR[slot * 4] = rec[0]; MR[slot * 4 + 1] = rec[1]; MR[slot * 4 + 2] = rec[2];
-    new Uint32Array(MR.buffer, slot * 16, 1)[0] = rec[3] >>> 0;
+    new Uint32Array(MR.buffer, slot * 16 + 12, 1)[0] = rec[3] >>> 0;
     const f = (L.materials + slot) * 4;
     B.tlas[f] = rec[0]; B.tlas[f + 1] = rec[1]; B.tlas[f + 2] = rec[2]; B.tlasU32[f + 3] = rec[3] >>> 0;
     B.dirtyTlas(L.materials + slot, L.materials + slot + 1);
