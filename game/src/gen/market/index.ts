@@ -34,7 +34,7 @@ import {generateSettlement, settleStoreyLabel} from './v2/index';
 import {settleIssues} from './v2/validate';
 import {barSettleIssues} from './v3/barValidate'; // task studio-market-bar-20261108-225231-01 (lane BAR): layout version 3
 import {denSettleIssues} from './v4/denValidate'; // task studio-corpse-market-shop-20261114-031614-01 (lane LAYOUT): layout version 4
-import {creviceStoreyLabel, generateCrevice} from './v5/index'; // task studio-survivor-market-crevice-20261116-074419: layout version 5, the crevice
+import {creviceStoreyLabel, generateCrevice} from './v5/index'; // task studio-survivor-market-crevice-20261116-074419: layout version 5, the crevice (+ 6: its envelope)
 import {creviceIssues} from './v5/validate';
 
 export {MARKET, MARKET_GENERIC_NAME, marketFrame, marketNameOf, marketSeed} from './frame';
@@ -64,10 +64,10 @@ export function marketStoreyLabel(level: number, version = 1): string {
   return level === 1 ? 'Housing deck' : 'Market floor';
 }
 
-/** Any market layout's validation issues (version 1, 2, 3, 4 or 5). */
+/** Any market layout's validation issues (version 1, 2, 3, 4, 5 or 6). */
 export function marketLayoutIssues(layout: StationLayout): string[] {
   const v = layout.market?.v;
-  return v === 5 ? creviceIssues(layout) : v === 4 ? denSettleIssues(layout) : v === 3 ? barSettleIssues(layout) : v === 2 ? settleIssues(layout) : marketIssues(layout);
+  return v === 5 || v === 6 ? creviceIssues(layout) : v === 4 ? denSettleIssues(layout) : v === 3 ? barSettleIssues(layout) : v === 2 ? settleIssues(layout) : marketIssues(layout);
 }
 
 /**
@@ -76,11 +76,12 @@ export function marketLayoutIssues(layout: StationLayout): string[] {
  * dense container settlement (gen/market/v2/), 3 (task studio-market-bar-20261108-225231-01, lane BAR) = that settlement plus
  * the upper-level bar (gen/market/v3/), 4 (task studio-corpse-market-shop-20261114-031614-01) = version 3 plus the corpse buyer's den
  * (gen/market/v4/), 5 (task studio-survivor-market-crevice-20261116-074419) = THE CREVICE (gen/market/v5/: a new settlement of converted
- * containers on both sides of an underground crevice, with the same stalls, bar and den).
+ * containers on both sides of an underground crevice, with the same stalls, bar and den), 6 (task
+ * studio-market-irregular-envelope-20261116-210503-01) = the crevice in its IRREGULAR ENVELOPE (gen/market/v6/envelope.ts).
  */
 export function generateMarketLevel(ctx: SectionGenContext): StationLayout {
   const version = ctx.layoutVersion ?? MARKET_LAYOUT_VERSION;
-  if (version >= 5) return generateCrevice(ctx);
+  if (version >= 5) return generateCrevice(ctx, version >= 6 ? 6 : 5);
   if (version >= 2) return generateSettlement(ctx, {bar: version >= 3, den: version >= 4});
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const seed = marketSeed(ctx.levelSeed);

@@ -46,10 +46,11 @@ beforeAll(async () => {
 
 /** The market as built now (layout v3: the settlement + the bar deck, its 'drink' posts naming their seats, the 'bar' stall; re-pinned by
  *  task studio-corpse-market-shop-20261114-031614-01: now layout v4 = that same v3 plus the corpse buyer's den, appended after it;
- *  re-pinned by task studio-survivor-market-crevice-20261116-074419: now layout v5, the crevice, its bar deck over the Arrival Square). */
+ *  re-pinned by task studio-survivor-market-crevice-20261116-074419: now layout v5, the crevice, its bar deck over the Arrival Square;
+ *  re-pinned by task studio-market-irregular-envelope-20261116-210503-01: now layout v6, the same crevice in its irregular envelope). */
 function barMarket(seed = 808) {
   const w = combatWorld(A, seed);
-  expect(w.layout.market!.v).toBe(5);
+  expect(w.layout.market!.v).toBe(6);
   w.people.bottleSource = () => ({obj: can, item: 'cola', source: 'models.item_cola (test)'});
   return {w};
 }
