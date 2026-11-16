@@ -21,11 +21,19 @@
 // Prop rules (root CLAUDE.md): every kind is a loose, movable thing (rule 2: world/trainEquipment.ts); the chest is storage that opens
 // (rule 1) through its own persistent store; nothing loose is baked into a view (rule 4). The sockets are anchored fixtures of the car
 // (rule 3: wall-mounted, no body, not storage).
+//
+// Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane CARGO): an UPGRADE KIT ('dolly' kind with the `upgrade` trait: the
+// train armour kit) is the HAND TRUCK with plates of the train's own armour kit (assets/trainArmorKit.generated.ts `plate`: the cooked
+// model with its own PBR maps, cloned — shared geometry / material, nothing new) stacked upright on the nose plate against the
+// uprights, fins to the front (KIT_LOOKS, per upgrade id; never per equipment kind). The plates are the kit itself (rule 4: nothing loose
+// on it); without the plate model the measured stand-in box is drawn, as for a module.
 
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {EQUIPMENT_KINDS, type EquipmentDef, type EquipmentKind} from '../craft/equipment';
 import {TRAIN_EQUIPMENT_MODELS, TRAIN_MODULE_MEASURED} from '../assets/trainEquipment.generated';
+import {TRAIN_ARMOR_KIT_MODELS} from '../assets/trainArmorKit.generated';
+import type {TrainUpgradeId} from '../run/trainUpgrades';
 import {equipmentPlugs, type EquipmentPlug} from '../craft/trainFixtures';
 import {CART_LOOK, CartHose, buildTruckBody, cartMaterials, cartModelsGen} from './fuelCartModel';
 import {LOCKBOX, LOCKBOX_MODEL_KEY, buildLockboxView, type LockboxSpec} from './trainLockbox';
@@ -56,15 +64,36 @@ interface ModuleMeasured {
   bounds?: {x0: number; x1: number; z0: number; z1: number};
 }
 
-/** A dolly kind's module as measured (the cook's numbers; a kind without a cooked module yet: a plain box on the plate). */
-function moduleMeasured(kind: EquipmentKind): ModuleMeasured {
-  const m = (TRAIN_MODULE_MEASURED as Readonly<Record<string, ModuleMeasured | undefined>>)[kind];
+/**
+ * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane CARGO): an upgrade kit's load on the hand truck, per UPGRADE id — the
+ * model (prop-library key), its uniform scale, the stack (`rows` high x `layers` deep, `gap` between plates) and the plates' back face in
+ * the dolly frame (`back`: just clear of the uprights' front face). `size` = the whole stack (w across, h up from the nose plate, d to
+ * the front). Plates of 0.54 x 0.42 m at 0.45 of the reference plate: a load of plating one person wheels on a hand truck.
+ */
+export const KIT_LOOKS: Readonly<Record<TrainUpgradeId, {key: string; scale: number; rows: number; layers: number; gap: number; w: number; h: number; d: number; back: number; size: {w: number; h: number; d: number}}>> = (() => {
+  const P = TRAIN_ARMOR_KIT_MODELS.plate, scale = 0.45, rows = 2, layers = 2, gap = 0.004;
+  const w = P.dims[0] * scale, h = P.dims[1] * scale, d = P.dims[2] * scale;
+  // (the uprights' front face in the dolly frame: the drum's back, CART_LOOK — a few millimetres clear of it)
+  const back = CART_LOOK.drumZ - CART_LOOK.drumR + 0.002;
+  const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
+  return Object.freeze({armor: Object.freeze({key: P.key, scale, rows, layers, gap, w: r4(w), h: r4(h), d: r4(d), back: r4(back),
+    size: Object.freeze({w: r4(w), h: r4(rows * h + (rows - 1) * gap), d: r4(layers * d + (layers - 1) * gap)})})});
+})();
+
+/** A dolly kind's module as measured (the cook's numbers; an upgrade kit: its plate stack; a kind without a cooked module yet: a plain box on the plate). */
+function moduleMeasured(def: EquipmentDef): ModuleMeasured {
+  if (def.upgrade) {
+    const K = KIT_LOOKS[def.upgrade.id];
+    return {size: K.size, mountZ: K.back, face: {y0: 0, y1: K.size.h}, bounds: {x0: -K.size.w / 2, x1: K.size.w / 2, z0: 0, z1: K.size.d}};
+  }
+  const m = (TRAIN_MODULE_MEASURED as Readonly<Record<string, ModuleMeasured | undefined>>)[def.kind];
   return m ?? {size: {w: 0.45, h: 0.9, d: 0.38}, mountZ: CART_LOOK.drumZ, face: {y0: 0.05, y1: 0.8}};
 }
 
-/** The prop-library key of a kind's model: the module ('dolly'), the Lockbox ('carry'); null: none cooked. */
+/** The prop-library key of a kind's model: the module ('dolly'; an upgrade kit: its plate), the Lockbox ('carry'); null: none cooked. */
 export function equipmentModelKey(def: EquipmentDef): string | null {
   if (def.move === 'carry') return LOCKBOX_MODEL_KEY;
+  if (def.upgrade) return KIT_LOOKS[def.upgrade.id].key;
   return (TRAIN_EQUIPMENT_MODELS as Readonly<Record<string, {key: string} | undefined>>)[def.kind]?.key ?? null;
 }
 
@@ -91,7 +120,7 @@ export function equipmentBox(def: EquipmentDef, spec: PlayerTrainSpec = PLAYER_T
     b = {body: {x: 0, hw: (lb.length * CHEST_SCALE) / 2, y0: 0, y1: lb.height * CHEST_SCALE, z: 0, hd: (lb.depth * CHEST_SCALE) / 2}, face: null};
   } else {
     // the module's plan bounds as it stands on the nose plate (its origin at (0, plate top, mountZ) in the dolly frame)
-    const m = moduleMeasured(def.kind), y0 = CART_LOOK.plateTop;
+    const m = moduleMeasured(def), y0 = CART_LOOK.plateTop;
     const B = m.bounds ?? {x0: -m.size.w / 2, x1: m.size.w / 2, z0: -m.size.d / 2, z1: m.size.d / 2};
     b = {
       body: {x: (B.x0 + B.x1) / 2, hw: (B.x1 - B.x0) / 2, y0, y1: y0 + m.size.h, z: m.mountZ + (B.z0 + B.z1) / 2, hd: (B.z1 - B.z0) / 2},
@@ -211,10 +240,23 @@ export class EquipmentLook {
     body.name = 'train-equipment-device-body';
     body.add(buildTruckBody());
     const src = this.scenes.get(equipmentModelKey(def) ?? '') ?? null;
-    if (src) {
+    if (src && def.upgrade) {
+      // (lane CARGO) an upgrade kit: its plates stacked on the nose plate (clones: the model's geometry / material shared)
+      const K = KIT_LOOKS[def.upgrade.id], m = new THREE.Group();
+      m.name = `train-equipment-module:${def.kind}`;
+      m.position.set(0, CART_LOOK.plateTop, K.back);
+      for (let r = 0; r < K.rows; r++) for (let l = 0; l < K.layers; l++) {
+        const plate = src.clone(true);
+        plate.name = `train-equipment-kit-plate:${r}:${l}`;
+        plate.scale.setScalar(K.scale);
+        plate.position.set(0, r * (K.h + K.gap), l * (K.d + K.gap));
+        m.add(plate);
+      }
+      body.add(m);
+    } else if (src) {
       const m = src.clone(true);
       m.name = `train-equipment-module:${def.kind}`;
-      m.position.set(0, CART_LOOK.plateTop, moduleMeasured(def.kind).mountZ);
+      m.position.set(0, CART_LOOK.plateTop, moduleMeasured(def).mountZ);
       body.add(m);
     } else {
       // the stand-in: a plain box of the measured bounds (exactly the aim box), its console face marked on +Z
