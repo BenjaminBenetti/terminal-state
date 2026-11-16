@@ -21,7 +21,8 @@ import {MARKET_BRIDGE_KIT} from '../src/assets/marketBridgeKit.generated';
 import {levelOfAsset} from '../src/assets/levelAssets';
 import {MARKET_BRIDGE_KEY, MARKET_BRIDGE_MODEL_FILES, buildCreviceView, marketBridgeModelKeys} from '../src/world/marketCrevice';
 import {MarketVisuals, buildMarketView} from '../src/world/marketVisuals';
-import {planLaundry, type GarmentDims} from '../src/world/marketClothes';
+import {LAUNDRY_GARMENTS, garmentDims, garmentMesh, planLaundry, staticGarment, type GarmentDims} from '../src/world/marketClothes';
+import {MARKET_HUMAN_KEY, MARKET_HUMAN_MODEL_FILES} from '../src/market/humanLooks';
 
 installCanvasShim(false);
 const PUB = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public');
@@ -157,16 +158,17 @@ describe('crevice view: the bridges', () => {
     }
   });
 
-  it('the loaded kit is instanced per piece mesh (its own geometry / material, shared); the instances lie on the decks', () => {
+  it('the loaded kit is instanced per piece mesh PER BRIDGE (shared geometry / material; the bridge\'s own bounds and storey)', () => {
     const L = L5(7), cr = L.market!.crevice!, v = buildCreviceView(L, {bridgeKit: kit})!;
     expect(v.kit).toBe('model');
     const ims: THREE.InstancedMesh[] = [];
     v.group.traverse(o => { if ((o as THREE.InstancedMesh).isInstancedMesh) ims.push(o as THREE.InstancedMesh); });
-    expect(ims.length).toBeGreaterThanOrEqual(3);
+    expect(ims.length).toBeGreaterThanOrEqual(3 * cr.bridges.length);
     const owned = new Set<unknown>();
     kit.scene.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) { owned.add(m.geometry); owned.add(m.material); } });
     const m = new THREE.Matrix4(), box = new THREE.Box3(), c = new THREE.Vector3();
     let instances = 0;
+    const perBridge = new Map<number, number>();
     for (const im of ims) {
       expect(owned.has(im.geometry)).toBe(true);
       expect(owned.has(im.material)).toBe(true);
@@ -174,15 +176,26 @@ describe('crevice view: the bridges', () => {
       expect(v.materials).not.toContain(im.material);
       expect(im.boundingSphere).not.toBeNull();
       if (!im.geometry.boundingBox) im.geometry.computeBoundingBox();
+      const mine = new Set<number>();
       for (let i = 0; i < im.count; i++, instances++) {
         im.getMatrixAt(i, m);
         box.copy(im.geometry.boundingBox!).applyMatrix4(m);
         box.getCenter(c);
-        const b = cr.bridges.find(q => Math.abs(c.z - (q.z0 + q.z1) / 2) < 0.1 && box.min.x >= q.x0 - 0.05 && box.max.x <= q.x1 + 0.05 && box.max.y > q.y + 0.5 && box.max.y < q.y + 1.2);
-        expect(b, `${im.name} #${i}`).toBeDefined();
+        const bi = cr.bridges.findIndex(q => Math.abs(c.z - (q.z0 + q.z1) / 2) < 0.1 && box.min.x >= q.x0 - 0.05 && box.max.x <= q.x1 + 0.05 && box.max.y > q.y + 0.5 && box.max.y < q.y + 1.2);
+        expect(bi, `${im.name} #${i}`).toBeGreaterThanOrEqual(0);
+        mine.add(bi);
+        // its bounds hold every instance (frustum culling never drops a visible piece)
+        for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) expect(im.boundingSphere!.center.distanceTo(c.set(x, y, z))).toBeLessThanOrEqual(im.boundingSphere!.radius + 1e-3);
       }
+      // one bridge per mesh: its bounds that bridge's (never the whole crevice), its storey the deck's
+      expect(mine.size, im.name).toBe(1);
+      const b = cr.bridges[[...mine][0]];
+      expect(im.userData.level).toBe(b.level);
+      expect(im.boundingSphere!.radius).toBeLessThan(Math.hypot(b.x1 - b.x0, b.z1 - b.z0, 2.5) / 2 + 1.5);
+      perBridge.set([...mine][0], (perBridge.get([...mine][0]) ?? 0) + im.count);
     }
-    expect(instances).toBeGreaterThanOrEqual(v.pieces.length);
+    expect(instances).toBe(v.pieces.length);
+    cr.bridges.forEach((_, bi) => expect(perBridge.get(bi)).toBe(v.pieces.filter(p => p.bridge === bi).length));
     // without the kit (a failed fetch): the same placements as stand-in pieces, so a deck is never invisible
     const s = buildCreviceView(L)!;
     expect(s.kit).toBe('standin');
@@ -229,6 +242,24 @@ describe('crevice view: lines, laundry, awnings, fans', () => {
       }
     }
   });
+
+  it('the garments stay within the market budget (versions 2-4: <= 18): every line thinned alike, a subset of the full plan', async () => {
+    const cast = await loadStripped(MARKET_HUMAN_MODEL_FILES[MARKET_HUMAN_KEY].url);
+    const real = LAUNDRY_GARMENTS.map(g => garmentDims(g, staticGarment(garmentMesh(cast, g)!)));
+    for (const seed of [...SEEDS, 1, 11, 4242]) {
+      const L = L5(seed), lines = creviceLines(L), floor = creviceLaundryFloor(L);
+      expect(lines.filter(l => l.laundry).length).toBeLessThanOrEqual(CREV_ART.line.laundry[1]);
+      const full = planLaundry(L, lines, real, floor), capped = planLaundry(L, lines, real, floor, CREV_ART.line.garments);
+      expect(capped.length, `seed ${seed}`).toBe(Math.min(full.length, CREV_ART.line.garments));
+      expect(capped.length, `seed ${seed}`).toBeGreaterThanOrEqual(8);
+      for (const g of capped) expect(full).toContainEqual(g);
+      expect(planLaundry(L, lines, real, floor, CREV_ART.line.garments)).toEqual(capped);
+      // (the view hangs exactly the capped plan)
+      const v = buildMarketView(L, {garments: cast})!;
+      expect(v.laundry!.plan).toEqual(capped);
+      for (const g of v.geometries) g.dispose();
+    }
+  }, 60_000);
 
   it('awnings along the E / W fronts (axis z), low edge >= 2.4 m, never under a bridge; fans only inside covered rooms', () => {
     const A = CREV_ART.awning;
@@ -282,14 +313,22 @@ describe('crevice view: scope, loading, lifecycle', () => {
   });
 
   it('bounded: a handful of materials, few draw calls (merged per material per chunk), static bounds for culling', () => {
-    const v = buildCreviceView(L5(7), {bridgeKit: kit})!;
+    const L = L5(7), v = buildCreviceView(L, {bridgeKit: kit})!, bridges = L.market!.crevice!.bridges.length;
     expect(v.materials.length).toBeLessThanOrEqual(4);
-    expect(v.draws).toBeLessThanOrEqual(16);
+    expect(v.draws).toBeLessThanOrEqual(4 * bridges + 12);
+    const p = new THREE.Vector3();
     v.group.traverse(o => {
       const m = o as THREE.InstancedMesh;
       if (!m.isMesh) return;
       expect(m.isInstancedMesh ? m.boundingSphere : m.geometry.boundingSphere, m.name).not.toBeNull();
       expect(m.castShadow || m.receiveShadow).toBe(false);
+      if (m.isInstancedMesh) return;
+      // a merged chunk: its sphere holds every vertex; bounded size; tagged with the storeys of its containers
+      const pos = m.geometry.getAttribute('position'), s = m.geometry.boundingSphere!;
+      for (let i = 0; i < pos.count; i++) expect(s.center.distanceTo(p.fromBufferAttribute(pos, i))).toBeLessThanOrEqual(s.radius + 1e-3);
+      expect(pos.count / 3).toBeLessThan(40000);
+      const lv: number[] = m.userData.levels ?? [m.userData.level];
+      expect(lv.every(l => typeof l === 'number' && l >= 0 && l < L.levels.length)).toBe(true);
     });
     const kitTris = v.pieces.reduce((a, p) => a + MARKET_BRIDGE_KIT.pieces[p.piece].tris, 0), own = v.triangles - kitTris;
     expect(own).toBeGreaterThan(5000);

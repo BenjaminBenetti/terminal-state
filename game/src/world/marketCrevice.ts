@@ -7,9 +7,10 @@
 //    (frame + dark / warm-lit / mesh / boarded pane; a lit pane is an emissive warm card: a dynamic effect), door architraves, a steel
 //    canopy over some home doors, roof vents, the shopfronts' roll-up shutter boxes and guides;
 //  - the BRIDGES: the cooked kit (assets/marketBridgeKit.generated.ts, the user's model cut into End / Mid / MidPlain / Trestle with its
-//    own PBR maps, kept) instanced per piece mesh — one InstancedMesh per piece part, the library's geometry / material shared and never
-//    disposed here. When the kit is not delivered (a failed fetch) the same placements draw simple stand-in pieces (deck, girders,
-//    rails) so the walkable deck is never invisible;
+//    own PBR maps, kept) instanced per piece mesh — one InstancedMesh per piece part PER BRIDGE (its own bounds: each bridge frustum-
+//    culled alone; tagged userData.level = the deck's storey), the library's geometry / material shared and never disposed here. When
+//    the kit is not delivered (a failed fetch) the same placements draw simple stand-in pieces (deck, girders, rails) so the walkable
+//    deck is never invisible;
 //  - the lines across the crevice (gen/market/v5/art.ts creviceLines): wires + their poles (the market's line steel; the laundry is
 //    world/marketClothes.ts, built by world/marketVisuals.ts).
 // Materials: ONE painted-steel material for every painted / steel part (the shared painted-panel surface set, world-mapped, tinted by
@@ -185,11 +186,12 @@ export function buildCreviceView(layout: StationLayout, opts: {bridgeKit?: GLTF 
     view.materials.push(m);
     return m;
   };
-  const accs = new Map<string, {key: MatKey; acc: Acc}>();
-  const accOf = (key: MatKey, x: number, z: number): Acc => {
+  const accs = new Map<string, {key: MatKey; acc: Acc; levels: Set<number>}>();
+  const accOf = (key: MatKey, x: number, z: number, level: number): Acc => {
     const k = `${key}@${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
     let e = accs.get(k);
-    if (!e) accs.set(k, (e = {key, acc: new Acc()}));
+    if (!e) accs.set(k, (e = {key, acc: new Acc(), levels: new Set()}));
+    e.levels.add(level);
     return e.acc;
   };
   const boardsTextured = !!marketTexture('ply');
@@ -198,8 +200,8 @@ export function buildCreviceView(layout: StationLayout, opts: {bridgeKit?: GLTF 
   view.art = creviceContainerArt(layout);
   for (const c of view.art) {
     const cx = c.axis === 'z' ? c.front : (c.s0 + c.s1) / 2, cz = c.axis === 'z' ? (c.s0 + c.s1) / 2 : c.front;
-    const paint = accOf('paint', cx, cz), glass = accOf('glass', cx, cz), lit = accOf('lit', cx, cz);
-    const boards = boardsTextured ? accOf('boards', cx, cz) : paint;
+    const paint = accOf('paint', cx, cz, c.level), glass = accOf('glass', cx, cz, c.level), lit = accOf('lit', cx, cz, c.level);
+    const boards = boardsTextured ? accOf('boards', cx, cz, c.level) : paint;
     const stats = buildContainer(c, {paint, glass, lit, boards}, boardsTextured, layout.seed >>> 0);
     view.frames++;
     view.doorEnds += stats.doorEnds;
@@ -207,44 +209,52 @@ export function buildCreviceView(layout: StationLayout, opts: {bridgeKit?: GLTF 
     view.lit += c.windows.filter(w => w.kind === 'lit').length;
   }
 
-  // --- the bridges: the kit's pieces (or the stand-in) instanced per piece part ---
+  // --- the bridges: the kit's pieces (or the stand-in) instanced per piece part PER BRIDGE (each bridge's own bounds: frustum-culled
+  //     on its own, never the whole crevice's kit for one deck in view), tagged with the deck's storey; geometry / material shared ---
   view.pieces = creviceBridgePieces(layout, MARKET_BRIDGE_KIT);
   if (view.pieces.length) {
     const parts = kitParts(opts.bridgeKit) ?? standinParts(view, matOf('paint'));
     view.kit = parts.model ? 'model' : 'standin';
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
-    for (const [name, list] of parts.pieces) {
-      const mine = view.pieces.filter(p => p.piece === name);
-      if (!mine.length) continue;
-      for (const part of list) {
-        const im = new THREE.InstancedMesh(part.geometry, part.material, mine.length);
-        im.name = `market-bridge-${name}`;
-        mine.forEach((p, i) => {
-          m.compose(new THREE.Vector3(p.x, p.y, p.z), q.setFromAxisAngle(up, p.yaw), new THREE.Vector3(p.sx, 1, 1)).multiply(part.local);
-          im.setMatrixAt(i, m);
-        });
-        im.instanceMatrix.needsUpdate = true;
-        im.computeBoundingBox();
-        im.computeBoundingSphere();
-        group.add(im);
-        view.draws++;
-        view.triangles += triangles(part.geometry) * mine.length;
+    cr.bridges.forEach((b, bi) => {
+      for (const [name, list] of parts.pieces) {
+        const mine = view.pieces.filter(p => p.bridge === bi && p.piece === name);
+        if (!mine.length) continue;
+        for (const part of list) {
+          const im = new THREE.InstancedMesh(part.geometry, part.material, mine.length);
+          im.name = `market-bridge-${bi}-${name}`;
+          mine.forEach((p, i) => {
+            m.compose(new THREE.Vector3(p.x, p.y, p.z), q.setFromAxisAngle(up, p.yaw), new THREE.Vector3(p.sx, 1, 1)).multiply(part.local);
+            im.setMatrixAt(i, m);
+          });
+          im.instanceMatrix.needsUpdate = true;
+          im.computeBoundingBox();
+          im.computeBoundingSphere();
+          im.userData.level = b.level;
+          group.add(im);
+          view.draws++;
+          view.triangles += triangles(part.geometry) * mine.length;
+        }
       }
-    }
+    });
   }
 
   // --- merge: one mesh per material per chunk ---
-  for (const [k, {key, acc}] of [...accs].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+  for (const [k, {key, acc, levels}] of [...accs].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
     const g = acc.geometry();
     if (!g) continue;
     const mesh = new THREE.Mesh(g, matOf(key));
     mesh.name = `market-crevice-${k}`;
+    // (a chunk holds the containers of several storeys: tagged with all of them; userData.level its lowest)
+    const lv = [...levels].sort((a, b) => a - b);
+    mesh.userData.level = lv[0] ?? 0;
+    if (lv.length > 1) mesh.userData.levels = lv;
     group.add(mesh);
     view.geometries.push(g);
     view.draws++;
     view.triangles += acc.tris;
   }
-  group.traverse(o => { if (o === group) return; o.castShadow = false; o.receiveShadow = false; o.userData.level = 0; });
+  group.traverse(o => { if (o === group) return; o.castShadow = false; o.receiveShadow = false; o.userData.level ??= 0; });
   return view;
 }
 

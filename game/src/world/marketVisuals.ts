@@ -13,7 +13,7 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import type {StationLayout} from '../gen/stationTypes';
 import {marketAwnings, marketFans, type MarketAwning, type MarketFan} from '../gen/market/art';
 import {settleLines, type MarketLine} from '../gen/market/v2/art';
-import {crevOf, creviceAwnings, creviceFans, creviceLaundryFloor, creviceLines, creviceObstacles} from '../gen/market/v5/art';
+import {CREV_ART, crevOf, creviceAwnings, creviceFans, creviceLaundryFloor, creviceLines, creviceObstacles} from '../gen/market/v5/art';
 import {MARKET_BRIDGE_KEY, buildCreviceView, creviceLineGeometry, type CreviceView} from './marketCrevice';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {SurfaceNodeMaterial} from './materials';
@@ -187,14 +187,17 @@ export function buildMarketView(layout: StationLayout, opts: {garments?: GLTF | 
     const wires = new THREE.Mesh(lg.steel, steel);
     wires.name = 'market-lines';
     root.add(wires);
-    laundry = buildLaundry(layout, lines, opts.garments, crevice ? creviceLaundryFloor(layout, creviceObstacles(layout, crevice.art)) : undefined);
+    laundry = crevice
+      ? buildLaundry(layout, lines, opts.garments, creviceLaundryFloor(layout, creviceObstacles(layout, crevice.art)), CREV_ART.line.garments)
+      : buildLaundry(layout, lines, opts.garments);
     if (laundry) {
       root.add(laundry.group);
       geometries.push(...laundry.geometries);
       materials.push(...laundry.materials);
     }
   }
-  root.traverse(o => { if (o === root) return; o.castShadow = false; o.receiveShadow = false; o.userData.level = 0; });
+  // (the crevice view tags its own: each bridge's meshes its deck's storey, each art chunk the storeys it holds — kept)
+  root.traverse(o => { if (o === root) return; o.castShadow = false; o.receiveShadow = false; o.userData.level ??= 0; });
   const view: MarketView = {root, fans, rotors, awnings: aw?.n ?? 0, lines: lines.length, laundry, crevice, geometries, materials};
   turnFans(view, 0);
   return view;

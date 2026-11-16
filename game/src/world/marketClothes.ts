@@ -126,9 +126,10 @@ export function laundryOpenAt(layout: StationLayout, x: number, z: number): bool
 /**
  * The laundry of a market's lines (only lines with `laundry`): seeded per line, garments one after another along it with clear gaps,
  * each fitting the line's open run, hanging no lower than LAUNDRY.minY; deterministic. `dims`: the garment types available (missing ones
- * are simply not hung).
+ * are simply not hung). `max` (layout version 5: the market's garment budget): over it, a seeded choice of the garments stays — every
+ * line thinned alike (gaps like the empty share), none emptied first; absent = no cap (versions 2-4 unchanged).
  */
-export function planLaundry(layout: StationLayout, lines: readonly MarketLine[], dims: readonly GarmentDims[], floor?: LaundryFloor): HungGarment[] {
+export function planLaundry(layout: StationLayout, lines: readonly MarketLine[], dims: readonly GarmentDims[], floor?: LaundryFloor, max?: number): HungGarment[] {
   const out: HungGarment[] = [];
   if (!dims.length) return out;
   lines.forEach((l, li) => {
@@ -188,7 +189,9 @@ export function planLaundry(layout: StationLayout, lines: readonly MarketLine[],
       else s += Math.max(0.3, (placed ? width : 0.3)) + LAUNDRY.gap;
     }
   });
-  return out;
+  if (max === undefined || out.length <= max) return out;
+  const keep = new Set(out.map((_, i) => [hash2(layout.seed >>> 0, 0x5bd1e995 + i), i] as const).sort((a, b) => a[0] - b[0] || a[1] - b[1]).slice(0, Math.max(0, max)).map(([, i]) => i));
+  return out.filter((_, i) => keep.has(i));
 }
 
 /** A hung garment's instance matrix: its hang point to the world point, its width along the line, tilted with it. */
@@ -243,7 +246,7 @@ export function staticGarment(mesh: THREE.Mesh): THREE.BufferGeometry {
 }
 
 /** Builds the laundry of `lines` from the cast's garments (null: no cast loaded / no laundry line / nothing fits). */
-export function buildLaundry(layout: StationLayout, lines: readonly MarketLine[], gltf: GLTF | null | undefined, floor?: LaundryFloor): LaundryView | null {
+export function buildLaundry(layout: StationLayout, lines: readonly MarketLine[], gltf: GLTF | null | undefined, floor?: LaundryFloor, max?: number): LaundryView | null {
   if (!gltf || !lines.some(l => l.laundry)) return null;
   const types: {g: (typeof LAUNDRY_GARMENTS)[number]; mesh: THREE.Mesh; geo: THREE.BufferGeometry; dims: GarmentDims}[] = [];
   for (const g of LAUNDRY_GARMENTS) {
@@ -253,7 +256,7 @@ export function buildLaundry(layout: StationLayout, lines: readonly MarketLine[]
     types.push({g, mesh, geo, dims: garmentDims(g, geo)});
   }
   const dims = types.map(t => t.dims);
-  const plan = planLaundry(layout, lines, dims, floor);
+  const plan = planLaundry(layout, lines, dims, floor, max);
   if (!plan.length) { for (const t of types) t.geo.dispose(); return null; }
   const group = new THREE.Group();
   group.name = 'market-laundry';
