@@ -203,7 +203,18 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       const sl = game.layout.surfaceAccess!.lift!;
       expect(P.x > sl.cab.x0 && P.x < sl.cab.x1 && P.z > sl.cab.z0 && P.z < sl.cab.z1, 'standing in the station\'s car').toBe(true);
       await h.waitFrames(20);
-      expect(snapHost(), 'the station exactly as left').toEqual(host0);
+      const host1 = snapHost();
+      if (host1.mem !== host0.mem) { // (the first difference, readable)
+        const a = JSON.parse(host0.mem) as unknown[][], b = JSON.parse(host1.mem) as unknown[][], names = ['pickups', 'holders', 'killed', 'cleared'];
+        for (let k = 0; k < 4; k++) {
+          const x = JSON.stringify(a[k]), y = JSON.stringify(b[k]);
+          if (x === y) continue;
+          const xa = (Array.isArray(a[k]) ? a[k] : Object.entries(a[k] as object)) as unknown[], ya = (Array.isArray(b[k]) ? b[k] : Object.entries(b[k] as object)) as unknown[];
+          const i = xa.findIndex((v, j) => JSON.stringify(v) !== JSON.stringify(ya[j]));
+          marks.push(`station memory differs in ${names[k]} (${xa.length} vs ${ya.length}) at ${i}: ${JSON.stringify(xa[i]).slice(0, 300)} -> ${JSON.stringify(ya[i]).slice(0, 300)}`);
+        }
+      }
+      expect(host1, 'the station exactly as left').toEqual(host0);
       const st = qa.surface.state();
       expect(st.scene.district, 'nothing of the district in the scene').toBe(0);
       expect(st.resources, 'the station\'s resources as they were').toEqual(res0);
