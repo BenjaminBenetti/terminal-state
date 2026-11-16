@@ -66,6 +66,15 @@ export interface InteriorPlan {
   links: LevelLink[];
   /** The depot programme only: its recoverable train units / upgrade kits (gen/surface/surfaceTypes.ts SurfaceRecoverable). */
   recoverables?: SurfaceRecoverable[];
+  /**
+   * Lane ROOMS: programme data other lanes draw / use (pure data). The depot: `features.depot` = rooms/depot.ts DepotFeatures (the shed's
+   * rail tracks, the inspection pit, the overhead crane, the kept dolly-lane cells, the loading-bay entrance id).
+   */
+  features?: Record<string, unknown>;
 }
+// Lane ROOMS (planInterior): indices in a plan are PLAN-LOCAL where noted — props[].host indexes plan.props and links[].id plan.links
+// (the caller rebases both when it appends the plan to the district's lists: layout.levelLinks[id] must be that link). links[].traversalId
+// is Kit-global (kit.flights: the district's layout.traversal.stairs must be kit.flights itself). Heights are absolute (props / lights /
+// pickups / zombies y; window sill / head stay relative to their storey floor) — the caller lifts nothing again.
 
 export type InteriorPlanner = (plot: InteriorPlot) => InteriorPlan;
