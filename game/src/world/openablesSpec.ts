@@ -31,6 +31,7 @@ import {SKYWAYS_MAPBOARD_OPEN_AUDIT} from '../gen/skyways/mapBoardKind'; // task
 import {SUBWAY_MAP_KIOSK_OPEN_AUDIT} from '../gen/subwayMapKioskKind'; // task studio-ui-subway-maps-20261108-074144-01
 import {BUNKER_MODEL_OPEN_AUDIT, BUNKER_OBJECTIVE_OPEN_AUDIT} from '../gen/bunker/bunkerKinds'; // task studio-bunker-level-20261109-072224-01
 import {CORPSE_DEN_OPEN_AUDIT} from '../gen/market/v4/denKinds'; // task studio-corpse-market-shop-20261114-031614-01
+import {SR_CRATE, SURFACE_OPEN_AUDIT} from '../gen/surface/kinds'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT)
 import {MALL_OPEN_AUDIT} from '../gen/mall/kinds'; // Task track3-eaton-centre-20261031 (lane SHOPS): the mall shop-fixture kinds' rows
 import {OPENABLE_TABLES, type ItemRows, type OwnTable} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import {COMPANY_DIMS} from '../assets/companyDims.generated'; // Task office-props-physics-scale-20261030 (lane FURN): furniture-only rescales
@@ -622,6 +623,46 @@ export const OPENABLE_SPECS = {
     loot: LOOT.footlocker,
     sound: {open: 'crate', close: 'crate'},
   },
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT): the Surface Run checkpoint's lidded MILITARY SUPPLY CRATE (gen/surface/
+   * kinds.ts SR_CRATE: 1.2 x 0.6 x 0.55 m). Authored wooden carcass on three battens with steel corner brackets, rope end grips and a
+   * hasp; the plank lid (with its cross battens and hasp) lifts on its back edge over a wood-lined compartment whose finds lie on the floor
+   * (items/lootTables.ts MILITARY_SUPPLY_ROWS). Keep >= 0.12 m behind it: a wall stops the lid near upright (fit), at least 65 degrees.
+   */
+  srMilitaryCrate: (() => {
+    const {bodyW, bodyD, h, skid, wall, lidT, floorY} = SR_CRATE, hx = bodyW / 2, hz = bodyD / 2, top = h - lidT, ix = hx - wall, iz = hz - wall;
+    return {
+      label: 'military crate', model: null, body: 'authored' as const, group: 'container' as const,
+      bodyBoxes: [
+        ...[-hx + 0.08, 0, hx - 0.08].map(x => B('wood', x - 0.045, 0, -hz, x + 0.045, skid, hz)),
+        B('wood', -hx, skid, -hz, hx, floorY, hz), B('wood', -hx, floorY, iz, hx, top, hz), B('wood', -hx, floorY, -hz, hx, top, -iz),
+        B('wood', -hx, floorY, -iz, -ix, top, iz), B('wood', ix, floorY, -iz, hx, top, iz),
+        B('wood', -hx, 0.24, hz, hx, 0.3, hz + 0.014), B('wood', -hx, 0.24, -hz - 0.014, hx, 0.3, -hz), // front / back battens
+        ...[-1, 1].flatMap(sx => [-1, 1].flatMap(sz => [
+          B('steelDark', sx > 0 ? hx - 0.05 : -hx - 0.016, skid, sz > 0 ? hz + 0.002 : -hz - 0.018, sx > 0 ? hx + 0.016 : -hx + 0.05, top, sz > 0 ? hz + 0.018 : -hz - 0.002),
+          B('steelDark', sx > 0 ? hx + 0.002 : -hx - 0.018, skid, sz > 0 ? hz - 0.05 : -hz - 0.016, sx > 0 ? hx + 0.018 : -hx - 0.002, top, sz > 0 ? hz + 0.016 : -hz + 0.05),
+        ])),
+        ...[-1, 1].flatMap(sx => [ // rope grips between two end cleats
+          B('wood', sx > 0 ? hx : -hx - 0.03, 0.28, -0.16, sx > 0 ? hx + 0.03 : -hx, 0.38, -0.11), B('wood', sx > 0 ? hx : -hx - 0.03, 0.28, 0.11, sx > 0 ? hx + 0.03 : -hx, 0.38, 0.16),
+          B('black', sx > 0 ? hx + 0.006 : -hx - 0.026, 0.335, -0.11, sx > 0 ? hx + 0.026 : -hx - 0.006, 0.355, 0.11),
+        ]),
+        B('steelDark', -0.025, top - 0.07, hz, 0.025, top - 0.03, hz + 0.016), // hasp staple
+      ],
+      parts: [{
+        name: 'lid',
+        move: {type: 'hinge' as const, axis: 'x' as const, pivot: [0, top, -hz] as const, angle: -95 * P, min: 65 * P},
+        boxes: [
+          B('wood', -hx - 0.008, top, -hz - 0.008, hx + 0.008, top + lidT * 0.6, hz + 0.008),
+          ...[-hx + 0.12, 0, hx - 0.12].map(x => B('wood', x - 0.05, top + lidT * 0.6, -hz - 0.008, x + 0.05, h, hz + 0.008)),
+          B('steelDark', -0.035, top - 0.04, hz + 0.008, 0.035, top + lidT * 0.6, hz + 0.018), // hasp
+        ],
+        cavity: box(-ix, floorY, -iz, ix, top - 0.001, iz), cavityRole: 'wood' as const,
+        surfaces: [{y: floorY + 0.002, x0: -ix + 0.03, x1: ix - 0.03, z0: -iz + 0.03, z1: iz - 0.03, clear: top - floorY - 0.06}],
+      }],
+      loot: LOOT.srMilitaryCrate,
+      sound: {open: 'crate', close: 'crate'},
+    };
+  })(),
   /** Four-drawer filing cabinet (p7-filing-cabinet-t25.glb): drawer fronts slide out along +Z with their trays. */
   filingCabinet: {
     label: 'filing cabinet', model: 'p7_filingCabinet', body: 'model', group: 'container',
@@ -1151,6 +1192,7 @@ export function openableSpec(kind: string): OpenableSpec | null { return SPECS[k
 /** New container kinds (not loot holders before iteration 08): items/loot.ts ContainerKind additions. */
 export const OPENABLE_CONTAINER_KINDS = ['bin', 'wheelieBin', 'newspaperVendingBox', 'staffLockers', 'filingCabinet', 'safe', 'chestFreezer', 'firstAidWallKit', 'fireExtinguisherCabinet', 'aedWallCabinet',
   'footlocker', // task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): the survivor hideout's footlocker
+  'srMilitaryCrate', // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT): the Surface Run checkpoint's supply crate
   'toiletStall', // task office-overhaul-20261030 (lane INTERACT): washroom cubicles
   // task office-interactions-layout-20261030 (lane OPEN): office-overhaul storage
   'officeFiling', 'executiveDesk', 'labBench', 'examTable', 'vaultSafe', 'serverCabinet', 'serverRack', 'biohazardFridge', 'archiveBoxes',
@@ -1403,6 +1445,7 @@ export const OPENABLE_AUDIT: readonly AuditEntry[] = [
   ...BUNKER_OBJECTIVE_OPEN_AUDIT, // task studio-bunker-level-20261109-072224-01: the Bunker's generator slots + core cluster (equipment)
   ...BUNKER_MODEL_OPEN_AUDIT, // (follow-up) the Bunker's model-backed flavour kinds (sealed equipment / fixtures)
   ...CORPSE_DEN_OPEN_AUDIT, // task studio-corpse-market-shop-20261114-031614-01: the Market den's chute / booth (equipment)
+  ...SURFACE_OPEN_AUDIT, // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT): the Surface Run kit (its crate: the openable row above)
 ];
 
 function describe(k: OpenableKind): string {

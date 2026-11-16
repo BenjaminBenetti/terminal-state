@@ -11,6 +11,7 @@ import {SKYWAYS_MAPBOARD_PROP_DEFS, type SkywaysMapBoardKind} from './skyways/ma
 import {SUBWAY_MAP_KIOSK_PROP_DEFS, type SubwayMapKioskKind} from './subwayMapKioskKind'; // task studio-ui-subway-maps-20261108-074144-01
 import {BUNKER_MODEL_PROP_DEFS, BUNKER_OBJECTIVE_PROP_DEFS, type BunkerModelKind, type BunkerObjectiveKind} from './bunker/bunkerKinds'; // task studio-bunker-level-20261109-072224-01
 import {CORPSE_DEN_PROP_DEFS, type CorpseDenKind} from './market/v4/denKinds'; // task studio-corpse-market-shop-20261114-031614-01
+import {SURFACE_PROP_DEFS, type SurfaceKind} from './surface/kinds'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT)
 
 export type PropKind =
   | 'bench' | 'cabinetTall' | 'cabinetLow' | 'column' | 'crate' | 'bin' | 'fareGate'
@@ -51,7 +52,8 @@ export type PropKind =
   | SubwayMapKioskKind // task studio-ui-subway-maps-20261108-074144-01: the Subway's station map kiosk (gen/subwayMapKioskKind.ts)
   | BunkerObjectiveKind // task studio-bunker-level-20261109-072224-01: the Bunker's generator slots + core cluster (gen/bunker/bunkerKinds.ts)
   | BunkerModelKind // (follow-up) the Bunker's model-backed flavour kinds: mainframes, decon showers, control console, pumps, pipe bank
-  | CorpseDenKind; // task studio-corpse-market-shop-20261114-031614-01: the Market den's body chute + buyer's booth (gen/market/v4/denKinds.ts)
+  | CorpseDenKind // task studio-corpse-market-shop-20261114-031614-01: the Market den's body chute + buyer's booth (gen/market/v4/denKinds.ts)
+  | SurfaceKind; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT): the Surface Run district's street / checkpoint / wreck kinds (gen/surface/kinds.ts)
 
 /** Purpose props (iteration 05). Holders: see PURPOSE_SURFACES; the rest are furniture/decor. */
 export const PURPOSE_PROP_KINDS = [
@@ -219,6 +221,7 @@ export const PROP_DEFS: Record<PropKind, PropDef> = {
   ...BUNKER_OBJECTIVE_PROP_DEFS, // task studio-bunker-level-20261109-072224-01
   ...BUNKER_MODEL_PROP_DEFS, // (follow-up) the model-backed flavour kinds
   ...CORPSE_DEN_PROP_DEFS, // task studio-corpse-market-shop-20261114-031614-01
+  ...SURFACE_PROP_DEFS, // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT): real-size boxes; wrecks = measured model bounds
 };
 
 /**
