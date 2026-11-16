@@ -30,7 +30,7 @@
 // RT On / Off change is not a pending change.
 
 import {
-  RT_FALLBACK_REASON, RT_NEEDS_LIGHTING, RT_NOT_READY_REASON, RT_UNSUPPORTED_REASON, rtFlashlightSummary, rtLineFragment, rtStationText, rtUnavailableText,
+  RT_FALLBACK_REASON, RT_NEEDS_LIGHTING, RT_NOT_READY_REASON, RT_UNSUPPORTED_REASON, hasFlashBounce, rtFlashlightSummary, rtLineFragment, rtStationText, rtUnavailableText,
   type RtCapability, type RtSceneInfo,
 } from './rtFlashlight';
 
@@ -338,7 +338,7 @@ export function rtFlashlightHelp(s: EnhancedLightingStatus): {text: string; deta
   const now = rtStationText(a), note = changeNote(s);
   if (note) return {text: `${now}. ${note}`, detail: false};
   // (Off and nothing to explain: what Off means, like the Reflections line)
-  return !want && a.rt !== true && !a.rtReason && a.gi !== 'baseline' && a.shading === 'full' ? {text: rtFlashlightSummary(false), detail: true} : {text: now, detail: false};
+  return !want && a.rt !== true && !a.rtReason && hasFlashBounce(a) ? {text: rtFlashlightSummary(false), detail: true} : {text: now, detail: false};
 }
 
 /** The line under the RT Flashlight choice (rtFlashlightHelp's text). */

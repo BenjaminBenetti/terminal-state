@@ -195,6 +195,7 @@ describe('Settings: four tabs over the one settings form', () => {
         'set-vol': 'audio', 'set-mute': 'audio',
         'set-quality': 'graphics', 'set-quality-help': 'graphics', 'set-res': 'graphics', 'set-res-readout': 'graphics', 'set-ao': 'graphics', 'set-ao-help': 'graphics',
         'set-lighting': 'graphics', 'set-lighting-help': 'graphics', 'set-reflections': 'graphics', 'set-reflections-help': 'graphics',
+        'set-rt': 'graphics', 'set-rt-help': 'graphics', // (task rt-flashlight-compute-20261115-233136, lane UI: RT Flashlight)
         'set-lighting-cache': 'graphics', 'set-lighting-cache-clear': 'graphics',
       };
       const box = m.q('#pause-settings');
@@ -218,6 +219,7 @@ describe('Settings: four tabs over the one settings form', () => {
       const box = m.q('#pause-settings');
       const detail = (id: string) => box.querySelector(`#${id}`)!.classList.contains('set-detail');
       expect(['set-quality-help', 'set-res-readout', 'set-ao-help', 'set-lighting-cache'].filter(detail)).toEqual(['set-quality-help', 'set-res-readout', 'set-ao-help', 'set-lighting-cache']);
+      expect(detail('set-rt-help')).toBe(true); // (lane UI: no station here — what RT Flashlight's choice means is a plain description; its reasons show: rt-flashlight-settings.test.ts)
       for (const id of ['set-lighting-help', 'set-reflections-help']) expect(detail(id), id).toBe(false); // requested / effective / pending / applying / error
       expect(box.querySelectorAll('.set-note').filter(n => !n.id).every(n => !n.classList.contains('set-detail'))).toBe(true);
       expect(box.querySelector('#set-lighting-cache-clear')!.parentElement!.classList.contains('set-detail')).toBe(false); // the button stays
