@@ -15,7 +15,7 @@ import {LEVELS} from '../src/levels/registry';
 import {GAS, GasField} from '../src/world/gas/field';
 import {installGas, type GasHost} from '../src/world/gas/system';
 import {surfaceOutdoorMap, type SurfaceOutdoorMap} from '../src/world/surface/airMask';
-import {SURFACE_FIELD, SurfaceGasField, surfaceGasZones, type SurfaceGasZoneSpec} from '../src/world/surface/airField';
+import {SURFACE_FIELD, SurfaceGasField, rectDistance, surfaceGasZones, type SurfaceGasZoneSpec} from '../src/world/surface/airField';
 import {doorBreachId, planSurfaceDoors} from '../src/world/surface/airDoors';
 
 const LOG = process.env.SURFACE_GAS_COST_LOG;
@@ -125,16 +125,25 @@ describe('the zone field (bounded per building)', () => {
     expect(f.zones[0].pending.length).toBe(1);
     for (let t = 0; t < 20; t += 0.1) f.tick(0.1);
     expect(f.zones[0].field).toBe(null); // nothing simulated while far
-    const before = f.counts.replayCellSteps;
-    focus = {x: 5, z: 5};
+    const before = f.counts.replayCellSteps, forced0 = f.counts.forced;
+    // coming back: first out of sight (beyond SEEN_M, inside the wake distance) — the replay runs nearest first within the frame budget
+    focus = {x: 5, z: 9.5 + SURFACE_FIELD.SEEN_M + 1};
     let frames = 0;
     while (f.zones.some(z => z.mode === 'catching' || (z.pending.length && z.mode === 'frozen')) || frames === 0) {
       const c0 = f.counts.replayCellSteps;
       f.tick(1 / 60);
-      expect(f.counts.replayCellSteps - c0).toBeLessThanOrEqual(SURFACE_FIELD.CATCHUP_CELL_STEPS + 2 * 15 * 22 * 22); // (each catching zone may finish its current coarse step)
+      // a step never costs more than what is left of the budget (+ one 0.1 s tick of one zone when nothing else ran)
+      expect(f.counts.replayCellSteps - c0).toBeLessThanOrEqual(SURFACE_FIELD.CATCHUP_CELL_STEPS + GasField.substeps(0.1) * 22 * 22);
       if (++frames > 600) break;
     }
+    expect(f.counts.replayCellSteps).toBeGreaterThan(before); // (replayed out of sight)
+    expect(f.counts.forced).toBe(forced0);
+    // ... then in sight: already current (nothing forced)
+    focus = {x: 5, z: 5};
+    f.tick(1 / 60);
+    expect(f.counts.forced).toBe(forced0);
     expect(f.zones[0].mode).toBe('live');
+    expect(f.zones[0].simT).toBe(f.now);
     expect(f.counts.replayCellSteps).toBeGreaterThan(before);
     expect(f.concentrationAt(4.25, 1, 5.25)).toBeGreaterThan(0.01); // A's 20 s of door gas, replayed
     // settle(): everything with history near a point, at once (behind the loading screen)
@@ -150,6 +159,28 @@ describe('the zone field (bounded per building)', () => {
       expect(f2.concentrationAt(x, 1, z), `replayed vs live at ${x},${z}`).toBeCloseTo(f3.concentrationAt(x, 1, z), 3);
     }
     expect(f2.concentrationAt(15.25, 1, 5.25)).toBeGreaterThan(0.05);
+  });
+
+  it('a zone the player can see or breathe is never stale: a teleport into SEEN_M completes its replay at once (counted)', () => {
+    const {g, info} = twoZones();
+    const map = surfaceOutdoorMap({grid: g, levels: [{id: 0, grid: g, baseY: 0}] as never, surface: info})!;
+    let focus = {x: 400, z: 400};
+    const f = new SurfaceGasField([{id: 0, grid: g}], surfaceGasZones(info), map, () => focus);
+    f.addAged({id: 'x', level: 0, cells: [g.idx(30, 10)]}, GAS.AGE_CAP_S);
+    for (let k = 0; k < 30; k++) f.tick(1 / 60);
+    expect(f.zones[1].mode).toBe('frozen');
+    focus = {x: 15, z: 5}; // inside B
+    f.tick(1 / 60);
+    expect(f.counts.forced).toBe(1);
+    expect(f.zones[1].mode).toBe('live');
+    expect(f.zones[1].simT).toBe(f.now);
+    expect(f.concentrationAt(15.25, 1, 5.25)).toBeGreaterThan(0.05);
+    // the wake distance leads the player's speed (the truck): ~6 m/s -> + 24 m; a teleport never counts as speed
+    expect(f.wakeM).toBe(SURFACE_FIELD.WAKE_M);
+    for (let k = 0; k < 240; k++) { focus = {x: 15 + k * 0.1, z: 5}; f.tick(1 / 60); }
+    expect(f.speed).toBeGreaterThan(5.8);
+    expect(f.speed).toBeLessThan(6 + 1e-6);
+    expect(Math.abs(f.wakeM - (SURFACE_FIELD.WAKE_M + 6 * SURFACE_FIELD.LEAD_S))).toBeLessThan(1);
   });
 
   it("overlapping zone rects on one level never clobber each other's layer cells (the upload composes every storey there)", () => {
@@ -188,6 +219,8 @@ describe('the zone field (bounded per building)', () => {
 
 describe('the cost on the generated district (Node; counts bounded, timings logged)', () => {
   it('every core building gassed through its doorway: arrival settle, then 60 s of 60 fps play and a walk across the core', () => {
+    const q = (xs: number[], p: number) => [...xs].sort((a, b) => a - b)[Math.min(xs.length - 1, Math.floor(xs.length * p))];
+    const mean = (xs: number[]) => xs.reduce((s, v) => s + v, 0) / xs.length;
     const t0 = performance.now();
     const L = LEVELS.subway.generate('surface', {levelSeed: 11});
     const tGen = performance.now() - t0;
@@ -211,19 +244,52 @@ describe('the cost on the generated district (Node; counts bounded, timings logg
     const frame: number[] = [];
     for (let k = 0; k < 3600; k++) { const a = performance.now(); f.tick(1 / 60); frame.push(performance.now() - a); }
     const s1 = f.stats();
-    // a walk across the core at 6 m/s (zones wake / catch up / freeze on the way)
-    const walk: number[] = [];
+    // a walk across the core at 6 m/s (zones wake / catch up / freeze on the way), from an arrival there (settled: the loading screen)
     const c = info.core, path = [{x: c.x0, z: c.z0}, {x: c.x1, z: c.z1}];
-    const steps = Math.ceil(Math.hypot(path[1].x - path[0].x, path[1].z - path[0].z) / 6 * 60);
-    let maxReplayFrame = 0;
-    for (let k = 0; k <= steps; k++) {
-      focus = {x: path[0].x + (path[1].x - path[0].x) * k / steps, z: path[0].z + (path[1].z - path[0].z) * k / steps};
-      const r0 = f.counts.replayCellSteps, a = performance.now();
-      f.tick(1 / 60);
-      walk.push(performance.now() - a);
-      maxReplayFrame = Math.max(maxReplayFrame, f.counts.replayCellSteps - r0);
-    }
+    const travel = (speed: number) => {
+      const times: number[] = [];
+      focus = {...path[0]};
+      f.tick(1 / 60); // (the jump there: a teleport — completes what is in sight)
+      f.settle(focus.x, focus.z, f.wakeM);
+      const forced0 = f.counts.forced;
+      const steps = Math.ceil(Math.hypot(path[1].x - path[0].x, path[1].z - path[0].z) / speed * 60);
+      let maxReplay = 0, stale = 0, worst = {ms: 0, replay: 0, tick: 0, wakes: 0, live: 0, ops: 0, fields: 0, k: 0};
+      const top: number[][] = [];
+      for (let k = 0; k <= steps; k++) {
+        focus = {x: path[0].x + (path[1].x - path[0].x) * k / steps, z: path[0].z + (path[1].z - path[0].z) * k / steps};
+        const r0 = f.counts.replayCellSteps, k0 = f.counts.tickCellSteps, wk0 = f.counts.wakes, op0 = f.counts.ops, fl0 = f.counts.fields, a = performance.now();
+        f.tick(1 / 60);
+        const ms = performance.now() - a;
+        times.push(ms);
+        maxReplay = Math.max(maxReplay, f.counts.replayCellSteps - r0);
+        if (ms > worst.ms) worst = {ms, replay: f.counts.replayCellSteps - r0, tick: f.counts.tickCellSteps - k0, wakes: f.counts.wakes - wk0, live: f.zones.filter(z => z.mode === 'live').length, ops: f.counts.ops - op0, fields: f.counts.fields - fl0, k};
+        top.push([Math.round(ms * 100) / 100, f.counts.replayCellSteps - r0, f.counts.ops - op0, f.counts.fields - fl0, k]);
+        // in sight / in reach: never stale
+        for (const z of f.zones) if ((z.field || z.pending.length || z.queue.length) && rectDistance(z.spec.rect, focus.x, focus.z) <= SURFACE_FIELD.SEEN_M && (z.mode !== 'live' || z.simT !== f.now)) stale++;
+      }
+      top.sort((a, b) => b[0] - a[0]);
+      return {times, steps, maxReplay, stale, forced: f.counts.forced - forced0, worst, top: top.slice(0, 8)};
+    };
+    const w6 = travel(6);
+    const walk = w6.times, steps = w6.steps, maxReplayFrame = w6.maxReplay;
     const s2 = f.stats();
+    // a doorway's first breach in a zone: the field's creation + the pool's flood fill (one op of a replay)
+    const opMs: number[] = [];
+    for (const d of doors) {
+      if (!d.cells.length) continue;
+      const zk = d.cells.map(i => f.zoneAtCell(i % g0.w, Math.floor(i / g0.w))).find(k => k >= 0) ?? -1;
+      if (zk < 0) continue;
+      const zn = f.zones[zk];
+      for (let rep = 0; rep < 2; rep++) {
+        const a = performance.now();
+        const gf = new GasField(zn.levels, {domain: zn.spec.cells, closed: zn.closed});
+        gf.addBreach({id: 'probe', level: d.level, cells: d.cells, strength: 0.6});
+        if (rep) opMs.push(performance.now() - a);
+      }
+    }
+    log(`a zone's first breach (field + pool), ${opMs.length} doorways: mean ${mean(opMs).toFixed(3)} ms, max ${Math.max(...opMs).toFixed(3)} ms`);
+    // ... and at truck speed (15 m/s: the wake distance leads it)
+    const w15 = travel(15);
     // a zone FILLING live from clean air (the biggest doorway zone; its door just opened beside the player): the simulation's own steady cost
     const zoneOfDoor = (d: (typeof doors)[number]) => d.cells.map(i => f.zoneAtCell(i % g0.w, Math.floor(i / g0.w))).find(k => k >= 0) ?? -1;
     const area = (k: number) => k < 0 ? 0 : (specs[k].cells.x1 - specs[k].cells.x0) * (specs[k].cells.y1 - specs[k].cells.y0);
@@ -239,23 +305,28 @@ describe('the cost on the generated district (Node; counts bounded, timings logg
     const fillTicks = (zn.field?.ticks ?? 0) - ticks0, fillSteps = f2.counts.tickCellSteps - t3;
     const bigCells = area(zoneOfDoor(big));
     focus2 = {x: -1e6, z: -1e6};
-    const q = (xs: number[], p: number) => [...xs].sort((a, b) => a - b)[Math.min(xs.length - 1, Math.floor(xs.length * p))];
-    const mean = (xs: number[]) => xs.reduce((s, v) => s + v, 0) / xs.length;
     log(`the biggest doorway zone (${bigCells} cells) filling live from clean air (30 s, ${fillTicks} ticks): frame mean ${mean(fill).toFixed(3)} ms, p95 ${q(fill, 0.95).toFixed(3)} ms, max ${Math.max(...fill).toFixed(3)} ms; cell-steps / tick ${(fillSteps / Math.max(1, fillTicks)).toFixed(0)}`);
     expect(fillTicks).toBeGreaterThan(250);
     expect(fillSteps / Math.max(1, fillTicks)).toBeLessThanOrEqual(GasField.substeps(1 / GAS.TICK_HZ) * Math.max(...specs.map(s => (s.cells.x1 - s.cells.x0 + 2) * (s.cells.y1 - s.cells.y0 + 2))) * 2);
     log(`district ${map.w}x${map.h} cells, ${info.buildings.length} buildings, ${specs.length} zones, ${added} doorway breaches (gen ${tGen.toFixed(0)} ms, field ctor ${tCtor.toFixed(1)} ms)`);
     log(`settle at the portal: ${settled} zones, ${tSettle.toFixed(1)} ms, replay cell-steps ${s0.replayCellSteps}, live ${s0.live}, storeys ${s0.storeys}, active cells ${s0.activeCells}`);
     log(`60 s at the portal: frame mean ${mean(frame).toFixed(3)} ms, p95 ${q(frame, 0.95).toFixed(3)} ms, max ${Math.max(...frame).toFixed(3)} ms; tick cell-steps ${s1.tickCellSteps}; live ${s1.live}`);
-    log(`walk across the core (${steps} frames): mean ${mean(walk).toFixed(3)} ms, p95 ${q(walk, 0.95).toFixed(3)} ms, max ${Math.max(...walk).toFixed(3)} ms; max replay cell-steps / frame ${maxReplayFrame}; wakes ${f.counts.wakes}, freezes ${f.counts.freezes}; live ${s2.live}, frozen ${s2.frozen}, catching ${s2.catching}`);
+    log(`walk across the core at 6 m/s (${steps} frames): mean ${mean(walk).toFixed(3)} ms, p95 ${q(walk, 0.95).toFixed(3)} ms, max ${Math.max(...walk).toFixed(3)} ms; max replay cell-steps / frame ${maxReplayFrame}; forced ${w6.forced}, stale-in-sight frames ${w6.stale}; live ${s2.live}, frozen ${s2.frozen}, catching ${s2.catching}`);
+    log(`  worst frames [ms, replay cell-steps, ops, new fields, frame]: walk ${JSON.stringify(w6.top)}; drive ${JSON.stringify(w15.top)}`);
+    log(`drive across the core at 15 m/s (${w15.steps} frames): mean ${mean(w15.times).toFixed(3)} ms, p95 ${q(w15.times, 0.95).toFixed(3)} ms, max ${Math.max(...w15.times).toFixed(3)} ms; max replay cell-steps / frame ${w15.maxReplay}; forced ${w15.forced}, stale-in-sight frames ${w15.stale}; wakes ${f.counts.wakes}, freezes ${f.counts.freezes}`);
     expect(specs.length).toBe(info.buildings.filter(b => b.levels.length && (b.entrances.length || b.windows.length)).length + 1);
     expect(added).toBeGreaterThan(0);
     // only the zones near the player ever simulate; the rest wait frozen (zero cost)
     expect(s0.live).toBeLessThan(specs.length);
     expect(s0.live).toBeGreaterThanOrEqual(1);
-    // per-frame replay stays inside the budget (+ at most one coarse step of one zone's box: a step is never split)
+    // per-frame replay stays inside the budget (+ at most one 0.1 s tick of one zone's box when nothing else ran); nothing in sight stale,
+    // nothing forced on a walk or a drive
     const zoneCells = Math.max(...specs.map(s => (s.cells.x1 - s.cells.x0 + 2) * (s.cells.y1 - s.cells.y0 + 2)));
-    expect(maxReplayFrame).toBeLessThanOrEqual(SURFACE_FIELD.CATCHUP_CELL_STEPS + GasField.substeps(SURFACE_FIELD.STEP_S) * zoneCells * 4);
+    for (const w of [w6, w15]) {
+      expect(w.maxReplay).toBeLessThanOrEqual(SURFACE_FIELD.CATCHUP_CELL_STEPS + GasField.substeps(0.1) * zoneCells * 4);
+      expect(w.forced).toBe(0);
+      expect(w.stale).toBe(0);
+    }
     // the live zones' tick work per frame: bounded by the zones within the wake radius
     const perTick = s1.tickCellSteps / Math.max(1, 3600 / 6);
     log(`live tick cell-steps per 10 Hz tick ≈ ${perTick.toFixed(0)}`);
