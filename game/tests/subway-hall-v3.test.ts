@@ -74,15 +74,20 @@ function expectLightRhythm(L: StationLayout, label: string): void {
     const own = L.lights.filter(l => l.area === a.id);
     expect(own.length, tag).toBeGreaterThan(0);
     expect(own.length, `${tag}: <= MAX_HALL_SOURCES`).toBeLessThanOrEqual(MAX_HALL_SOURCES);
+    // (task studio-subway-rework-m2-finishing-20261117-111246-01, lane FRONTS) a wall front's own fixtures stand over its zone, not on a
+    // bay centre (tests/subway-hall-fronts.test.ts checks them); every other rule holds for them too
+    const fronts = (hallSectionWorld(a)?.fronts ?? []).filter(f => f.wall !== 'nave');
+    const ofFront = (along: number, across: number) => fronts.some(f => along >= Math.min(...f.along) - 0.05 && along <= Math.max(...f.along) + 0.05 && across >= Math.min(...f.across) - 0.05 && across <= Math.max(...f.across) + 0.05);
     for (const l of own) {
       const along = b.alongX ? l.x : l.z, across = b.alongX ? l.z : l.x;
+      const front = ofFront(along, across);
       const at = `${tag} ${l.style} @${l.x},${l.y},${l.z}`;
       expect(['drum', 'cove', 'downlight'], at).toContain(l.style);
       const i = g.idx(Math.floor(l.x / CELL), Math.floor(l.z / CELL));
       expect(g.area[i], at).toBe(a.id);
       if (g.hasCeil(i)) expect(l.y, `${at}: under the cell ceiling`).toBeLessThan(g.ceil[i]);
       if (l.style === 'drum') {
-        expect(Math.min(...centres.map(c => Math.abs(c - along))), `${at}: a bay centre`).toBeLessThan(0.01);
+        if (!front) expect(Math.min(...centres.map(c => Math.abs(c - along))), `${at}: a bay centre`).toBeLessThan(0.01);
         expect(l.y, `${at}: >= DRUM_MIN_Y over the floor`).toBeGreaterThanOrEqual(form.floor + DRUM_MIN_Y - 0.01);
         expect(l.y, `${at}: DRUM_CLEAR under the soffit`).toBeLessThanOrEqual(soffitAt(form, l.x, l.z, g) - DRUM_CLEAR + 0.01);
       } else if (l.style === 'cove') {
@@ -97,7 +102,7 @@ function expectLightRhythm(L: StationLayout, label: string): void {
         }
       } else {
         expect(vaulted, `${at}: no downlight under a vault`).toBe(false);
-        expect(Math.min(...centres.map(c => Math.abs(c - along))), `${at}: a bay centre`).toBeLessThan(0.01);
+        if (!front) expect(Math.min(...centres.map(c => Math.abs(c - along))), `${at}: a bay centre`).toBeLessThan(0.01);
         expect(l.y, `${at}: just under the visible soffit`).toBeLessThanOrEqual(soffitAt(form, l.x, l.z, g));
       }
     }

@@ -263,7 +263,8 @@ function frontPlan(a: Area, S: HallSection, bays: [number, number][], sides: [nu
       const bi = bays.findIndex(([p, q]) => mid >= p && mid < q);
       if (bi < 0 || drumLine === null || drumAcross.has(bi)) continue;
       const d = drumLine - c;
-      drumAcross.set(bi, r3(f.kind === 'waiting' ? (Math.abs(d) > NAVE_CLOCK_CLEAR ? c + Math.sign(d) * NAVE_CLOCK_CLEAR : drumLine) : c));
+      // (a waiting island's hung clock is at its centre: the lantern hangs NAVE_CLOCK_CLEAR beside it, on the nave's centre-line side)
+      drumAcross.set(bi, r3(f.kind === 'waiting' ? c + (d < 0 ? -1 : 1) * NAVE_CLOCK_CLEAR : c));
       continue;
     }
     frontFixtures(a, S, f, lo, hi).forEach((o, k) => spots.push({...o, rank: k}));
