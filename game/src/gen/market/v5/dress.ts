@@ -70,6 +70,10 @@ export const CREVICE_DRESS = {
   denApproach: 3,
   /** The platform's train side kept clear (m from the edge). */
   trainSide: 2.5,
+  /** (layout version 7) A plaza: a walk section at least `min` cells wide keeps its outer `lane` cells (2 m) clear; its seating group. */
+  plaza: {min: 9, lane: 4, rows: 6},
+  /** (layout version 7) A stair's head kept clear on the walk above: rows [run end - [0], run end + [1]) across the walk. */
+  stairHead: [3, 4],
 } as const;
 
 /** QA / tests: per furnished layout, what this pass placed (the first `props` / `lights` / `signs` entries are its own: later passes
@@ -119,8 +123,13 @@ function frameOf(a: Area, r: Rect, face: Side, base: number): Frame {
 }
 const areaRect = (a: Area): Rect => ({x: a.x, y: a.y, w: a.w, h: a.h});
 
-/** A storey's frontage: the container fronts along one side's walk (storey 0: the square, the low walk, the weir). */
-interface Front { L: number; s: 'W' | 'E'; dir: 1 | -1; col: number; wallX: number; y0: number; y1: number; band: CrevContainer[] }
+/** A storey's frontage: the container fronts along one side's walk (storey 0: the square, the low walk, the weir). Per row (layout
+ *  version 7's fronts step from section to section; versions 5 / 6: one column): the walk's first column against the fronts, the wall
+ *  plane, the walk's width (cells). */
+interface Front {
+  L: number; s: 'W' | 'E'; dir: 1 | -1; y0: number; y1: number; band: CrevContainer[];
+  colAt: (y: number) => number; wallXAt: (y: number) => number; widthAt: (y: number) => number;
+}
 
 /** Furnishes the whole crevice (props, lights, signs); null when a required piece (a stall's counter, the bar) does not fit. */
 export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, names: Record<MarketStallId, string>): CreviceAnchors | null {
@@ -227,20 +236,31 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
 
   // --- 0. Clear lanes and approaches (keep cells first: every later placement respects them) --------------------------------------
   const fronts: Front[] = [];
+  const st7 = cc.settle;
   for (const s of ['W', 'E'] as const) for (let L = 0; L < 4; L++) {
-    const A = L ? cc.walks[s][L - 1] : cc.low[s];
     const dir: 1 | -1 = faceOfSide(s) === 'E' ? 1 : -1;
+    const band = cc.containers.filter(c => c.level === L && c.side === s).sort((p, q) => p.box.y - q.box.y);
+    if (st7) {
+      // (layout version 7, task studio-market-irregular-settlement-20261117-003819-01: the walk's columns row by row)
+      const colAt = (y: number) => st7.walkCols(s, L, y)[0];
+      fronts.push({L, s, dir, y0: cc.rows.z0, y1: cc.rows.z1, band, colAt, wallXAt: y => (dir > 0 ? colAt(y) * CELL : (colAt(y) + 1) * CELL), widthAt: y => { const [a, b] = st7.walkCols(s, L, y); return Math.abs(b - a) + 1; }});
+      continue;
+    }
+    const A = L ? cc.walks[s][L - 1] : cc.low[s];
     const col = dir > 0 ? A.x : A.x + A.w - 1;
     const y0 = L ? A.y : cc.square.y, y1 = L ? A.y + A.h : cc.weir.y + cc.weir.h;
-    const band = cc.containers.filter(c => c.level === L && c.side === s).sort((p, q) => p.box.y - q.box.y);
-    fronts.push({L, s, dir, col, wallX: dir > 0 ? col * CELL : (col + 1) * CELL, y0, y1, band});
+    const wallX = dir > 0 ? col * CELL : (col + 1) * CELL;
+    const width = L ? CREVICE.pitch : CREVICE.lowWalk; // (the walk's / low walk's own columns: the square's and the weir's side lanes)
+    fronts.push({L, s, dir, y0, y1, band, colAt: () => col, wallXAt: () => wallX, widthAt: () => width});
   }
   const publicIds = new Set<number>([cc.square.id, cc.weir.id, cc.low.W.id, cc.low.E.id, ...cc.walks.W.map(a => a.id), ...cc.walks.E.map(a => a.id)]);
+  if (st7) for (const s of ['W', 'E'] as const) for (const list of st7.parts[s]) for (const a of list) publicIds.add(a.id);
+  /** (layout version 7) Plaza cells: on a walk section 4.5 m or wider, the cells past the dressed strip short of the outer 2 m lane. */
+  const plazaOf = (fr: Front, y: number) => (st7 && fr.L > 0 && fr.widthAt(y) >= D.plaza.min ? fr.widthAt(y) - D.plaza.lane : 0);
   for (const fr of fronts) {
     const g = gridOf(fr.L), allow = fr.L ? D.dressCells.walk : D.dressCells.low;
-    const width = fr.L ? CREVICE.pitch : CREVICE.lowWalk; // (the walk's / low walk's own columns: the square's and the weir's side lanes)
-    for (let y = fr.y0; y < fr.y1; y++) for (let k = allow; k < width; k++) {
-      const x = fr.col + fr.dir * k;
+    for (let y = fr.y0; y < fr.y1; y++) for (let k = Math.max(allow, plazaOf(fr, y)), width = fr.widthAt(y); k < width; k++) {
+      const x = fr.colAt(y) + fr.dir * k;
       if (!g.inBounds(x, y)) break;
       const i = g.idx(x, y);
       if (g.cells[i] !== FLOOR || !publicIds.has(g.area[i])) continue;
@@ -259,10 +279,20 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
   }
   // the bridges' mouths (both walks, the deck's rows +- 1, the whole walk width), the stair feet (whole areas)
   for (const b of cc.bridges) for (const s of ['W', 'E'] as const) {
+    if (st7) {
+      // (layout version 7: the walk's own columns on each of the mouth's rows)
+      for (let y = b.rect.y - 1; y < b.rect.y + b.rect.h + 1; y++) { const [p, q] = st7.walkCols(s, b.level, y); keepCells(b.level, Math.min(p, q), y, Math.max(p, q) + 1, y + 1); }
+      continue;
+    }
     const A = cc.walks[s][b.level - 1];
     keepCells(b.level, A.x, b.rect.y - 1, A.x + A.w, b.rect.y + b.rect.h + 1);
   }
   for (const st of cc.stairs) { const f = area(st.foot); keepCells(st.from, f.x, f.y, f.x + f.w, f.y + f.h); }
+  // (layout version 7: each stair's head too — the walk above, its whole width, from the top landing's rows on past the run)
+  if (st7) for (const st of cc.stairs) for (let y = st.rect.y + st.rect.h - D.stairHead[0]; y < st.rect.y + st.rect.h + D.stairHead[1]; y++) {
+    const [p, q] = st7.walkCols(st.side, st.from + 1, y);
+    keepCells(st.from + 1, Math.min(p, q), y, Math.max(p, q) + 1, y + 1);
+  }
   // the square: the gates' apron (its first rows across the floor), the den's approach; the weir: the cross route by the chasm
   const SQ = cc.square, WE = cc.weir;
   keepCells(0, SQ.x, SQ.y, SQ.x + SQ.w, SQ.y + D.apron);
@@ -736,18 +766,21 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
   }
   /** One thing against the frontage at row y (backed onto the wall cell, inside the dressable strip); 'sit' marks a seat's post. */
   function frontThing(fr: Front, y: number, kind: PropKind, tag?: string): PropPlacement | null {
-    const g = gridOf(fr.L), wallC = fr.col - fr.dir;
-    if (!g.inBounds(fr.col, y)) return null;
-    const i = g.idx(fr.col, y);
+    const g = gridOf(fr.L), col = fr.colAt(y), wallC = col - fr.dir;
+    if (!g.inBounds(col, y)) return null;
+    const i = g.idx(col, y);
     if (g.cells[i] !== FLOOR || !publicIds.has(g.area[i])) return null;
     const a = area(g.area[i]);
     // bicycles lie along the wall, everything else faces the walk
     const along = kind === 'bicycle';
     const rot = along ? (rng.chance(0.5) ? 0 : Math.PI) : fr.dir > 0 ? WALL_ROT.W : WALL_ROT.E;
     const {hx, hz} = footprint(kind, rot);
-    const x = fr.wallX + fr.dir * (D.wallGap + hx), z = (y + 0.5) * CELL + (hz > 0.25 ? hz - 0.25 : 0);
-    // wall-backed over its whole length (never against an opening / a nook / a stair foot)
-    for (let cy = Math.floor((z - hz + 0.04) / CELL); cy <= Math.floor((z + hz - 0.04) / CELL); cy++) if (!g.inBounds(wallC, cy) || g.cells[g.idx(wallC, cy)] !== SOLID) return null;
+    const x = fr.wallXAt(y) + fr.dir * (D.wallGap + hx), z = (y + 0.5) * CELL + (hz > 0.25 ? hz - 0.25 : 0);
+    // wall-backed over its whole length (never against an opening / a nook / a stair foot; version 7: nor across a step in the fronts,
+    // nor in the row beside one — a jog's corner stays clear: routes round it)
+    const r0 = Math.floor((z - hz + 0.04) / CELL), r1 = Math.floor((z + hz - 0.04) / CELL);
+    for (let cy = r0; cy <= r1; cy++) if (!g.inBounds(wallC, cy) || g.cells[g.idx(wallC, cy)] !== SOLID) return null;
+    for (let cy = r0 - 1; cy <= r1 + 1; cy++) if (fr.colAt(cy) !== col) return null;
     const p = put(a, kind, x, z, rot, {checkZone: true});
     if (!p) return null;
     count('frontage');
@@ -757,6 +790,24 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
     }
     if (tag === 'sit-door') count('teaChairs');
     return p;
+  }
+  /** (layout version 7) A walk's residents: one by the railing, a pair chatting (two storeys up: another by the railing), on rows down
+   *  its length — each post on the walk's own floor there (the walk's areas step with it), never on a stair or a bridge. */
+  function frontPosts(fr: Front): void {
+    const g = gridOf(fr.L), y0 = fr.L ? fr.y0 : cc.rows.chasm0, y1 = fr.L ? fr.y1 : cc.rows.chasm1;
+    const ys = [0.28, 0.62, 0.85].map(t => Math.round(y0 + (y1 - y0) * t + rng.range(-3, 3)));
+    const on = (x: number, z: number): Area | null => {
+      const [cx, cy] = g.cellOf(x, z);
+      if (!g.inBounds(cx, cy)) return null;
+      const i = g.idx(cx, cy);
+      return g.cells[i] === FLOOR && g.rampIdx[i] < 0 && publicIds.has(g.area[i]) ? area(g.area[i]) : null;
+    };
+    const xAt = (y: number, k: number) => (fr.colAt(y) + fr.dir * k + 0.5) * CELL;
+    const idle = (y: number) => { const x = xAt(y, fr.widthAt(y) - 2), z = (y + 0.5) * CELL, A = on(x, z); if (A) use('idle', x, z, A, x + fr.dir * 3, z); };
+    idle(ys[0]);
+    const xc = xAt(ys[1], fr.widthAt(ys[1]) - 3), za = (ys[1] + 0.5) * CELL - 0.55, zb = (ys[1] + 0.5) * CELL + 0.55, A = on(xc, za), Bq = on(xc, zb);
+    if (A && Bq) { use('chat', xc, za, A, xc, zb); use('chat', xc, zb, Bq, xc, za); }
+    if (fr.L >= 2) idle(ys[2]);
   }
   for (const fr of fronts) {
     const band = fr.band;
@@ -784,20 +835,22 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
     let ly = fr.y0 + 2 + rng.int(0, 4);
     while (ly < fr.y1 - 1) {
       const c = at(ly);
-      const okWall = g.inBounds(fr.col - fr.dir, ly) && g.cells[g.idx(fr.col - fr.dir, ly)] === SOLID && g.cells[g.idx(fr.col, ly)] === FLOOR;
+      const lc = fr.colAt(ly);
+      const okWall = g.inBounds(lc - fr.dir, ly) && g.cells[g.idx(lc - fr.dir, ly)] === SOLID && g.cells[g.idx(lc, ly)] === FLOOR;
       const nearDen = den && den.level === fr.L && den.side === fr.s && ly >= den.box.y - 1 && ly < den.box.y + den.box.h + 1;
       const onBoard = band.some(q => q.door && (q.use === 'shop' || noticeOf(q)) && ly >= q.door.y - 1 && ly < q.door.y + q.door.h + 1);
       if (!okWall || nearDen || onBoard) { ly++; continue; }
       const canopy = c && c.area >= 0 && c.use !== 'den' ? area(c.area) : canopyOf(fr.L, {s: fr.s, y: ly});
-      if (canopy) light(canopy, fr.L, fr.wallX + fr.dir * D.wallLampOff, (ly + 0.5) * CELL, B[fr.L] + D.wallLampY, fr.L === 0 ? 0.8 : 0.7);
+      if (canopy) light(canopy, fr.L, fr.wallXAt(ly) + fr.dir * D.wallLampOff, (ly + 0.5) * CELL, B[fr.L] + D.wallLampY, fr.L === 0 ? 0.8 : 0.7);
       ly += Math.round((D.lampEvery + rng.range(-1, 1)) / CELL);
     }
     // a resident or two at the railing / chatting on every terrace and low walk (the lane's middle: posts, never props)
+    if (st7) { frontPosts(fr); continue; }
     const A = fr.L ? cc.walks[fr.s][fr.L - 1] : cc.low[fr.s];
-    const kRail = fr.L ? 4 : 3, xr = (fr.col + fr.dir * kRail + 0.5) * CELL;
+    const kRail = fr.L ? 4 : 3, xr = (fr.colAt(0) + fr.dir * kRail + 0.5) * CELL;
     const ys = [0.28, 0.62, 0.85].map(t => Math.round(A.y + A.h * t + rng.range(-3, 3)));
     use('idle', xr, (ys[0] + 0.5) * CELL, A, xr + fr.dir * 3, (ys[0] + 0.5) * CELL);
-    const xc = (fr.col + fr.dir * (kRail - 1) + 0.5) * CELL;
+    const xc = (fr.colAt(0) + fr.dir * (kRail - 1) + 0.5) * CELL;
     use('chat', xc, (ys[1] + 0.5) * CELL - 0.55, A, xc, (ys[1] + 0.5) * CELL + 0.55);
     use('chat', xc, (ys[1] + 0.5) * CELL + 0.55, A, xc, (ys[1] + 0.5) * CELL - 0.55);
     if (fr.L >= 2) use('idle', xr, (ys[2] + 0.5) * CELL, A, xr + fr.dir * 3, (ys[2] + 0.5) * CELL);
@@ -877,8 +930,49 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
     // under the deck: over the walk / low walk below its two ends (the deck lowers their ceiling)
     const zc = (b.rect.y + b.rect.h / 2) * CELL;
     for (const s of ['W', 'E'] as const) {
+      if (st7) {
+        // (layout version 7: the middle of the walk under the deck's middle row, that row's own walk area)
+        const row = Math.floor(zc / CELL), [p, q] = st7.walkCols(s, b.level - 1, row), xm = (Math.min(p, q) + Math.max(p, q) + 1) / 2 * CELL;
+        const g = gridOf(b.level - 1), [cx, cy] = g.cellOf(xm, zc), id = g.inBounds(cx, cy) ? g.area[g.idx(cx, cy)] : -1;
+        if (id >= 0 && publicIds.has(id)) light(area(id), b.level - 1, xm, zc, B[b.level] - 0.35 - 0.05, 0.6);
+        continue;
+      }
       const A = b.level === 1 ? cc.low[s] : cc.walks[s][b.level - 2];
       light(A, b.level - 1, (A.x + A.w / 2) * CELL, zc, B[b.level] - 0.35 - 0.05, 0.6);
+    }
+  }
+
+  // --- 5b. (layout version 7) The plazas: a walk section 4.5 m or wider gets a seating group past its dressed strip (a camp table and
+  // two chairs along the walk, its lantern; a bench where they do not fit), the outer 2 m lane kept clear --------------------------
+  if (st7) for (const fr of fronts) {
+    if (!fr.L) continue;
+    const g = gridOf(fr.L);
+    for (let y = fr.y0; y < fr.y1;) {
+      const w = fr.widthAt(y), col = fr.colAt(y);
+      let y2 = y;
+      while (y2 < fr.y1 && fr.widthAt(y2) === w && fr.colAt(y2) === col) y2++;
+      if (w >= D.plaza.min && y2 - y >= D.plaza.rows + 2) {
+        // (the group's band: from the dressed strip to the clear lane, its middle row)
+        const k0 = D.dressCells.walk, k1 = w - D.plaza.lane, xm = (col + fr.dir * ((k0 + k1 - 1) / 2) + 0.5) * CELL;
+        const zm = ((y + y2) / 2) * CELL, [cx, cy] = g.cellOf(xm, zm), id = g.inBounds(cx, cy) ? g.area[g.idx(cx, cy)] : -1;
+        const a = id >= 0 && publicIds.has(id) ? area(id) : null;
+        if (a) {
+          const t = put(a, 'campTable', xm, zm, Math.PI / 2, {checkZone: true});
+          if (t) {
+            onHost(t, 'campLantern', 0, 0);
+            for (const sg of [-1, 1] as const) {
+              const ch = put(a, rng.chance(0.5) ? 'foldingChair' : 'plasticStackChair', xm, zm + sg * 1.0, sg < 0 ? WALL_ROT.N : WALL_ROT.S, {checkZone: true});
+              if (ch) { use('sit', ch.x, ch.z, a, t.x, t.z); count('chairs'); }
+            }
+            count('plaza');
+          } else {
+            const b = put(a, 'bench', xm, zm, fr.dir > 0 ? WALL_ROT.W : WALL_ROT.E, {checkZone: true});
+            if (b) { use('sit', b.x, b.z, a, b.x + fr.dir * 2, b.z); count('plaza'); }
+          }
+          put(a, 'pottedPlantSmall', xm, y * CELL + 0.45, 0, {checkZone: true});
+        }
+      }
+      y = y2;
     }
   }
 

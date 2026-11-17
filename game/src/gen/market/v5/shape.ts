@@ -4,7 +4,7 @@
 
 import {CELL} from '../../grid';
 import type {Door, Rect, StationLayout} from '../../stationTypes';
-import type {MarketCrevContainer, MarketCrevice} from '../marketTypes';
+import type {CrevEdgeRun, MarketCrevContainer, MarketCrevice} from '../marketTypes';
 import {CREVICE} from './frame';
 import type {CreviceCarve} from './carve';
 import {ENVELOPE} from '../v6/envelope';
@@ -38,6 +38,26 @@ export function creviceShape(layout: StationLayout, cc: CreviceCarve): MarketCre
       clefts: env.plan.clefts.map(p => ({...box(cc.M({x: p.x, y: p.y, w: p.w, h: p.h})), y: r3(p.floor)})),
       alcoves: cc.pockets.filter(p => p.deep).length,
     };
+  }
+  // (layout version 7, task studio-market-irregular-settlement-20261117-003819-01: the irregular settlement — the pit's runs, each storey's
+  // walk edge over the drop per world side, row by row)
+  const st = cc.settle;
+  if (st) {
+    const R = cc.rows, edges: {W: CrevEdgeRun[]; E: CrevEdgeRun[]}[] = [];
+    for (let L = 0; L < CREVICE.bands; L++) {
+      const e: {W: CrevEdgeRun[]; E: CrevEdgeRun[]} = {W: [], E: []};
+      const y0 = L ? R.z0 : R.chasm0, y1 = L ? R.z1 : R.chasm1;
+      for (const s of ['W', 'E'] as const) {
+        // (canonical side s stands on the world side its fronts face away from: world west when its fronts face east)
+        const ws: 'W' | 'E' = (s === 'W') !== cc.f.mirror ? 'W' : 'E', list = e[ws];
+        for (let y = y0; y < y1; y++) {
+          const last = st.walkCols(s, L, y)[1], x = r3((ws === 'W' ? last + 1 : last) * CELL), q = list[list.length - 1];
+          if (q && q.x === x && Math.abs(q.z1 - y * CELL) < 1e-6) q.z1 = r3((y + 1) * CELL); else list.push({z0: r3(y * CELL), z1: r3((y + 1) * CELL), x});
+        }
+      }
+      edges.push(e);
+    }
+    out.settlement = {pit: st.pit.map(box), edges};
   }
   return out;
 }

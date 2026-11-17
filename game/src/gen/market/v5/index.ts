@@ -6,6 +6,9 @@
 // Layout version 6 (task studio-market-irregular-envelope-20261116-210503-01) is this generator with the IRREGULAR ENVELOPE
 // (gen/market/v6/envelope.ts, on its own fork): a taller canvas, the top terrace's alcoves, the overhead, the end clefts, the chasm's bed;
 // `generateCrevice(ctx, 5)` (a recorded version 5) never forks it and regenerates exactly as shipped.
+// Layout version 7 (task studio-market-irregular-settlement-20261117-003819-01) is version 6 on an IRREGULAR SETTLEMENT FLOORPLAN
+// (gen/market/v7/settlement.ts, on its own fork: each storey's container row, terrace walk and the pit's edges in seeded sections) on a
+// wider canvas; `generateCrevice(ctx, 6)` never forks it and regenerates exactly as shipped.
 //
 // Pipeline (version 2's): frame (seeded) → carve (Kit with 4 storey grids) → crop (fixed origin) → storeys / the stair links / apertures /
 // rescue ladders / rails → start → furnishing (own pass) → the den → lift the upper storeys' props → lighting (every area lit: a lived-in
@@ -32,6 +35,7 @@ import {creviceIssues} from './validate';
 import {addCreviceDen} from './den';
 import {creviceShape} from './shape';
 import {ENVELOPE, creviceEnvelopeDrop, creviceEnvelope} from '../v6/envelope';
+import {SETTLEMENT, creviceSettlement} from '../v7/settlement';
 
 /** Generation attempts before the last generated layout is returned with its issues. */
 const ATTEMPTS = 8;
@@ -45,21 +49,27 @@ export function creviceStoreyLabel(level: number): string {
   return level === 3 ? 'Upper terrace' : level === 2 ? 'Middle terrace' : level === 1 ? 'Lower terrace' : 'Crevice floor';
 }
 
-/** The crevice layout versions this generator builds: 5 (as shipped) and 6 (in the irregular envelope). */
-export type CreviceVersion = 5 | 6;
+/** The crevice layout versions this generator builds: 5 (as shipped), 6 (in the irregular envelope) and 7 (+ the irregular settlement). */
+export type CreviceVersion = 5 | 6 | 7;
+
+/** The frame a version builds on (version 7: every column moved onto its wider canvas). */
+function frameOf(levelSeed: number, salt: number, version: CreviceVersion): CreviceFrame {
+  const f = creviceFrame(levelSeed, salt);
+  return version >= 7 ? {...f, shift: SETTLEMENT.shift} : f;
+}
 
 /** The ONE continuous version-5 (or -6: `version`) market layout. */
 export function generateCrevice(ctx: SectionGenContext, version: CreviceVersion = 5): StationLayout {
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const seed = marketSeed(ctx.levelSeed);
-  let f = creviceFrame(ctx.levelSeed);
+  let f = frameOf(ctx.levelSeed, 0, version);
   let fallback: StationLayout | null = null;
   CREVICE_GEN_STATS.carveFails = 0;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     const s = attempt === 0 ? seed : hashString('retry' + attempt, seed);
     const layout = tryCrevice(f, s, seed, attempt, ctx, version);
     CREVICE_GEN_STATS.attempts = attempt + 1;
-    if (!layout) { CREVICE_GEN_STATS.carveFails++; f = creviceFrame(ctx.levelSeed, CREVICE_GEN_STATS.carveFails); continue; }
+    if (!layout) { CREVICE_GEN_STATS.carveFails++; f = frameOf(ctx.levelSeed, CREVICE_GEN_STATS.carveFails, version); continue; }
     const issues = creviceIssues(layout);
     CREVICE_GEN_STATS.issues = issues;
     if (!issues.length) { fallback = layout; break; }
@@ -75,17 +85,20 @@ export function generateCrevice(ctx: SectionGenContext, version: CreviceVersion 
 export function creviceAttempt(ctx: SectionGenContext, attempt: number, salt = 0, version: CreviceVersion = 5): {layout: StationLayout | null; carve: CreviceCarve | null} {
   const seed = marketSeed(ctx.levelSeed);
   const out = {carve: null as CreviceCarve | null};
-  const layout = tryCrevice(creviceFrame(ctx.levelSeed, salt), attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, version, out);
+  const layout = tryCrevice(frameOf(ctx.levelSeed, salt, version), attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, version, out);
   return {layout, carve: out.carve};
 }
 
 function tryCrevice(f: CreviceFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, version: CreviceVersion, out?: {carve: CreviceCarve | null}): StationLayout | null {
   const rng = new Rng(genSeed);
-  const H = version >= 6 ? ENVELOPE.canvasH : CREVICE.canvas.h;
-  const k = new Kit(rng, {levels: CREVICE.canvas.levels, w: CREVICE.canvas.w, h: H});
-  // (version 6: the envelope's own fork — Rng.fork never advances the generator's stream)
-  const env = version >= 6 ? creviceEnvelope(creviceRows(f), CREVICE.canvas.w, H, rng.fork('envelope')) : undefined;
-  const cc = carveCrevice(k, f, rng.fork('carve'), env);
+  const H = version >= 6 ? ENVELOPE.canvasH : CREVICE.canvas.h, W = version >= 7 ? SETTLEMENT.canvasW : CREVICE.canvas.w;
+  const k = new Kit(rng, {levels: CREVICE.canvas.levels, w: W, h: H});
+  // (version 7: the settlement's own fork, the pit it plans fed to the envelope's chasm bed; version 6: the envelope's own fork — Rng.fork
+  // never advances the generator's stream)
+  const R = creviceRows(f);
+  const plan = version >= 7 ? creviceSettlement(R, f, H, rng.fork('settlement')) : undefined;
+  const env = version >= 6 ? creviceEnvelope(R, W, H, rng.fork('envelope'), plan) : undefined;
+  const cc = carveCrevice(k, f, rng.fork('carve'), env, plan);
   if (!cc) return null;
   if (out) out.carve = cc;
   // --- Crop (fixed origin: canvas cells = grid cells) ----------------------------------------------------------------------------
