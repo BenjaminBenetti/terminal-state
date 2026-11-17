@@ -419,10 +419,14 @@ export function buildSubwayKit(sink: KitSink, inp: KitInput): KitStats {
         box(trim, l.x, l.y + 0.01, l.z + s * (r - t / 2), 2 * r, 0.03, t);
       }
     } else if (l.style === 'cove') {
-      // the ledge the strip sits on (the strip itself is the light's tube instance)
-      const L = cov.get(i) ?? 2, ax = Math.cos(l.rot);
-      const sx = Math.abs(ax) > 0.5 ? L : 0.14, sz = Math.abs(ax) > 0.5 ? 0.14 : L;
-      box(trim, l.x, l.y - 0.06, l.z, sx, 0.08, sz);
+      // the trough the strip sits in: a ledge and two lips that hide the strip from the floor, so the cove washes the soffit instead of
+      // reading as a bare glowing line (the strip itself is the light's tube instance)
+      const L = cov.get(i) ?? 2, alongX = Math.abs(Math.cos(l.rot)) > 0.5, W = 0.16, lip = 0.03;
+      box(trim, l.x, l.y - 0.06, l.z, alongX ? L : W, 0.08, alongX ? W : L);
+      for (const s of [-1, 1]) {
+        const o = s * (W / 2 - lip / 2);
+        box(trim, l.x + (alongX ? 0 : o), l.y + 0.02, l.z + (alongX ? o : 0), alongX ? L : lip, 0.08, alongX ? lip : L);
+      }
       st.coves++;
     }
   });
