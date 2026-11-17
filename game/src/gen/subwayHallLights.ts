@@ -60,6 +60,11 @@ const MIN_BAND = 2;
 
 /** Base power of each style (a lit hall jitters it by +-POWER_JITTER). */
 const BASE_POWER: Readonly<Record<SubwayLightStyle, number>> = {drum: 0.92, cove: 0.7, downlight: 0.8};
+/**
+ * (lane FRONTS) A front's own fixtures (Spot.rank set) are its LOCAL target light — the counter / bench / kiosk a passenger walks to:
+ * a full-output lamp (jittered like the rest), not the aisle's generic 0.8. Local authored fixtures only, no hall-wide gain.
+ */
+export const FRONT_POWER = 1.0;
 const POWER_JITTER = 0.1;
 const WARM: Readonly<Record<SubwayLightStyle, boolean>> = {drum: true, cove: true, downlight: false};
 /**
@@ -355,7 +360,7 @@ function stateOf(layout: StationLayout, a: Area, s: Spot, i: number): LightPlace
   if (a.level) l.level = a.level;
   const tint = hallFixtureTint(layout); // (lane FRONTS) the scheme's colour temperature
   if (tint) l.tint = tint;
-  const base = BASE_POWER[s.style];
+  const base = s.rank !== undefined ? FRONT_POWER : BASE_POWER[s.style];
   if (a.lighting === 'lit') {
     l.power = r2(Math.min(1, base + (u(0) * 2 - 1) * POWER_JITTER));
     l.broken = u(1) < BROKEN;

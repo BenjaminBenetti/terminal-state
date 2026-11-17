@@ -309,6 +309,11 @@ describe('the dresser\'s real records (lane GEN) at the natural seeds', () => {
       // (a hall at its budget trims a front's extras first: every front keeps at least its first fixture unless the rhythm itself is 60)
       expect(lit, 'wall / aisle fronts with their own fixture').toBe(wallish);
       const frontLights = own.filter(l => fronts.some(f => inZone(l, f)) && !(l.style === 'downlight' && bayBounds(ceilingFormOf(L, T).bays).some(([p, q]) => Math.abs(l.x - (p + q) / 2) < 0.01)));
+      // a front's own lamps are its local target light: brighter than the aisle's generic downlights (no hall-wide gain)
+      const generic = own.filter(l => l.style === 'downlight' && !frontLights.includes(l));
+      const mean = (ls: LightPlacement[]) => ls.reduce((s, l) => s + l.power, 0) / Math.max(1, ls.length);
+      expect(frontLights.length).toBeGreaterThan(0);
+      if (generic.length) expect(mean(frontLights)).toBeGreaterThan(mean(generic));
       for (const l of frontLights) for (const sg of hung) {
         const h = (sg.w ?? 1.4) / 2, dx = Math.cos(sg.rot) * h, dz = -Math.sin(sg.rot) * h;
         const vx = 2 * dx, vz = 2 * dz, t = Math.max(0, Math.min(1, ((l.x - sg.x + dx) * vx + (l.z - sg.z + dz) * vz) / (vx * vx + vz * vz)));
