@@ -16,7 +16,7 @@
 //     exterior (renderOrder): far panes first;
 //  3. STREET (unlit outdoor shading like the Office city: fake hemisphere + weak sun; one mesh): pavement slabs, curb, the road with
 //     faded lane markings, the far pavement, ruined facades (atlas variants, jagged broken tops, exposed slabs), a second row of taller
-//     silhouettes, wrecked cars, rubble, lamp posts, an entrance canopy; a backdrop box (back / sides / lid) painted with the roof's
+//     silhouettes, rubble, lamp posts, an entrance canopy; a backdrop box (back / sides / lid) painted with the roof's
 //     own sky colour (world/mallExterior.ts mallSkyColour: the Office murk, the skyline ghost at the horizon). FOG = the Office's
 //     outdoor green height fog (world/exterior.ts EXT_FOG through the EXT_U uniforms: base / ground / height / range / noise / drift)
 //     over the OUTDOOR part of each view ray only — the ray's crossing of the exit plane comes from a per-vertex attribute (aExit), so
@@ -24,24 +24,31 @@
 //     mall's indoor haze (MALL_FOG) over the indoor part, exactly as three's FogExp2 would;
 //  4. FOG CARDS (transparent; one mesh): drifting murk layers parallel to the glass at increasing depths (parallax) + a low street
 //     layer — the Office fog's PATCH variation (EXT_FOG.noise) on top of its mean (each card's opacity = the Office fog opacity of its
-//     depth slice x the thick-patch structure), so the mean density is never counted twice.
-// Cost (pinned in tests/mall-budget.test.ts): 4 draws per exit in the main pass (+ the frame in the flashlight shadow pass when lit),
+//     depth slice x the thick-patch structure), so the mean density is never counted twice;
+//  5. WRECKS on the road (task studio-mall-parking-glass-followup-20261117-043548-01): the game's cooked wreck models (cars and the
+//     bus: world/mallVehicles.ts), one InstancedMesh per model part on the library's shared geometry, shaded like the street
+//     (streetModelMaterial: per-object exit / view uniforms, one program per side for every view); a model that did not load is
+//     substituted by a loaded one of its class, else that wreck is not drawn (never a block stand-in).
+// Cost (pinned in tests/mall-budget.test.ts): 4 draws per exit in the main pass + one per wreck model part drawn (instanced, ~1-2; pinned
+// in tests/mall-vehicles.test.ts) (+ the frame in the flashlight shadow pass when lit),
 // ~1.5-2.5 k triangles, one shared 1024 x 1024 canvas atlas for every exit, 4 shared materials (one program each). Culling: every
 // mesh carries userData.aperture (the glazed opening): world/levelCulling.ts draws it only when its storey is shown AND the opening is
 // potentially visible (frustum, fog distance, a sight ray through the free bands to the hall cells in front of it).
-// Provenance: procedural canvas art drawn here at load (generic words only: no brands, no external imagery), procedural geometry and
-// the Office's procedural stand-in props (world/exterior.ts fallbackPropGeometry). No provider job, no model / image asset.
+// Provenance: procedural canvas art drawn here at load (generic words only: no brands, no external imagery), procedural geometry, the
+// Office's procedural rubble (world/exterior.ts fallbackPropGeometry) and the existing cooked wreck models. No provider job, no new asset.
 
 import * as THREE from 'three';
 import {MeshBasicNodeMaterial, MeshStandardNodeMaterial} from 'three/webgpu';
 import {
-  Fn, abs, attribute, cameraPosition, clamp, dFdx, dFdy, dot, exp, float, fract, length, max, min, mix, normalWorld, normalize, positionView,
-  positionWorld, select, smoothstep, step, texture, time, uniform, uv, vec2, vec3,
+  Fn, abs, attribute, cameraPosition, clamp, dFdx, dFdy, dot, exp, faceForward, float, fract, length, max, min, mix, normalWorld, normalWorldGeometry,
+  normalize, positionView, positionWorld, select, smoothstep, step, texture, time, uniform, uv, vec2, vec3,
 } from 'three/tsl';
+import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {mulberry32} from '../core/rng';
 import {canvasTexture} from './canvasTextures';
 import {wmNoise} from './surfaceNodes';
-import {EXT_FOG, EXT_U, exteriorFogOpacity, fallbackPropGeometry} from './exterior';
+import {EXT_FOG, EXT_U, exteriorFogOpacity, fallbackPropGeometry, modelParts} from './exterior';
+import {MALL_VEHICLE_MODELS, drawnKey, placeVehicles, type VehiclePlace} from './mallVehicles'; // task studio-mall-parking-glass-followup-20261117-043548-01
 import {MALL_EXT_ORDER, MALL_SKY, gasColour, gasDensity, hazeSatCpu, mallSkyColour, murkAt} from './mallExterior';
 import {MALL_FOG} from './mallAtmosphere';
 
@@ -482,6 +489,108 @@ export function streetExitMaterial(): MeshBasicNodeMaterial {
   return (streetMat = m);
 }
 
+// ---------------------------------------------------------------------------------------------------------------------------
+// Task studio-mall-parking-glass-followup-20261117-043548-01: the exterior VEHICLES (world/mallVehicles.ts) — the cooked wreck models drawn
+// instanced in the street view's own shading
+
+/**
+ * The exit plane (nx, nz, d, streetY: the street material's aExit) and the view's world box (x0, z0, x1, z1: its aView) of the object
+ * being drawn, from its userData (vehicleMeshes sets both): per-object uniforms, so one material per model map serves every view.
+ */
+const VEHICLE_EXIT = uniform(new THREE.Vector4()).onObjectUpdate(({object}) => object?.userData.vehicleExit as THREE.Vector4 | undefined);
+const VEHICLE_VIEW = uniform(new THREE.Vector4()).onObjectUpdate(({object}) => object?.userData.vehicleView as THREE.Vector4 | undefined);
+
+const vehicleMats = new WeakMap<THREE.Texture | THREE.Color, Map<THREE.Side, MeshBasicNodeMaterial>>();
+/**
+ * A cooked wreck model's part in the street view: its own base colour (map x colour; world/exterior.ts modelMaterial's reading of the
+ * Meshy GLB) under exactly the street material's shading — the fake outdoor light (the view-facing normal on a double-sided model, as the
+ * Office city's models), the Office's outdoor height fog over the outdoor part of the ray toward the roof sky's murk, the view volume's
+ * edge fade and the mall's indoor haze over the indoor part. Unlit, never three-fogged, opaque. Cached per map and side (never disposed:
+ * module state, like the city's model materials).
+ */
+export function streetModelMaterial(src: THREE.Material): MeshBasicNodeMaterial {
+  const std = src as THREE.MeshStandardMaterial;
+  const key: THREE.Texture | THREE.Color = std.map ?? std.color ?? new THREE.Color(0x777777);
+  const side: THREE.Side = std.side === THREE.DoubleSide ? THREE.DoubleSide : THREE.FrontSide;
+  let bySide = vehicleMats.get(key);
+  if (!bySide) vehicleMats.set(key, (bySide = new Map()));
+  let m = bySide.get(side);
+  if (m) return m;
+  const tint = std.color ?? new THREE.Color(std.map ? 0xffffff : 0x777777);
+  const map = std.map ?? null;
+  m = new MeshBasicNodeMaterial({side, fog: false});
+  m.name = 'mall-exit-vehicle';
+  m.colorNode = Fn(() => {
+    const ex = VEHICLE_EXIT as AnyNode, vw = VEHICLE_VIEW as AnyNode;
+    const C = cameraPosition, P = positionWorld, D = P.sub(C).toVar();
+    const dist = length(D), dir = D.div(max(dist, 1e-3)).toVar();
+    const tIn = insideFraction(ex).toVar();
+    const outside = dist.mul(float(1).sub(tIn));
+    const hc = max(C.y.sub(ex.w), 0), hp = max(P.y.sub(ex.w), 0);
+    const drift = time.mul(EXT_U.fogDrift);
+    const patch = wmNoise((vec3 as AnyNode)(P.x.add(drift).div(38), P.y.div(24), P.z.sub(drift.mul(0.4)).div(38))) as AnyNode;
+    const tau = fogDepth(outside, hc, hp).mul(float(1).add(EXT_U.fogNoise.mul(patch.sub(0.5)).mul(2)));
+    const BIG = 1e3;
+    const dx0 = P.x.sub(vw.x).add(step(0.5, ex.x).mul(BIG)), dx1 = vw.z.sub(P.x).add(step(0.5, ex.x.negate()).mul(BIG));
+    const dz0 = P.z.sub(vw.y).add(step(0.5, ex.y).mul(BIG)), dz1 = vw.w.sub(P.z).add(step(0.5, ex.y.negate()).mul(BIG));
+    const fadeL = clamp(min(vw.z.sub(vw.x), vw.w.sub(vw.y)).mul(0.2), 1.5, 5);
+    const edge = float(1).sub(smoothstep(0.2, fadeL, min(min(dx0, dx1), min(dz0, dz1))));
+    const outF = max(float(1).sub(exp(tau.negate())), edge);
+    const albedo: AnyNode = map ? (texture(map, uv()).rgb as AnyNode).mul(vec3(tint.r, tint.g, tint.b)) : vec3(tint.r, tint.g, tint.b);
+    const n: AnyNode = side === THREE.DoubleSide ? faceForward(normalWorldGeometry, positionWorld.sub(cameraPosition), normalWorldGeometry) : normalize(normalWorld as AnyNode);
+    const lit = albedo.mul(outdoorLight(n)).mul(STREET_U.light);
+    return vec3(indoorHazeOver(mix(lit, murkAt(dir), outF), tIn));
+  })();
+  bySide.set(side, m);
+  return m;
+}
+
+/** What vehicleMeshes drew: the instanced meshes (one per model part), instances and triangles (instances x part triangles). */
+export interface VehicleDraw { meshes: THREE.InstancedMesh[]; drawn: number; triangles: number; byKey: Record<string, number> }
+
+/**
+ * The placements of a view (its local frame `f`) as instanced cooked models: per model key and part ONE InstancedMesh over the library's
+ * SHARED geometry (never cloned, never disposed here: the library owns it) in streetModelMaterial, tagged with the view's exit plane /
+ * volume (the material's per-object uniforms). A placement whose model is not loaded takes another of its class (mallVehicles.ts
+ * drawnKey) or is skipped. Static: matrices composed once.
+ */
+export function vehicleMeshes(f: ExitFrame, places: readonly VehiclePlace[], models: Readonly<Record<string, GLTF | undefined>>, exit: readonly number[], view: Rect): VehicleDraw {
+  const byKey = new Map<string, VehiclePlace[]>();
+  for (const p of places) {
+    const k = drawnKey(p, key => !!models[key]);
+    if (!k) continue;
+    let l = byKey.get(k);
+    if (!l) byKey.set(k, (l = []));
+    l.push(p);
+  }
+  const out: VehicleDraw = {meshes: [], drawn: 0, triangles: 0, byKey: {}};
+  const exitV = new THREE.Vector4(exit[0], exit[1], exit[2], exit[3]), viewV = new THREE.Vector4(view.x0, view.z0, view.x1, view.z1);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0), pos = new THREE.Vector3(), sc = new THREE.Vector3();
+  for (const key of [...byKey.keys()].sort()) {
+    const list = byKey.get(key)!, gltf = models[key]!, k = MALL_VEHICLE_MODELS[key]?.k ?? 1;
+    const place = list.map(p => new THREE.Matrix4().multiplyMatrices(f.m, m4.compose(pos.set(p.u, p.y, p.w), q.setFromAxisAngle(UP, p.yaw), sc.set(k, k, k))));
+    modelParts(gltf).forEach((part, i) => {
+      const im = new THREE.InstancedMesh(part.geometry, streetModelMaterial(part.material), list.length);
+      place.forEach((pm, j) => im.setMatrixAt(j, new THREE.Matrix4().multiplyMatrices(pm, part.matrix)));
+      im.instanceMatrix.needsUpdate = true;
+      im.computeBoundingBox();
+      im.computeBoundingSphere();
+      im.name = `vehicle-${key}${i ? `-${i}` : ''}`;
+      im.userData.vehicleExit = exitV;
+      im.userData.vehicleView = viewV;
+      im.castShadow = im.receiveShadow = false;
+      im.matrixAutoUpdate = false;
+      im.updateMatrix();
+      out.meshes.push(im);
+      const g = part.geometry, tris = (g.index ? g.index.count : g.attributes.position.count) / 3;
+      out.triangles += tris * list.length;
+    });
+    out.drawn += list.length;
+    out.byKey[key] = list.length;
+  }
+  return out;
+}
+
 let cardMat: MeshBasicNodeMaterial | null = null;
 /**
  * Drifting murk layers outside the glass: the gas colour of the roof exterior (lit rims / dark cores, the Office hue), opacity = the
@@ -730,14 +839,19 @@ export function planStreet(s: StreetExitSpec): StreetPlan {
 // ---------------------------------------------------------------------------------------------------------------------------
 // Build
 
-export interface StreetExitStats { id: string; meshes: number; triangles: number; panes: number; shards: number; buildings: number; cards: number }
+export interface StreetExitStats {
+  id: string; meshes: number; triangles: number; panes: number; shards: number; buildings: number; cards: number;
+  /** Task studio-mall-parking-glass-followup-20261117-043548-01: the wrecks drawn as cooked models (instances), their draws (instanced
+   *  meshes, besides `meshes`) and triangles (instances x model triangles); 0 without loaded models. */
+  vehicles: number; vehicleDraws: number; vehicleTriangles: number;
+}
 export interface StreetExitView { meshes: THREE.Mesh[]; stats: StreetExitStats; plan: StreetPlan; aperture: StreetExitAperture; frame: ExitFrame }
 
 const ALU: V3[] = [[0.56, 0.57, 0.56], [0.2, 0.18, 0.15]];
 const tint = (c: V3, k: number): V3 => [c[0] * k, c[1] * k, c[2] * k];
 
 /** Builds one exit's four meshes (frame, glass, street, fog cards) in world space, tagged with its storey and aperture. */
-export function buildStreetExit(s: StreetExitSpec): StreetExitView {
+export function buildStreetExit(s: StreetExitSpec, models: Readonly<Record<string, GLTF | undefined>> = {}): StreetExitView {
   const f = exitFrame(s);
   const plan = planStreet(s);
   const r = mulberry32(s.seed ^ 0xd00c);
@@ -987,18 +1101,19 @@ export function buildStreetExit(s: StreetExitSpec): StreetExitView {
     }
     if (q() < 0.35 && b.row === 1) { const y = broken - 3.4 * (1 + Math.floor(q() * 2)); if (y > 4.5) massing(b, b.u0 - 0.4, b.u1 + 0.4, b.w0 - 0.5, b.w0 + 2.5, y, y + 0.3, false); }
   }
-  // wrecks / rubble (the Office's procedural stand-ins, vertex-coloured), lamp posts, the entrance canopy
+  // rubble (the Office's procedural stand-in mound, vertex-coloured), lamp posts, the entrance canopy; the wrecks (task
+  // studio-mall-parking-glass-followup-20261117-043548-01) are the cooked models, instanced below (world/mallVehicles.ts)
   const m4 = new THREE.Matrix4(), qq = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
   const white = sx('white');
   const place = (g: THREE.BufferGeometry, u: number, y: number, w: number, yaw: number, sc: V3) => {
     m4.compose(new THREE.Vector3(u, y, w), qq.setFromAxisAngle(UP, yaw), new THREE.Vector3(...sc));
     street.geometry(g, m4, {color: [1, 1, 1], aCell: white, aExit: exitAttr}, true);
   };
-  const carG = fallbackPropGeometry('car'), busG = fallbackPropGeometry('bus'), rubG = fallbackPropGeometry('rubble');
-  // (the stand-ins are long along z: a car parked along the road (u) is turned a quarter)
-  for (const c of plan.cars) place(c.kind === 'bus' ? busG : carG, c.u, curbY, c.w, Math.PI / 2 + c.yaw, [1, 1, 1]);
+  const rubG = fallbackPropGeometry('rubble');
+  // (the plan's headings are the old Z-long stand-ins': a car parked along the road (u) was turned a quarter)
+  const vehicles = placeVehicles(plan.cars.map(c => ({u: c.u, y: curbY, w: c.w, yaw: Math.PI / 2 + c.yaw, kind: c.kind})), s.seed);
   for (const rb of plan.rubble) place(rubG, rb.u, rb.w > plan.road[0] && rb.w < plan.road[1] ? curbY : 0, rb.w, r() * 6.28, [rb.s, rb.s * 0.8, rb.s]);
-  for (const g of [carG, busG, rubG]) g.dispose();
+  rubG.dispose();
   const steelCol: V3 = [0.16, 0.16, 0.15];
   const sbox = (u0: number, u1: number, y0: number, y1: number, w0: number, w1: number, col: V3) =>
     box(street, u0, u1, y0, y1, w0, w1, () => ({uv: [[0.5, 0.5], [0.5, 0.5], [0.5, 0.5], [0.5, 0.5]], extra: {color: col, aCell: white, aExit: exitAttr}}));
@@ -1048,7 +1163,13 @@ export function buildStreetExit(s: StreetExitSpec): StreetExitView {
   named(fog.mesh(f, streetFogCardMaterial(), 'fog'), 'fog', MALL_EXT_ORDER.gas);
   named(glass.mesh(f, streetExitGlassMaterial(), 'glass'), 'glass', 0);
   const triangles = out.reduce((t, m) => t + (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3, 0);
-  return {meshes: out, stats: {id: s.id, meshes: out.length, triangles, panes, shards, buildings: plan.buildings.length, cards: plan.cards.length}, plan, aperture, frame: f};
+  const views = out.length;
+  const vd = vehicleMeshes(f, vehicles, models, exitAttr, s.view);
+  for (const m of vd.meshes) named(m, m.name);
+  return {
+    meshes: out, plan, aperture, frame: f,
+    stats: {id: s.id, meshes: views, triangles, panes, shards, buildings: plan.buildings.length, cards: plan.cards.length, vehicles: vd.drawn, vehicleDraws: vd.meshes.length, vehicleTriangles: vd.triangles},
+  };
 }
 
 /**
