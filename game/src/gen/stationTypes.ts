@@ -136,6 +136,37 @@ export interface Area extends Rect {
    * shelves / counters / in its containers.
    */
   noFloorLoot?: true;
+  /**
+   * Task studio-subway-architecture-materials-rework-20261117-072826-01: the SECTION of a layout-version-3 grand hall (gen/stationHallV3.ts):
+   * a tall nave between low side aisles (their cells' grid.ceil lowered), arcade column lines on the nave / aisle boundaries, the clear
+   * circulation spine. Absent on every other area (and on every version-1 / version-2 station).
+   */
+  hallSection?: HallSection;
+}
+
+/**
+ * Task studio-subway-architecture-materials-rework-20261117-072826-01: a version-3 grand hall's section. Metres RELATIVE to the area's corner
+ * (area.x / area.y * CELL), so the record survives the generator's crop and the track extensions' re-framing: `across` values run across the
+ * hall's long axis (z of a hall along X), `along` values along it. gen/hallSection.ts hallSectionWorld(area) gives world coordinates.
+ */
+export interface HallSection {
+  /** 'basilica' = nave + two aisles; 'transept' = the same with a full-height crossing at the hall centre; 'gate-aisle' = one aisle (gate side). */
+  variant: 'basilica' | 'transept' | 'gate-aisle';
+  alongX: boolean;
+  /** The full-height nave (across span) and its ceiling (= the area ceiling, absolute). */
+  nave: [number, number];
+  naveCeil: number;
+  /** The low side aisles (across spans; gate side first) and their ceiling (absolute). */
+  aisles: [number, number][];
+  aisleCeil: number;
+  /** Across positions of the arcade column rows (one per aisle, in the aisle's cell row next to the nave). */
+  arcades: number[];
+  /** Along positions of the arcade columns (the bay lines; transept: the crossing's inner line omitted). */
+  lines: number[];
+  /** 'transept': the crossing's along span (its aisle cells keep the nave ceiling). */
+  transept?: [number, number];
+  /** The clear circulation spine (across span), kept free end to end. */
+  spine: [number, number];
 }
 
 export interface Door extends Rect {

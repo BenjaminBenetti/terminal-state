@@ -16,6 +16,7 @@ import {dressStorefront, rugBoxes, type ShopDressApi} from './storefronts';
 import {dressP7} from './props07Dress';
 import {isP7Kind, p7Palette} from './props07';
 import {COMPOSED_ZONES, compose, zoneOf} from './compose';
+import {dressGrandHallV3, furnishGrandHallV3, type HallV3Api} from './stationHallV3Dress'; // task studio-subway-architecture-materials-rework-20261117-072826-01
 import {passageWallsAlongX, signDims, wallSignSpot} from './doorways';
 import {
   OPPOSITE, areaBase, areaLevel, cellsOfBox, doorSide, forceProp, levelGrid, levelsOf, mainDoor, makePlaceCtx, placeAgainstWall,
@@ -186,6 +187,11 @@ export function dress(layout: StationLayout, rng: Rng): void {
     light: (area, x, z, rot, breakChance) => addLight(ctxOf(area), area, x, z, rot, breakChance),
   };
   let kiosk = rng.chance(0.35);
+  // (task studio-subway-architecture-materials-rework-20261117-072826-01: a layout-version-3 grand hall, gen/stationHallV3.ts, is dressed by
+  // gen/stationHallV3Dress.ts on its own fork; no other station has one, so nothing here runs for them and no draw moves)
+  const v3Halls = layout.areas.filter(a => a.hallSection);
+  const v3rng = v3Halls.length ? rng.fork('grand-hall-v3-furnish') : null;
+  const v3api: HallV3Api | null = v3Halls.length ? {signAtDoor, hungRoofed, palette: stationP7Palette(rng)} : null;
   for (const area of layout.areas) {
     const c = ctxOf(area);
     inLocalFrame(layout, area, () => {
@@ -194,7 +200,7 @@ export function dress(layout: StationLayout, rng: Rng): void {
         case 'passage': dressPassage(c, area); break;
         case 'underpass': lineLights(c, area, 4.5, 0.12); break;
         case 'concourse': area.paid ? dressPaidConcourse(c, area) : dressExitHall(c, area); break;
-        case 'fare-hall': if (dressTicketHall(c, area, kiosk)) kiosk = false; break;
+        case 'fare-hall': if (area.hallSection && v3rng && v3api) dressGrandHallV3({...c, rng: v3rng}, area, v3api); else if (dressTicketHall(c, area, kiosk)) kiosk = false; break;
         case 'food-court': dressFoodCourt(c, area); break;
         case 'retail-arcade': if (dressArcade(c, area, kiosk)) kiosk = false; break;
         case 'exit-stair': dressExitStair(c, area); break;
@@ -239,6 +245,9 @@ export function dress(layout: StationLayout, rng: Rng): void {
       backed: (a, side, t0, t1, yb) => backed(pctxOf(a), a, side, t0, t1, yb),
     });
   }
+  // (task studio-subway-architecture-materials-rework-20261117-072826-01) the version-3 great hall's furnished bays, appended after the
+  // composer and the iteration-07 dresser (their clusters and the reserved circulation are in place)
+  if (v3rng && v3api) for (const a of v3Halls) furnishGrandHallV3({...ctxOf(a), rng: v3rng}, a, v3api.palette);
   // Staff-only plates on the public side of back-of-house doors; purpose plates (SECURITY,
   // ELECTRICAL, JANITOR …) on the corridor side of a purpose room's main door.
   for (const d of layout.doors) {

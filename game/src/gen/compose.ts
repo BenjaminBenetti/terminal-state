@@ -500,6 +500,15 @@ function desireLines(ctx: PlaceCtx, a: Area, portals: Portal[]): number {
   }
   const cost = new Float32Array(n);
   for (let j = 0; j < n; j++) cost[j] = 1 + (wd[j] < 3 ? (3 - wd[j]) * 1.2 : 0);
+  // Task studio-subway-architecture-materials-rework-20261117-072826-01 (lane HALL): a sectioned layout-version-3 great hall has its
+  // circulation reserved by its dresser (gen/stationHallV3Dress.ts: the spine and a lane from every opening to it). The desire lines
+  // follow those lanes (cheap blocks) and add nothing on them, so they no longer criss-cross the nave's furnished bays. (Only areas with
+  // a hallSection: every other area routes exactly as before.)
+  const pre = a.hallSection ? new Uint8Array(n) : null;
+  if (pre) for (let j = 0; j < n; j++) {
+    const bx = j % BW, by = (j - bx) / BW, x = a.x + bx * 2, y = a.y + by * 2;
+    if (free[j] && cellFree(x, y) && ctx.lane[g.idx(x, y)]) { pre[j] = 1; cost[j] = 0.25; }
+  }
   const blockOf = (i: number) => { const x = i % g.w - a.x, y = Math.floor(i / g.w) - a.y; return x >= 0 && y >= 0 && x < a.w && y < a.h ? (y >> 1) * BW + (x >> 1) : -1; };
   const srcs = portals.map(p => [...new Set(p.cells.map(blockOf).filter(j => j >= 0 && free[j]))]);
   const dist = new Float32Array(n), prev = new Int32Array(n), goal = new Uint8Array(n);
@@ -512,6 +521,7 @@ function desireLines(ctx: PlaceCtx, a: Area, portals: Portal[]): number {
   const mark = (j: number) => {
     if (done[j]) return;
     done[j] = 1;
+    if (pre?.[j]) return;
     const bx = j % BW, by = (j - bx) / BW;
     for (let y = a.y + by * 2 - dil; y <= a.y + by * 2 + 1 + dil; y++) for (let x = a.x + bx * 2 - dil; x <= a.x + bx * 2 + 1 + dil; x++) {
       if (!cellFree(x, y)) continue;
@@ -565,7 +575,8 @@ function plazas(cc: CC, ctx: PlaceCtx, a: Area, zone: Zone, portals: Portal[]): 
     if (any) cc.sum.plazas.push({area: a.id, level: ctx.level, x0: r3(p.x - R), z0: r3(p.z - R), x1: r3(p.x + R), z1: r3(p.z + R), kind: 'arrival'});
   }
   const wM = a.w * CELL, hM = a.h * CELL;
-  if (rule.plaza > 0 && Math.min(wM, hM) >= 12 && wM * hM >= 250) {
+  // (a sectioned layout-version-3 great hall keeps its spine open instead of a central plaza: its nave bays are furnished)
+  if (rule.plaza > 0 && !a.hallSection && Math.min(wM, hM) >= 12 && wM * hM >= 250) {
     const pw = Math.max(4, wM * rule.plaza), ph = Math.max(4, hM * rule.plaza);
     const cx = (a.x + a.w / 2) * CELL, cz = (a.y + a.h / 2) * CELL;
     const [x0, y0] = g.cellOf(cx - pw / 2, cz - ph / 2), [x1, y1] = g.cellOf(cx + pw / 2 - 1e-3, cz + ph / 2 - 1e-3);
