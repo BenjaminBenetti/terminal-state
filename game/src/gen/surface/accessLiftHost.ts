@@ -4,7 +4,8 @@
 // enclosure (the cargo kit's car, its gate, the sealed shaft box of the ring cells) on open floor near the way out the version-1 door
 // used — the Office lobby's boarded street entrance, the Mall's hashed street exit — preferably backed against a wall.
 //  - APPEND-ONLY / RNG-neutral like the Subway's lift (gen/surface/accessLift.ts): one area appended (the car, the landing area's child),
-//    the footprint's cells carved, one EXIT sign appended over the gate; no generated prop, pickup, light or enemy is moved or removed —
+//    the footprint's cells carved, one EXIT sign appended over the gate and one fixture over the landing (accessLift.ts liftLandingLight);
+//    no generated prop, pickup, light or enemy is moved or removed —
 //    a spot under any of them, a doorway, a window span, a street exit, a stair or the spawn is not used;
 //  - connectivity: every cell reachable on foot before is reachable after (the footprint's own cells excepted), and the car is;
 //  - deterministic: candidates ordered by distance from the way out (a wall behind first), then by a fixed scan order.
@@ -15,7 +16,7 @@ import {CELL, FLOOR, SOLID, type Grid} from '../grid';
 import {levelDistance} from '../levelGen';
 import type {Area, SignPlacement, StationLayout} from '../stationTypes';
 import type {SurfaceAccessInfo} from './surfaceTypes';
-import {LIFT_CAR, LIFT_FOOT, carveLiftRoom, liftCell, liftInsidePose, liftRecord, liftRect, liftTrigger, outward, type LiftFrame} from './accessLift';
+import {LIFT_CAR, LIFT_FOOT, carveLiftRoom, liftCell, liftInsidePose, liftLandingLight, liftRecord, liftRect, liftTrigger, outward, type LiftFrame} from './accessLift';
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
@@ -149,6 +150,7 @@ function finish(layout: StationLayout, level: number, c: Cand, room: ReturnType<
   if (parent.paid !== undefined) car.paid = parent.paid;
   layout.areas.push(car);
   const lift = liftRecord(room.cab, room.doorSide, room.along, c.y, level, car.id, 'lower');
+  layout.lights.push(liftLandingLight(layout.levels[level].grid, lift, parent.id, parent.lighting));
   // an EXIT sign on the shaft's front over the gate, facing the landing
   const n = outward(room.doorSide), d = lift.door;
   const sp: SignPlacement = {x: r3(d.x + n[0] * 0.06), y: r3(c.y + LIFT_CAR.gateH + 0.3), z: r3(d.z + n[1] * 0.06), rot: r3(Math.atan2(n[0], n[1])), kind: 'exit', text: 'LIFT TO STREET', area: parent.id, w: 1.5};

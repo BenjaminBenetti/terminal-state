@@ -10,14 +10,19 @@
 // block's cells, the gate opens onto the hall. Nothing is dug into the rock (the shaft rises through the rock above the hall, drawn only
 // by the kit). A hall with anything else on the lift's footprint (a prop, a pickup, a light, a spawn) is skipped.
 //
-// RNG-NEUTRAL and APPEND-ONLY, like the version-1 stairwell: no station stream is drawn; one area is appended (the car); in place only the
+// The landing's light (liftLandingLight, every version-2 end): one steady ceiling fixture over the landing in front of the gate, appended
+// as the version-1 stairwell appends its own (gen/surface/accessStair.ts: its power by the hall's lighting), so the gate and the landing
+// stand in the baked light at rest; the car itself carries its own lit finish (world/elevator.ts cargoLitMaterials).
+//
+// RNG-NEUTRAL and APPEND-ONLY, like the version-1 stairwell: no station stream is drawn; one area and one light are appended (the car,
+// the landing's fixture); in place only the
 // chosen hall changes (its far cells, its grille block retired, its signs and label). The hall order is rotated by a hash of the level
 // seed (its own key: never the version-1 one), so the same station always gets the same lift.
 
 import {hashString} from '../../core/rng';
 import {CELL, FLOOR, SOLID, type Grid} from '../grid';
 import {cellsOfBox} from '../placeKit';
-import type {Area, Door, Rect, Side, StationLayout} from '../stationTypes';
+import {PENDANT_Y, type Area, type Door, type LightPlacement, type Rect, type Side, type StationLayout} from '../stationTypes';
 import type {SPose, SRect, SurfaceAccessInfo, SurfaceLift} from './surfaceTypes';
 
 /** The car (cells unless noted) — one shape for every end of every Surface Run lift. */
@@ -71,6 +76,24 @@ export function liftInsidePose(l: SurfaceLift): SPose {
 /** The car interior as the crossing's [E] box (absolute y). */
 export function liftTrigger(l: SurfaceLift): {x0: number; z0: number; x1: number; z1: number; y0: number; y1: number} {
   return {x0: l.cab.x0, z0: l.cab.z0, x1: l.cab.x1, z1: l.cab.z1, y0: r3(l.y - 0.2), y1: r3(l.y + LIFT_CAR.cabH)};
+}
+
+/** The landing's fixture: its distance (m) out from the gate's plane over the landing. */
+export const LIFT_LANDING_LIGHT = {out: 1.0} as const;
+
+/**
+ * The landing's light (every version-2 lift end in a station; the tent's is its own work lamp, gen/surface/checkpoint.ts): one steady
+ * ceiling fixture over the landing, its tube along the gate, at the station's fixture height under the landing's ceiling (`g`: the
+ * lift's storey grid), its power by the landing area's lighting (the version-1 stairwell's rule: dark 0.45, dim 0.7, else 1).
+ */
+export function liftLandingLight(g: Grid, l: SurfaceLift, area: number, lighting: Area['lighting']): LightPlacement {
+  const n = outward(l.doorSide), x = l.door.x + n[0] * LIFT_LANDING_LIGHT.out, z = l.door.z + n[1] * LIFT_LANDING_LIGHT.out;
+  const [cx, cy] = g.cellOf(x, z), rel = g.ceil[g.idx(cx, cy)] - l.y;
+  const power = lighting === 'dark' ? 0.45 : lighting === 'dim' ? 0.7 : 1;
+  const L: LightPlacement = {x: r3(x), y: r3(l.y + (rel > PENDANT_Y + 0.15 ? PENDANT_Y : rel - 0.02)), z: r3(z), rot: l.doorSide === 'N' || l.doorSide === 'S' ? 0 : Math.PI / 2,
+    area, broken: false, flicker: false, warm: false, power, dying: false};
+  if (l.level) L.level = l.level;
+  return L;
 }
 
 /** Outward unit normal (x, z) of a side. */
@@ -216,6 +239,7 @@ function carve(layout: StationLayout, P: HallPick): SurfaceAccessInfo {
   layout.areas.push(car);
   const room = carveLiftRoom(g, P.lift, base, car.id, hall.id);
   const lift = liftRecord(room.cab, room.doorSide, room.along, base, 0, car.id, 'lower');
+  layout.lights.push(liftLandingLight(g, lift, hall.id, hall.lighting));
   // signs: the hall's door sign and grille notice change in place (as the version-1 stairwell's)
   let street = '';
   const dcx = (P.door.x + P.door.w / 2) * CELL, dcz = (P.door.y + P.door.h / 2) * CELL;

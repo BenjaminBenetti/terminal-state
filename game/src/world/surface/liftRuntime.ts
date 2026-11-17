@@ -116,7 +116,10 @@ export class SurfaceLiftRuntime {
     const mats = (this.game as unknown as {mats?: unknown}).mats;
     if (!mats) return null;
     const info = liftElevatorInfo(l), plan = planElevator(info);
-    const view = buildElevatorView(plan, mats as Parameters<typeof buildElevatorView>[1], {cargo: true});
+    const view = buildElevatorView(plan, mats as Parameters<typeof buildElevatorView>[1], {cargo: true, cargoLit: true});
+    // (the car's OWN lit finish — world/elevator.ts cargoLitMaterials: the car, its gate, the landing door and the shaft liner carry the
+    // cab lamp's light as a self-glow in their own colours, so they read with the flashlight off at rest and through the whole ride, in
+    // the rock / between storeys where the baked field does not reach. No scene light.)
     view.root.name = 'cargo-lift-surface';
     view.root.userData.surfaceLift = true;
     const frame = carFrame(l), stops = liftStops(l), home = liftHome(l);
