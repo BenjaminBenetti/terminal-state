@@ -62,18 +62,20 @@ const carryNear = (L: StationLayout, f: Uint8Array, x: number, z: number, r = 1.
 };
 
 describe('Survivor Market layout version 5 (the crevice)', () => {
-  it('the version policy: 5 for new / unvisited markets, a recorded 1-4 kept; a recorded 4 regenerates the shipped version 4 exactly', () => {
-    expect(MARKET_LAYOUT_VERSION).toBe(5);
-    expect(marketLayoutVersionFor(undefined)).toBe(5);
-    expect(marketLayoutVersionFor({visits: 0, lanes: {}})).toBe(5);
+  // (re-pinned by task studio-market-irregular-envelope-20261116-210503-01: new / unvisited markets build version 6 now — this crevice in
+  // its irregular envelope, market-crevice-envelope.test.ts, which pins version 5's fingerprints; a recorded 5 is kept)
+  it('the version policy: 6 for new / unvisited markets, a recorded 1-5 kept; a recorded 4 regenerates the shipped version 4 exactly', () => {
+    expect(MARKET_LAYOUT_VERSION).toBe(6);
+    expect(marketLayoutVersionFor(undefined)).toBe(6);
+    expect(marketLayoutVersionFor({visits: 0, lanes: {}})).toBe(6);
     expect(marketLayoutVersionFor({visits: 2, lanes: {}})).toBe(1);
-    for (const v of [1, 2, 3, 4, 5]) expect(marketLayoutVersionFor({visits: 4, lanes: {[MARKET_LAYOUT_LANE]: {v}}})).toBe(v);
+    for (const v of [1, 2, 3, 4, 5, 6]) expect(marketLayoutVersionFor({visits: 4, lanes: {[MARKET_LAYOUT_LANE]: {v}}})).toBe(v);
     for (const [s, want] of Object.entries(V4_SHIPPED)) {
       expect(fingerprint(generateMarketLevel({levelSeed: Number(s), layoutVersion: 4})), `seed ${s}`).toBe(want);
     }
     expect(fingerprint(LEVELS.market.generate('main', {levelSeed: 42, layoutVersion: 4}))).toBe(V4_SHIPPED[42]);
-    // the default (no recorded version) builds the crevice
-    expect(LEVELS.market.generate('main', {levelSeed: 42}).market?.v).toBe(5);
+    // the default (no recorded version) builds the crevice (version 6: in its irregular envelope)
+    expect(LEVELS.market.generate('main', {levelSeed: 42}).market?.v).toBe(6);
   });
 
   it('every seed validates within the budget; deterministic; the same name and stall ids as version 4', () => {

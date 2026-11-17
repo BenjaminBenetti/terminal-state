@@ -16,8 +16,11 @@
 // - the calm rules: no enemies, no hordes, no track extensions, no pickups, no other level's record, no loot in any holder but the
 //   community stores;
 // - railings on every drop, the shared storey / traversal / doorway rules.
+// Layout version 6 (task studio-market-irregular-envelope-20261116-210503-01: the same crevice in its irregular envelope, gen/market/v6/
+// envelope.ts) adds: the envelope record; every overhead within its band and >= 3.5 m over every top-storey public floor; the end clefts
+// out of reach (their floors well over the top terrace: their lips take no railing); the chasm's bed below a railing's drop everywhere.
 
-import {CELL, FLOOR} from '../../grid';
+import {CELL, FLOOR, VOID} from '../../grid';
 import {levelDistance, levelIssues, type LevelRules} from '../../levelGen';
 import {levelsOf} from '../../levels';
 import {traversalIssues} from '../../traversal';
@@ -35,6 +38,7 @@ import {BAR_RULES, barFloorArea} from '../v3/barValidate';
 import {BAR_SPOTS} from '../v3/barRecord';
 import {DEN_RULES, denIssues} from '../v4/denValidate';
 import {CREVICE} from './frame';
+import {ENVELOPE, creviceEnvelopeDrop} from '../v6/envelope';
 
 export const CREVICE_LEVEL_RULES: LevelRules = {minLevels: 4, overlapRoles: [], maxRiser: 0.19, minFlightWidth: 1.5};
 
@@ -51,8 +55,9 @@ export function creviceIssues(layout: StationLayout): string[] {
   if (levels.length !== CREVICE.canvas.levels) return [`${levels.length} levels`];
   for (const L of levels) if (L.grid.w !== g0.w || L.grid.h !== g0.h) issues.push(`level ${L.id} grid size differs`);
   for (const L of levels) if (Math.abs(L.baseY - CREVICE.bases[L.id]) > 1e-6) issues.push(`storey ${L.id} height`);
-  if (m.v !== 5) issues.push('market record version');
+  if (m.v !== 5 && m.v !== 6) issues.push('market record version');
   if (!m.crevice) issues.push('no crevice record');
+  if (m.crevice && !!m.crevice.envelope !== (m.v === 6)) issues.push('envelope record');
 
   // --- The calm rules --------------------------------------------------------------------------------------------------------
   if (layout.zombies.length) issues.push(`${layout.zombies.length} enemies`);
@@ -148,14 +153,47 @@ export function creviceIssues(layout: StationLayout): string[] {
     }
   }
 
+  // --- (version 6) The envelope -------------------------------------------------------------------------------------------------
+  if (m.v === 6 && m.crevice) issues.push(...envelopeIssues(layout));
+
   // --- Railings, shared rules -----------------------------------------------------------------------------------------------
-  const drops = levelsOf(layout).unrailedDrops().filter(d => !dropInLadderOpening(layout, d));
+  const drops = levelsOf(layout).unrailedDrops().filter(d => !dropInLadderOpening(layout, d) && !(m.v === 6 && creviceEnvelopeDrop(layout, d)));
   if (drops.length) issues.push(`${drops.length} unrailed drops (first at ${drops[0].x0.toFixed(1)},${drops[0].z0.toFixed(1)} level ${drops[0].level})`);
   issues.push(...excuseDesignedRailGaps(layout, levelIssues(layout, dist, CREVICE_LEVEL_RULES)));
   issues.push(...traversalIssues(layout));
   issues.push(...doorwayIssues(layout));
   return issues;
 }
+
+/** Version 6's envelope rules (header). */
+function envelopeIssues(layout: StationLayout): string[] {
+  const issues: string[] = [];
+  const cr = layout.market!.crevice!, top = CREVICE.bases[CREVICE.bases.length - 1];
+  let low = 0, band = 0, cleft = 0, bed = 0;
+  for (const L of layout.levels) {
+    const g = L.grid;
+    for (let i = 0; i < g.cells.length; i++) {
+      const c = g.cells[i];
+      if (c === FLOOR) {
+        // the open crevice's tops (anything over the top boxes' roof line) inside the envelope's band; the top storey's public floors
+        // (walks, bridges, nooks / alcoves, stair heads) at least 3.5 m under it
+        const ceil = g.ceil[i], f = g.floorOf(i), a = layout.areas[g.area[i]];
+        if (ceil > top + CREVICE.cont + 0.5 && (ceil < ENVELOPE.low - 1e-3 || ceil > ENVELOPE.high + 1e-3)) band++;
+        if (L.id === CREVICE.bases.length - 1 && g.rampIdx[i] < 0 && a?.publicSpace && ceil - f < 3.5 - 1e-3) low++;
+      } else if (c === VOID) {
+        if (L.id > 0) { if (g.floorOf(i) < top + 3 || g.ceil[i] < g.floorOf(i) + 2) cleft++; }
+        else if (inBox(cr.chasm, ...g.center(i % g.w, (i / g.w) | 0)) && g.floorOf(i) > ENVELOPE.bed.lipMax + 1e-3) bed++;
+      }
+    }
+  }
+  if (low) issues.push(`${low} top-storey floor cells under 3.5 m of headroom`);
+  if (band) issues.push(`${band} overhead cells outside the envelope's band`);
+  if (cleft) issues.push(`${cleft} end-cleft cells within reach`);
+  if (bed) issues.push(`${bed} chasm-bed cells within a railing's drop`);
+  if (!cr.envelope?.clefts.length) issues.push('no end clefts');
+  return issues;
+}
+const inBox = (b: {x0: number; z0: number; x1: number; z1: number}, x: number, z: number) => x >= b.x0 && x < b.x1 && z >= b.z0 && z < b.z1;
 
 /** Which side of a counter a point lies on, across its depth (a counter runs along its longer side): -1 / 1, 0 = over it. */
 export function counterSide(c: MarketStall['counter'], x: number, z: number): -1 | 0 | 1 {
