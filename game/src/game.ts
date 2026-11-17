@@ -270,6 +270,7 @@ import {collectGlassPlanes} from './world/glassPanes';
 import {installShadowAlphaTwin} from './render/shadowOverride'; // (lane RENDER-CPU)
 import {installUploadDedupe} from './render/uploadDedupe'; // task mall-horde-performance-20261105
 import {installBindingRefresh} from './render/bindingRefresh'; // task studio-death-retry-render-fix-20261114-044607-01
+import {installGeometryDisposeRef} from './render/geometryDisposeRef'; // task studio-surface-run-field-followup-20261116-211729-01 (resource teardown)
 // task studio-rt-flashlight-compute-20261115-233136-01: RT Flashlight — the flashlight's bounce traced by WebGPU compute (render/rt/)
 import {probeRtComputeBounded, type RtProbe} from './render/rt/rtGpu';
 import {RtFlashlight} from './render/rt/rtFlashlightRuntime';
@@ -1121,6 +1122,7 @@ export class Game {
       installGlowLightNode(this.renderer); // task studio-reactor-glowing-zombies-20261115-013245-01: the irradiated zombies' gated, occluded glow lights
       installUploadDedupe(this.renderer); // task mall-horde-performance-20261105: no identical / split per-frame uniform uploads (WebGPU only)
       installBindingRefresh(this.renderer); // task studio-death-retry-render-fix-20261114-044607-01: a swapped shared texture (the station light field) reaches unchanged objects too
+      installGeometryDisposeRef(this.renderer); // (lane ACCESS, resource teardown) a disposed render object no longer stays alive with its geometry
       // Task studio-gi-mood-bounce-loading-20261115-081523-01 (lane LOAD): the pools of one instanced material share ONE node build (three
       // builds every InstancedMesh on its own: 903 of a Subway station's 1044 loading builds); `?instshare=off` = three's keyed builds
       installSharedInstancing(this.renderer);
@@ -3136,7 +3138,7 @@ export class Game {
       const flesh = this.physics.chunks.fleshPrototypes(layers);
       const pickup = this.pickups.pickupPrototypes(Object.keys(ITEMS)); // (lane PLAY: the variety weapons are their own pool's)
       const movingSets = prepareStockMovingSets(this.stock); // (lane PLAY: hidden, empty; the 'shelf-stock-moving' pool)
-      this.damage.props.dropWarmup();
+      this.damage.props.dropWarmup(retire); // (lane ACCESS: their render objects, if drawn, released after this job)
       const st = this.runtimeVariants.rebuild([
         {name: 'takeover', meshes: cm.takeover}, {name: 'highlight', meshes: cm.highlight}, {name: 'damaged', meshes: dmg.meshes}, {name: 'flesh', meshes: flesh.meshes},
         {name: 'pickup', meshes: pickup.meshes},

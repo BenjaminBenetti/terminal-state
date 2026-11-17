@@ -11,6 +11,13 @@
 //  4. [E] in the tent's car rides down: back in the station's car, the station exactly as left, no district objects / resources / frame
 //     hooks / lift views left over.
 //  5. A ride whose destination cannot be prepared (QA failure injection) returns the player to the car they left (recovered).
+//  Resource teardown, every world: exactly one live light field and one decay field on the device — the left world's released, never
+//  re-created (render/bindingRefresh.ts syncNewBindings: three r186 alone re-uploaded the left station's disposed decay / light field for
+//  the first draw of an object of a material built there, one more of each per crossing); and after a full GC no render object three
+//  disposed and no render pipeline it released is still reachable (render/geometryDisposeRef.ts: three's per-geometry dispose listener
+//  kept the first render object of every shared geometry — and its released pipeline / shader modules — alive: the ride re-keys more
+//  of them than the loading screen, measured +44 pipelines / +84 shader modules).
+import v8 from 'node:v8';
 import {afterAll, describe, expect, it, vi} from 'vitest';
 import {installHeadless} from './helpers/headlessGame';
 import {generateNetwork} from '../src/campaign/network';
@@ -70,6 +77,25 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
     // near the camera — still a real, complete job the doors wait for) keep each ride's compile short. SURFACE_LIFT_FULL=1 runs the default
     // quality with the full coverage (the product's).
     if (!process.env.SURFACE_LIFT_FULL) (globalThis as unknown as {location: {search: string}}).location.search = '?fog=off&warmup=view';
+    // the device's light / decay field textures (the validating device: one per stub), to count the live (not destroyed) ones per world
+    const fieldTextures: {label: string; tex: {destroyed?: boolean}}[] = [];
+    {
+      type Dev = {createTexture(d: {label?: string}): unknown};
+      const gpu = (globalThis as unknown as {navigator: {gpu: {requestAdapter(): Promise<{requestDevice(): Promise<Dev>}>}}}).navigator.gpu;
+      const dev = await (await gpu.requestAdapter()).requestDevice();
+      const createTexture = dev.createTexture.bind(dev);
+      dev.createTexture = (d: {label?: string}) => {
+        const tex = createTexture(d) as {destroyed?: boolean};
+        if (d?.label === 'decay-field' || d?.label === 'light-field') fieldTextures.push({label: d.label, tex});
+        return tex;
+      };
+    }
+    const liveFields = () => {
+      const n: Record<string, number> = {'decay-field': 0, 'light-field': 0};
+      for (const f of fieldTextures) if (!f.tex.destroyed) n[f.label]++;
+      return n;
+    };
+    const oneField = {'decay-field': 1, 'light-field': 1};
     try {
       const {Game} = await import('../src/game');
       const {installQaHooks} = await import('../src/qa');
@@ -91,6 +117,27 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       game.setState('title');
       requestAnimationFrame(loop);
       await game.initRenderer();
+      // three's render objects and render pipelines, held weakly (see the header)
+      const r3 = (game as unknown as {renderer: {_objects: {_renderObjects: Set<object>; createRenderObject(...a: unknown[]): object}; _pipelines: {caches: Map<string, object>; _getRenderPipeline(...a: unknown[]): object}}}).renderer;
+      const roRefs: WeakRef<object>[] = [], pipeRefs: WeakRef<object>[] = [];
+      let roClass: unknown = null;
+      {
+        const O = r3._objects, P = r3._pipelines;
+        const createRo = O.createRenderObject.bind(O), createPipe = P._getRenderPipeline.bind(P);
+        O.createRenderObject = (...a: unknown[]) => { const ro = createRo(...a); roClass ??= ro.constructor; roRefs.push(new WeakRef(ro)); return ro; };
+        P._getRenderPipeline = (...a: unknown[]) => { const p = createPipe(...a); pipeRefs.push(new WeakRef(p)); return p; };
+      }
+      /** The fields on the device; after a full GC (v8.queryObjects collects first) the disposed render objects / released pipelines still reachable. */
+      const teardown = async () => {
+        await h.waitFrames(1); // (a later task than the WeakRefs' creation)
+        (v8 as unknown as {queryObjects(c: unknown, o: {format: 'count'}): number}).queryObjects(roClass, {format: 'count'});
+        const live = r3._objects._renderObjects, cached = new Set(r3._pipelines.caches.values());
+        let disposedRo = 0, releasedPipe = 0;
+        for (const w of roRefs) { const o = w.deref(); if (o && !live.has(o)) disposedRo++; }
+        for (const w of pipeRefs) { const o = w.deref(); if (o && !cached.has(o)) releasedPipe++; }
+        return {fields: liveFields(), disposedRo, releasedPipe};
+      };
+      const clean = {fields: oneField, disposedRo: 0, releasedPipe: 0};
       await game.load(() => {});
       const until = async (f: () => boolean, max = 8000) => { for (let i = 0; i < max && !f(); i++) await h.waitFrames(1); return f(); };
       const press = async () => { G.interact(); await h.waitFrames(1); };
@@ -126,6 +173,7 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       expect(R.site?.lift, 'the station end is drawn').toEqual(acc.lift);
       expect(liftViews()).toBe(1);
       await h.waitFrames(30);
+      expect(await teardown(), 'the station: one light field, one decay field; nothing released still reachable').toEqual(clean);
       G.saveSectionMemory();
       const snapHost = () => {
         G.saveSectionMemory();
@@ -190,6 +238,7 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       let maxC = 0;
       for (let i = 0; i < 30; i++) { await h.waitFrames(1); maxC = Math.max(maxC, game.gas.exposure.c); }
       expect(maxC, 'no gas at the eye in the tent (flap shut)').toBe(0);
+      expect(await teardown(), 'the district: its own fields only (the station\'s released, none re-created); nothing released still reachable').toEqual(clean);
 
       // ---- 3. the tent's doorway: shut = a wall; open = walk out and back in --------------------------------------------------------
       const t = S.checkpoint.tent, side = t.door.side, n = side === 'N' ? [0, -1] : side === 'S' ? [0, 1] : side === 'W' ? [-1, 0] : [1, 0];
@@ -210,6 +259,7 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       await walk(400, () => face(-n[0], -n[1]), () => outward() < -2.0);
       expect(outward(), 'walked back in').toBeLessThan(-2.0);
       mark('tent walk');
+      expect(await teardown(), 'after the walk (new objects drawn in the district)').toEqual(clean);
 
       // ---- 4. the ride down --------------------------------------------------------------------------------------------------------
       expect(qa.surface.go()).toBe(true);
@@ -246,6 +296,7 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       expect(st.resources, 'the station\'s resources as they were').toEqual(res0);
       expect(st.frameHooks, 'no frame hook left over').toBe(hooks0);
       expect(liftViews(), 'one lift view: the station\'s').toBe(1);
+      expect(await teardown(), 'back at the station: its own fields only (the district\'s released, none re-created); nothing released still reachable').toEqual(clean);
       expect(R.counts.views - R.counts.disposed, 'every other lift view disposed').toBeLessThanOrEqual(2); // (the station's + the tent's, disposed with its world)
       marks.push(`lift counts ${JSON.stringify(R.counts)}`);
 
@@ -262,12 +313,16 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       expect(R.phase).toBe('idle');
       expect(R.holding).toBe(false);
       expect(liftViews()).toBe(1);
+      expect(await teardown(), 'after the recovery').toEqual(clean);
+      marks.push(`field textures created ${fieldTextures.length}; render objects ${roRefs.length}, render pipelines ${pipeRefs.length} created`);
       const sl2 = game.layout.surfaceAccess!.lift!;
       expect(P.x > sl2.cab.x0 && P.x < sl2.cab.x1 && P.z > sl2.cab.z0 && P.z < sl2.cab.z1, 'back in the car').toBe(true);
       expect(errors.filter(e => !e.includes('qa: the street is unreachable'))).toEqual([]);
       expect(frameErrors).toEqual([]);
       marks.push(`hits absorbed ${hits}`);
     } finally {
+      // (Input.lock's 1.5 s fallback timer of the last Resume reads `document`: let it fire while the page globals still exist)
+      await new Promise(res => setTimeout(res, 1600));
       h.stop();
       process.stdout.write(`surface-lift-ride: ${marks.join(' | ')}\n`);
     }
