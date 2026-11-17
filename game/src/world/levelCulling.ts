@@ -1407,8 +1407,11 @@ export class LevelCuller {
       else show = this.nearPortal(en, vis.get(en.level)) || this.nearAtrium(en, null, en.level) || this.airLevels.has(en.level) || this.overRoofs(en);
       // Task mall-round2 (lane ARCH, M09): a street exit's doors / street view only while its glazed opening may be seen (mall only)
       if (show && this.enabled && en.aperture && !this.apertureSeen(en.aperture, e, ov !== null)) { show = false; apCulled++; }
-      // Task track3 (lane PERF): the mall's slab occlusion (no planes elsewhere: Subway / Office unchanged)
-      if (show && this.enabled && this.slabs && this.slabPlanes.length && this.slabHiddenAt(en, e) && this.slabLights(en)) { show = false; slab++; }
+      // Task track3 (lane PERF): the mall's slab occlusion (no planes elsewhere: Subway / Office unchanged). Task studio-mall-parking-
+      // glass-followup-20261117-043548-01: never for a window wall's exterior (storeys + aperture): its glazing spans the storeys, so a
+      // ray from an upper storey crosses a floor plane OUTSIDE the building (no slab there) to a parked car low in the lot; the
+      // aperture gate above decides it
+      if (show && this.enabled && this.slabs && this.slabPlanes.length && !(en.levels && en.aperture) && this.slabHiddenAt(en, e) && this.slabLights(en)) { show = false; slab++; }
       // Task mall-round2 (lane PERF): same-storey occlusion last (only meshes every other rule shows; see OCCL_*)
       if (this.occl.length) {
         en.base = show;

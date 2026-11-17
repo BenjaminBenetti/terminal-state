@@ -26,6 +26,7 @@
 //    world/mallStreetExit.ts), 4 aperture-gated meshes per exit, the exterior kept under the roof deck (exits(): capY).
 
 import * as THREE from 'three';
+import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {MeshBasicNodeMaterial, MeshStandardNodeMaterial} from 'three/webgpu';
 import {abs, cameraPosition, clamp, dot, float, floor, fract, max, min, mix, normalWorld, normalize, positionWorld, smoothstep, step, uv, vec2, vec3} from 'three/tsl';
 import {CELL, FLOOR, SOLID, VOID, rampHeight, type Ramp} from '../gen/grid';
@@ -866,13 +867,16 @@ export class MallArch {
   /** All level ids (the roof, columns, sky render with every storey). */
   private get allLevels(): number[] { return this.levels.map(l => l.id); }
 
-  /** Builds the atrium architecture and dressing into `group` (before the warm-up). Returns its stats. */
-  buildAtrium(group: THREE.Group, rails: readonly RailRun[]): AtriumStats {
-    return drainSync(this.buildAtriumSteps(group, rails));
+  /**
+   * Builds the atrium architecture and dressing into `group` (before the warm-up). Returns its stats. `models`: the builder's loaded
+   * model record (task studio-mall-parking-glass-followup-20261117-043548-01: the exterior views' cooked wrecks; none = no cars drawn).
+   */
+  buildAtrium(group: THREE.Group, rails: readonly RailRun[], models: Readonly<Record<string, GLTF | undefined>> = {}): AtriumStats {
+    return drainSync(this.buildAtriumSteps(group, rails, models));
   }
 
   /** task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): buildAtrium as steps (core/pacedBuild.ts): the same parts in the same order, one per step (stats.ms: wall time). */
-  *buildAtriumSteps(group: THREE.Group, rails: readonly RailRun[]): BuildSteps<AtriumStats> {
+  *buildAtriumSteps(group: THREE.Group, rails: readonly RailRun[], models: Readonly<Record<string, GLTF | undefined>> = {}): BuildSteps<AtriumStats> {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     const add = (m: THREE.Mesh | null) => {
       if (!m) return;
@@ -883,7 +887,7 @@ export class MallArch {
     for (const fn of [
       () => this.buildRoof(add), () => this.buildBalustrades(add, rails), () => this.buildColumns(add), () => this.buildShaftTowers(add),
       () => this.buildSignage(group, add), () => this.buildBanners(add), () => this.buildEscalatorSoffits(add), () => this.buildShopfronts(add, this.mats),
-      () => this.buildFountain(add), () => this.buildAds(group, add), () => this.buildStreetExits(add),
+      () => this.buildFountain(add), () => this.buildAds(group, add), () => this.buildStreetExits(add, models),
     ]) {
       try { fn(); } catch (e) { console.warn('mall atrium: part skipped', e); }
       yield;
@@ -1748,19 +1752,21 @@ export class MallArch {
    * frame / lock / signage / vestibule, glass, the street view, its fog cards), tagged with the street storey and the exit's
    * aperture (world/levelCulling.ts draws them only while the opening may be seen). View only: nothing walkable, no gas rule.
    */
-  buildStreetExits(add: (m: THREE.Mesh | null) => void): void {
+  buildStreetExits(add: (m: THREE.Mesh | null) => void, models: Readonly<Record<string, GLTF | undefined>> = {}): void {
     this.stats.exitCost = [];
     for (const s of this.exits()) {
-      const v = buildStreetExit(s);
+      const v = buildStreetExit(s, models); // (task studio-mall-parking-glass-followup-20261117-043548-01: + the wrecks as the cooked models)
       for (const m of v.meshes) add(m);
       this.stats.exitCost.push(v.stats);
     }
     this.stats.exits = this.stats.exitCost.length;
-    // Task studio-mall-layout-variety-20261117-005520-01: the parking-lot window walls (world/mallWindows.ts: the exits' four materials,
-    // four aperture-gated meshes per wall tagged with its glazed storeys) in the same build step
+    // Task studio-mall-layout-variety-20261117-005520-01: the parking-lot window walls (world/mallWindows.ts: the exits' materials,
+    // aperture-gated meshes per wall tagged with its glazed storeys) in the same build step. Task studio-mall-parking-glass-followup-
+    // 20261117-043548-01: three meshes + the parked cars (the cooked wreck models, instanced); the glass = the live breakable panes
+    // (world/mallWindowPanes.ts, a section runtime)
     this.stats.windowCost = [];
     for (const s of this.windowWalls()) {
-      const v = buildWindowWall(s);
+      const v = buildWindowWall(s, models);
       for (const m of v.meshes) add(m);
       this.stats.windowCost.push(v.stats);
     }

@@ -11,7 +11,8 @@
 // Behind the glazing plane the grid stays SOLID: a one-cell curtain wall (glass + mullions) and then the exterior VIEW volume, which
 // world/mallWindows.ts dresses as the mall's parking lot (asphalt, stall rows, islands, light poles, abandoned cars, a parking deck and
 // the town beyond) in the street exits' outdoor shading and the Office's green murk. Collision is the SOLID cells (player / zombies /
-// bullets / sight / physics): no prop, no Door record, never the breakable shopGlazing, no Travel, no gas / exposure rule.
+// bullets / sight / physics): no prop, no Door record, never the breakable shopGlazing, no Travel. (The panes are the Office's breakable
+// windows at runtime, a broken one letting the outside gas in: world/mallWindowPanes.ts; nothing here records them.)
 //
 // WHEN: an APPEND-ONLY post-pass after the street exits (gen/mall/index.ts): only virtual daylight lights and layout.mall.windows are
 // added, so every core record and every exit of the build keep their indices and values. Placement reads only the finished grids and

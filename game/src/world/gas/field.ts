@@ -112,8 +112,10 @@ export interface GasFieldOptions {
   /** Covered cells (default: the whole grid). Fields, loops and uploads stay inside it. */
   domain?: GasDomain;
   /**
-   * Extra closed cells (grid column / row): e.g. the elevator shaft. `level` = the storey's level id (task
-   * studio-surface-run-field-followup-20261116-211729-01, lane INTERIOR: a district roof's open sky is closed on its own level only).
+   * Extra closed cells (grid column / row): e.g. the elevator shaft. `level` = the storey's level id, the storey being built (task
+   * studio-surface-run-field-followup-20261116-211729-01, lane INTERIOR: a district roof's open sky is closed on its own level only; task
+   * studio-mall-parking-glass-followup-20261117-043548-01: the Mall closes its atrium VOID cells per storey; the other worlds' callbacks
+   * ignore it).
    */
   closed?: (cx: number, cy: number, level: number) => boolean;
 }
