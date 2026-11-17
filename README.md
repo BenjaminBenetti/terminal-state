@@ -91,7 +91,7 @@ bandwidth cutoff page. GitHub artifact access follows repository permissions.
 
 `tools/release/package-ci.mjs` is the portable release path. It verifies every
 public input against the checked-in path/size/hash allowlist, rejects unexpected
-paths/types, symlinks, files over 25 MiB each, more than 1,000 files, source/maps/archives/secrets and external
+paths/types, symlinks, files over 25 MiB each, more than 1,200 shipped files, source/maps/archives/secrets and external
 or root-absolute runtime asset URLs, and preserves every copied byte. It omits
 `assets/models/*.glb` only when no bundled JS/HTML contains that exact relative
 path: the same explicit reference check as the legacy release helper. Currently
