@@ -25,7 +25,7 @@ import {WorldMaterials, COLUMN_PAINT, columnPaintGradeCpu} from '../src/world/ma
 import {buildWorld, type BuiltWorld} from '../src/world/builder';
 import {ARCH_CLASS, ZONES, finishSchemeOf, greyTint, paintTint, schemeTextures, type FinishScheme, type ZoneFinish} from '../src/world/subwayFinish';
 import {SUBWAY_WALL_TAG, SubwayArch, columnPaintMultiplier, subwayArchKeysOf} from '../src/world/subwayArch';
-import {FIN, PILASTER, buildSubwayKit, freeSpans} from '../src/world/subwayKit';
+import {FIN, PILASTER, buildSubwayKit, freeSpans, type KitInput} from '../src/world/subwayKit';
 import {BACKING, PORTAL, buildCavernKit, type CavernKitApi} from '../src/world/subwayKitCavern';
 import {SUBWAY_ARCH_TEXTURES} from '../src/assets/subwayArchTextures.generated';
 import type {TreatFace} from '../src/world/wallDetailFaces';
@@ -138,7 +138,7 @@ describe('scheme contrast: every grand hall speaks its own language', () => {
       const sub = w.subwayArch!;
       const got: {mat: string; s: [number, number, number]}[] = [];
       buildSubwayKit({box: (mat, _x, _y, _z, sx, sy, sz) => got.push({mat, s: [sx, sy, sz]}), geo: () => {}},
-        {layout: L, gridOf: l => L.levels?.[l]?.grid ?? L.grid, faces: w.wallFaces, sub});
+        {layout: L, gridOf: l => L.levels?.[l]?.grid ?? L.grid, faces: w.wallFaces as unknown as KitInput['faces'], sub});
       return {L, w, sub, got};
     };
     const b = boxesOf(3);
