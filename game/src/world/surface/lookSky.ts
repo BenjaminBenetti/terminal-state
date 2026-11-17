@@ -1,7 +1,9 @@
 // Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): THE DISTRICT'S SKY AND OUTDOOR LOOK — the overcast, toxic-tinged
 // sky dome, the scene fog the district runs under, and the OUTDOOR-LIT materials of everything with no light-field slot behind it:
 // roof decks / copings / parapets (they stand on SOLID building columns), rooftop plant, and everything beyond the grid (the cordon's
-// rubble berms, the collapsed blocks behind it, the far city).
+// rubble berms, the collapsed blocks behind it, the far city). Follow-up (task studio-surface-run-field-followup-20261116-211729-01, lane
+// FACADE): also the party walls standing over a lower neighbour's roof (outdoorFacadeMaterial: the facade's own texture + tint), and
+// every model keeps its authored face mode (the far-city / rooftop GLBs are double-sided: front-only culling showed the sky through them).
 //
 //  - FOG: an ordinary FogExp2 (the scene's) — a neutral warm grey overcast haze, NEVER green (CLAUDE.md: ordinary non-hazard fog is
 //    not green; the toxic gas is AIR's green volumetric term). ~50 % at 100 m, ~95 % at 200 m: the streets read deep, the far city is
@@ -16,7 +18,7 @@
 
 import * as THREE from 'three';
 import {MeshBasicNodeMaterial} from 'three/webgpu';
-import {Fn, abs, cameraPosition, float, max, mix, normalWorld, normalize, positionWorld, smoothstep, texture, time, uniform, uv, vec3, vec4} from 'three/tsl';
+import {Fn, abs, cameraPosition, float, max, mix, normalWorld, normalize, positionWorld, smoothstep, texture, time, uniform, uv, vec3, vec4, vertexColor} from 'three/tsl';
 import {wmNoise} from '../surfaceNodes';
 import {ownSurfaceResource} from './archMaterials';
 
@@ -108,16 +110,21 @@ export function outdoorFlatMaterial(kind: 'roof' | 'coping' | 'ground' | 'steel'
 const models = new Map<string, MeshBasicNodeMaterial>();
 /**
  * An outdoor model's material: its own (Meshy / Office) base colour map and tint under the overcast hemisphere, scene fog on.
- * One per source map (shared by every instance); the far city darkens a touch with distance (`far`).
+ * One per source map and face mode (shared by every instance); the far city darkens a touch with distance (`far`).
+ * Task studio-surface-run-field-followup-20261116-211729-01 (lane FACADE): the source's FACE MODE is kept (`side`). Every model this
+ * reaches is authored doubleSided (the Meshy ruined-city kit, the Office ruins / rubble / rooftop plant: glTF doubleSided true ->
+ * GLTFLoader DoubleSide); a fresh material defaulted to FrontSide, so the open shells' inner faces culled away and the ruins read
+ * see-through. Only the asset's own flag is carried over (a FrontSide source stays FrontSide).
  */
 export function outdoorModelMaterial(src: THREE.Material, far = false): MeshBasicNodeMaterial {
   const std = src as THREE.MeshStandardMaterial;
   const map = std.map ?? null;
-  const key = `${far ? 'far' : 'near'}:${map ? map.uuid : (std.color ?? new THREE.Color(0x777777)).getHexString()}`;
+  const side = src.side ?? THREE.FrontSide;
+  const key = `${far ? 'far' : 'near'}:${side}:${map ? map.uuid : (std.color ?? new THREE.Color(0x777777)).getHexString()}`;
   let m = models.get(key);
   if (m) return m;
   const tint = std.color ?? new THREE.Color(0xffffff);
-  m = new MeshBasicNodeMaterial({name: far ? 'surface-far-model' : 'surface-outdoor-model'});
+  m = new MeshBasicNodeMaterial({name: far ? 'surface-far-model' : 'surface-outdoor-model', side});
   m.colorNode = Fn(() => {
     const albedo = n(map ? n(texture(map, uv())).rgb.mul(vec3(tint.r, tint.g, tint.b)) : vec3(tint.r, tint.g, tint.b));
     const nn = n(normalWorld);
@@ -132,6 +139,34 @@ export function outdoorModelMaterial(src: THREE.Material, far = false): MeshBasi
   return track(m);
 }
 
+/** The outdoor-lit facade finishes (outdoorFacadeMaterial): the texture set each draws (none: the flat paint / panel colour). */
+export type OutdoorFacadeKind = 'brick' | 'concrete' | 'rusted' | 'flat';
+const facades = new Map<string, MeshBasicNodeMaterial>();
+/**
+ * Task studio-surface-run-field-followup-20261116-211729-01 (lane FACADE): an OUTDOOR-LIT FACADE — the wall finish of a facade face
+ * whose outside is a SOLID column (a party wall where it rises above a lower neighbour's roof, a wall over the cordon): like the roof
+ * decks beside it there is no light-field slot out there (closed columns hold zero light), so the field-lit facade program would draw
+ * it black. Its own family's existing texture (`map`: the Skyways brick / the Reactor pit concrete / rusted steel, sampled by the
+ * part's metre UVs over the set's span; null = the flat paint / panel colour) x the building's linear tint from the geometry's 'color'
+ * attribute (the member material's own colour factor, so the albedo is the field-lit facade's) under the same overcast hemisphere
+ * and rain streaks as the outdoor models, scene fog on. One per (kind, map): every building's tint rides in its vertices.
+ */
+export function outdoorFacadeMaterial(kind: OutdoorFacadeKind, map: THREE.Texture | null): MeshBasicNodeMaterial {
+  const key = `${kind}:${map ? map.uuid : '-'}`;
+  let m = facades.get(key);
+  if (m) return m;
+  m = new MeshBasicNodeMaterial({name: `surface-outfacade-${kind}`});
+  m.colorNode = Fn(() => {
+    const albedo = n(map ? n(texture(map, uv())).rgb.mul(n(vertexColor()).rgb) : n(vertexColor()).rgb);
+    const nn = n(normalWorld);
+    const streak = n(smoothstep(0.55, 0.85, n(wmNoise(n(vec3(n(positionWorld).x.add(n(positionWorld).z).mul(1.7), n(positionWorld).y.mul(0.08), 2.1)))))).mul(0.22);
+    return vec4(n(albedo).mul(float(1).sub(streak)).mul(hemi(nn)), 1);
+  })();
+  facades.set(key, m);
+  m.addEventListener('dispose', () => { if (facades.get(key) === m) facades.delete(key); });
+  return track(m);
+}
+
 /** Every material this module created and still holds (released with the district's level resources; tests: releaseLookMaterials). */
 export const liveLookMaterials = (): number => created.size;
 
@@ -141,5 +176,6 @@ export function releaseLookMaterials(): number {
   for (const m of list) m.dispose();
   flats.clear();
   models.clear();
+  facades.clear();
   return list.length;
 }

@@ -13,7 +13,7 @@ import type {Kit} from '../stationKit';
 import type {LightPlacement, PickupPlacement, Side, SignPlacement, ZombieSpawn} from '../stationTypes';
 import type {PropPlacement} from '../props';
 import type {LevelLink} from '../levels';
-import type {SurfaceBuilding, SurfaceDepotFeatures, SurfaceEntrance, SurfaceRecoverable, SurfaceWindowSpan} from './surfaceTypes';
+import type {SurfaceBuilding, SurfaceDepotFeatures, SurfaceEntrance, SurfaceRecoverable, SurfaceRoofAccess, SurfaceWindowSpan} from './surfaceTypes';
 import type {InteriorFloor, InteriorPlan, InteriorPlanner, PlannedEntrance} from './rooms/api';
 import {crH, crW, type CR} from './cityFrame';
 import {KERB, SLAB, type BuildingPlan} from './cityBlocks';
@@ -176,7 +176,7 @@ const VALID_DOORS: ReadonlySet<string> = new Set(['closed', 'open', 'smashed', '
  * `outdoor`: every outdoor area id. Host buildings / the tent / the headhouse are GEN's own. Kept doorways go into kit.doors.
  */
 export function planInteriors(kit: Kit, gm: GroundMap, outdoor: ReadonlySet<number>, plans: BuildingPlan[], rec: SurfaceBuilding[], rng: Rng, planner: InteriorPlanner,
-  depot: DepotDoors, props: PropPlacement[]): InteriorsOut {
+  depot: DepotDoors, props: PropPlacement[], deep = false): InteriorsOut {
   const out: InteriorsOut = {lights: [], signs: [], pickups: [], zombies: [], windows: [], links: [], recoverables: null, depotFeatures: null, enemies: new Map(), ms: 0};
   const g = kit.g;
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -186,8 +186,10 @@ export function planInteriors(kit: Kit, gm: GroundMap, outdoor: ReadonlySet<numb
     const doors = planDoors(kit, gm, outdoor, b, rng.fork(`doors-${b.id}`), b.id === depot.id ? depot : undefined);
     if (!doors.length) { rec[b.id].enterable = false; rec[b.id].destination = false; continue; }
     const t0 = now();
+    // (v2, lane INTERIOR) the deep plan: its roof, when the storey plan gave it one, on the level above the walkable storeys
+    const roof = deep && b.roof && b.walk < kit.levelGrids.length ? {level: b.walk, y: roofOf(b), parapet: b.parapet} : null;
     const plan: InteriorPlan = planner({kit, building: rec[b.id], rect: {x: b.r.x0, y: b.r.y0, w: crW(b.r), h: crH(b.r)}, floors: floorsOf(b), entrances: doors.map(d => d.pe), rng: brng,
-      firstArea: kit.areas.length});
+      firstArea: kit.areas.length, ...(deep ? {deep: {roof}} : {})});
     out.ms += now() - t0;
     // entrances: the planner's door state (GEN: >= 1 passable); kept ones carved into the street grid (a boarded doorway stays SOLID)
     const ents: {e: SurfaceEntrance; dp: DoorPlan}[] = [];
@@ -221,7 +223,9 @@ export function planInteriors(kit: Kit, gm: GroundMap, outdoor: ReadonlySet<numb
     for (const w of plan.windows) out.windows.push({...w, building: b.id});
     out.links.push(...plan.links);
     const r = rec[b.id];
-    r.areas = [...plan.areas];
+    // (v2, lane INTERIOR) a reachable roof's own areas are OUTDOORS (open sky over the parapet): listed on roofAccess, never as rooms
+    const roofAreas = new Set(deep ? (plan.features?.roof as SurfaceRoofAccess | undefined)?.areas ?? [] : []);
+    r.areas = plan.areas.filter(a => !roofAreas.has(a));
     r.levels = [...new Set(plan.areas.map(a => kit.areas[a]?.level ?? 0))].sort((p, q) => p - q);
     r.entrances = ents.map(q => q.e);
     r.windows = plan.windows.map(w => w.id);
@@ -230,6 +234,9 @@ export function planInteriors(kit: Kit, gm: GroundMap, outdoor: ReadonlySet<numb
     if (b.id === depot.id) out.recoverables = plan.recoverables?.length ? plan.recoverables : null;
     // (lane ROOMS) the depot's shed gear for LOOK (InteriorPlan.features.depot: pure data, world metres, this layout's ids)
     if (b.id === depot.id) out.depotFeatures = (plan.features?.depot as SurfaceDepotFeatures | undefined) ?? null;
+    // (v2, lane INTERIOR) its reachable roof (InteriorPlan.features.roof): the roof door is a real door of the building (not a street entrance)
+    const ra = deep ? plan.features?.roof as SurfaceRoofAccess | undefined : undefined;
+    if (ra && r.enterable) r.roofAccess = ra;
   }
   return out;
 }

@@ -504,6 +504,8 @@ export class PropDamage {
    * Iteration 13 (MAT-B): the warm clone shares its node graph with every later damage clone of the
    * same source (memoNode), so the node build + pipeline it triggers is the one the first hit uses.
    * It carries no PartData (reads zeros: no damage).
+   * Lane ACCESS (resource teardown): a source material disposed with its world (a world-owned material, e.g. a Surface Run
+   * district's: a new set per build) takes its warm clone with it — the page keeps warm clones only of materials still in use.
    */
   warmup(): number {
     const seen = new Set<THREE.Material>();
@@ -515,6 +517,14 @@ export class PropDamage {
       if (!c) return;
       addPropDamageHooks(c);
       PropDamage.warmMats.set(m, c as unknown as THREE.Material);
+      const warmClone = c as unknown as THREE.Material;
+      const prune = () => {
+        m.removeEventListener('dispose', prune);
+        if (PropDamage.warmMats.get(m) !== warmClone) return;
+        PropDamage.warmMats.delete(m);
+        if (warmClone !== m) warmClone.dispose();
+      };
+      m.addEventListener('dispose', prune);
       const mesh = new THREE.Mesh(geo, c as unknown as THREE.Material);
       mesh.matrixAutoUpdate = false;
       mesh.matrix.copy(ZERO);
@@ -583,10 +593,18 @@ export class PropDamage {
     return {meshes, geometries};
   }
 
-  /** Remove the pre-warm meshes (call once the first frames have rendered). */
-  dropWarmup(): void {
-    for (const m of this.warm) this.group.remove(m);
-    this.warm.length = 0;
+  /**
+   * Remove the pre-warm meshes (once the first frames have rendered, or when the prototypes take over). Without `retire` (the first
+   * played frames, a teardown) their render objects stay: they keep the station's first-hit programs compiled, as before.
+   * Lane ACCESS (resource teardown): with `retire` — the warm-up / journey preparation hands the warm role to its play-only damage
+   * prototypes (Game.refreshRuntimeVariants) — the render objects three made for them (a world drawn while it was prepared: the lift
+   * ride's frames in the transit gap; the loading screen never draws them) are released with the world's other queued releases, after
+   * that job re-used the programs (every ride left one more set before: 37-67 meshes).
+   */
+  dropWarmup(retire?: (release: () => void) => void): void {
+    const dropped = this.warm.splice(0);
+    for (const m of dropped) this.group.remove(m);
+    if (retire && dropped.length) retire(() => { for (const m of dropped) (m as unknown as THREE.EventDispatcher<{dispose: object}>).dispatchEvent({type: 'dispose'}); });
   }
 
   get warming(): number {

@@ -12,7 +12,8 @@
 //  - BUILDINGS: per building its facade style (archStyles.ts), tint, storey height, roof line (a RUIN PROFILE per facade side: damaged =
 //    a collapsed corner notch, gutted = a jagged burnt top, collapsed = a low jagged stump), roof decks, decorative window grid per
 //    storey (glass / broken / boarded / dark / shutter), GEN's live window spans (AIR's panes: cut + framed, never glazed here),
-//    shopfront bays + runtime-text signs, fire escapes, rooftop clutter and rubble.
+//    shopfront bays + runtime-text signs, fire escapes, rooftop clutter and rubble; (lane FACADE) the facade detail pass
+//    (facadeDetail.ts: shed / garage row repair, closed windows, awnings, relief) and the exposed stretches no builder face covers.
 //  - TENT: the checkpoint command tent's frame (walls, pitched roof, flap door seam for AIR, guy lines).
 // Deterministic from the district seed (its own hash streams: never GEN's generator streams). Memoized per layout.
 
@@ -21,7 +22,9 @@ import type {Side, StationLayout} from '../../gen/stationTypes';
 import type {SRect, SurfaceBuilding, SurfaceInfo, SurfaceStreet, SurfaceWindowSpan} from '../../gen/surface/surfaceTypes';
 import {mulberry32} from '../../core/rng';
 import {drainSync, type BuildSteps} from '../../core/pacedBuild';
+import {DEFAULT_CEIL} from '../levelGeometry';
 import {FACADE_STYLES, INTERIOR_LOOKS, SHOPFRONT_NAMES, interiorFamilyOf, surfaceStyleOf, type FacadeStyle, type InteriorFamily} from './archStyles';
+import {EMPTY_FACADE_DETAIL, planFacadeDetail, type FacadeDetail} from './facadeDetail';
 
 /**
  * Lane GEN's OPTIONAL shape / ground records (gen/surface/surfaceTypes.ts additive fields): read when present, the skeleton path
@@ -106,7 +109,24 @@ export interface FacadeSide {
   open: boolean;
   frontage: boolean;
   tops: TopSeg[];
+  /**
+   * (lane FACADE) The stretches of this side's wall plane that stand EXPOSED but that no builder face covers (bareRuns): the arch draws
+   * them from `y0` up to the roof line. Empty when the builder's faces cover the whole side.
+   */
+  bare: BareRun[];
 }
+/**
+ * Task studio-surface-run-field-followup-20261116-211729-01 (lane FACADE): a stretch of a facade side the builder's grid faces miss.
+ * The builder emits a wall face only toward an OPEN cell, over that cell's band (world/levelGeometry.ts: floor .. its ceiling). So:
+ *  - 'outdoor': the cell outside is SOLID — a lower NEIGHBOUR's mass (its party wall, from its roof line up), the cordon / a debris
+ *    block / the tent (from their tops up): no face there at all, and no light-field slot either (the arch draws it outdoor-lit);
+ *  - 'field': the cell outside is open street, but the roof line rises above its band top (the outdoor band ends at SKY_CEIL, 40 m:
+ *    the Office host tower's top storeys): the field's top layer lights it like the facade below.
+ * `base`: the face's texture base (the open cell's floor, as the builder's face below; the building's ground floor for 'outdoor').
+ */
+export interface BareRun { s0: number; s1: number; y0: number; lit: 'field' | 'outdoor'; base: number }
+/** (lane FACADE) A vertical step between two roof decks of one building (a damaged shell's collapsed corner): its face toward the lower deck. */
+export interface DeckStep { alongX: boolean; plane: number; n: 1 | -1; s0: number; s1: number; y0: number; y1: number }
 export interface ShopSign { side: Side; s0: number; s1: number; y0: number; y1: number; text: string; plane: number; n: 1 | -1; alongX: boolean }
 export interface FireEscape {
   side: Side; s: number; plane: number; n: 1 | -1; alongX: boolean; levels: number[];
@@ -143,6 +163,8 @@ export interface BuildingLook {
   interiors: [number, number][];
   /** Absolute y of the highest interior ceiling (0: none). */
   ceilTop: number;
+  /** (lane FACADE) Closed windows, awnings, relief (facadeDetail.ts; its row repair already applied to `holes`). */
+  detail: FacadeDetail;
 }
 
 export interface TentPlan {
@@ -205,6 +227,12 @@ export interface SurfaceLookPlan {
   placements: Placement[];
   /** The playable rect inside the cordon (world m). */
   inner: SRect;
+  /**
+   * (task studio-surface-run-field-followup-20261116-211729-01, lane FOG) The cordon WALL is drawn (its faces, barricades, coping, its
+   * daylight obstruction): a version-1 district. A version-2 district has no visible perimeter wall — its fog-pressure boundary
+   * (surface.boundary) — and its thin last-resort SOLID ring is never drawn (the surroundings are pulled in to it: lookCity.ts).
+   */
+  wall: boolean;
   stats: Record<string, number>;
 }
 
@@ -536,12 +564,14 @@ function* planSurfaceLook(layout: StationLayout, S: SurfaceInfo): BuildSteps<Sur
   const spans = new Map(S.windows.map(w => [w.id, w]));
   const buildings: BuildingLook[] = [];
   for (const b of S.buildings) {
-    buildings.push(planBuilding(layout, b, ground, spans, seed));
+    const bl = planBuilding(layout, b, ground, spans, seed);
+    bl.detail = planFacadeDetail(layout, bl, seed); // (lane FACADE: its own stream; after every draw of the building's)
+    buildings.push(bl);
     if (buildings.length % 4 === 0) yield PLAN_STEP;
   }
   yield PLAN_STEP;
   // the tent is drawn by the tent build (canvas walls via OWNER.tent, the roof, the flap): no facade parts of its own
-  for (const bl of buildings) if (tentIds.has(bl.id)) { bl.sides = []; bl.holes = []; bl.signs = []; bl.escapes = []; bl.decks = []; }
+  for (const bl of buildings) if (tentIds.has(bl.id)) { bl.sides = []; bl.holes = []; bl.signs = []; bl.escapes = []; bl.decks = []; bl.detail = EMPTY_FACADE_DETAIL; }
   // scorch decals on the ground below burnt-out openings (soot fans) — on the sidewalk only
   for (const bl of buildings) for (const h of bl.holes) {
     if (!h.scorch || h.storey !== 0) continue;
@@ -550,10 +580,13 @@ function* planSurfaceLook(layout: StationLayout, S: SurfaceInfo): BuildSteps<Sur
     decals.push({kind: 'scorch', x0: Math.min(x0, x1), z0: Math.min(z0, z1), x1: Math.max(x0, x1), z1: Math.max(z0, z1), y: floorAt((x0 + x1) / 2, (z0 + z1) / 2) + LOOK_TUNE.decalY + 0.001});
   }
   // rooftop clutter / water tanks / rubble on the decks
-  const placements: Placement[] = [];
+  const kept: Placement[] = [];
   const pr = stream(seed, 23);
   for (const bl of buildings) {
     if (bl.style.wall === 'canvas') continue;
+    // (v2, lane INTERIOR, task studio-surface-run-field-followup-20261116-211729-01) a reachable roof carries its plant as real props
+    // (gen/surface/rooms/deepStores.ts): its look clutter is drawn from the stream as before (the other roofs' picks stay) and dropped
+    const into = bl.b.roofAccess ? [] as Placement[] : kept;
     for (const d of bl.decks) {
       const w = d.x1 - d.x0, dd = d.z1 - d.z0;
       if (w < 4 || dd < 4) continue;
@@ -561,18 +594,26 @@ function* planSurfaceLook(layout: StationLayout, S: SurfaceInfo): BuildSteps<Sur
       const ins = (v: number, a: number, b: number, m: number) => a + m + v * Math.max(0, b - a - 2 * m);
       if (d.burnt) {
         const nr = clamp(Math.round(area / 90), 1, 5);
-        for (let k = 0; k < nr; k++) placements.push({model: 'rubble', x: ins(pr(), d.x0, d.x1, 2.5), z: ins(pr(), d.z0, d.z1, 2.5), y: d.y - 0.5, yaw: pr() * Math.PI * 2, s: 0.6 + pr() * 0.7});
+        for (let k = 0; k < nr; k++) into.push({model: 'rubble', x: ins(pr(), d.x0, d.x1, 2.5), z: ins(pr(), d.z0, d.z1, 2.5), y: d.y - 0.5, yaw: pr() * Math.PI * 2, s: 0.6 + pr() * 0.7});
         continue;
       }
       const nc = clamp(Math.round(area / 100 * bl.style.clutter), 0, 4);
-      for (let k = 0; k < nc; k++) placements.push({model: pr() < 0.7 ? 'hvac' : 'vent', x: ins(pr(), d.x0, d.x1, 2.2), z: ins(pr(), d.z0, d.z1, 2.2), y: d.y, yaw: Math.floor(pr() * 4) * Math.PI / 2, s: 0.9 + pr() * 0.25});
-      if (bl.style.tanks && bl.storeys >= 3 && pr() < 0.7) placements.push({model: 'tank', x: ins(pr(), d.x0, d.x1, 3.5), z: ins(pr(), d.z0, d.z1, 3.5), y: d.y, yaw: pr() * Math.PI, s: 0.85 + pr() * 0.2});
+      for (let k = 0; k < nc; k++) into.push({model: pr() < 0.7 ? 'hvac' : 'vent', x: ins(pr(), d.x0, d.x1, 2.2), z: ins(pr(), d.z0, d.z1, 2.2), y: d.y, yaw: Math.floor(pr() * 4) * Math.PI / 2, s: 0.9 + pr() * 0.25});
+      if (bl.style.tanks && bl.storeys >= 3 && pr() < 0.7) into.push({model: 'tank', x: ins(pr(), d.x0, d.x1, 3.5), z: ins(pr(), d.z0, d.z1, 3.5), y: d.y, yaw: pr() * Math.PI, s: 0.85 + pr() * 0.2});
     }
   }
+  const placements = kept;
 
   yield PLAN_STEP;
   const tent = planTent(S, owner, W, tentB ?? null, floorAt);
   yield PLAN_STEP;
+  // (lane FACADE) the wall stretches no builder face covers (party walls over lower neighbours, roof lines over the outdoor band)
+  let bareK = 0;
+  stats.bareRuns = 0;
+  for (const bl of buildings) {
+    for (const sd of bl.sides) { sd.bare = bareRuns(layout, owner, buildings, tent, bl, sd); stats.bareRuns += sd.bare.length; }
+    if (++bareK % 16 === 0) yield PLAN_STEP;
+  }
   const depot = depotGear(S, floorAt);
   const rail = genRail(GG, floorAt) ?? planRail(S, buildings, segments, floorAt, !!depot?.tracks.length);
   stats.buildings = buildings.length;
@@ -586,7 +627,7 @@ function* planSurfaceLook(layout: StationLayout, S: SurfaceInfo): BuildSteps<Sur
   stats.depotTracks = depot?.tracks.length ?? 0;
   stats.depotPits = depot?.pits.length ?? 0;
   stats.depotCrane = depot?.crane ? 1 : 0;
-  return {W, H, seed, ground, owner, outdoorAreas, areaBuilding, tentAreas, doorCells, segments, decals, discs, buildings, spans, tent, rail, depot, placements, inner, stats};
+  return {W, H, seed, ground, owner, outdoorAreas, areaBuilding, tentAreas, doorCells, segments, decals, discs, buildings, spans, tent, rail, depot, placements, inner, wall: !S.boundary, stats};
 }
 
 function axisRect(kind: DecalKind, axis: 'x' | 'z', s0: number, s1: number, c0: number, c1: number, y: number): Decal {
@@ -635,7 +676,7 @@ const HOLE_ODDS: Readonly<Record<SurfaceBuilding['condition'], readonly [HoleKin
   gutted: [['glass', 0.04], ['broken', 0.2], ['boarded', 0.14], ['dark', 0.62]],
   collapsed: [['broken', 0.25], ['boarded', 0.1], ['dark', 0.65]],
 };
-const rollHole = (r: () => number, cond: SurfaceBuilding['condition']): HoleKind => {
+export const rollHole = (r: () => number, cond: SurfaceBuilding['condition']): HoleKind => {
   let u = r();
   for (const [k, p] of HOLE_ODDS[cond] ?? HOLE_ODDS.intact) { if ((u -= p) <= 0) return k; }
   return 'dark';
@@ -692,7 +733,7 @@ function planBuilding(layout: StationLayout, b: SurfaceBuilding, ground: Uint8Ar
     }
     roadScore.set(side, road);
     // (GEN's `exposed` sides, when published, decide which faces are party walls)
-    return {side, plane, n, s0, s1, alongX, open: gs.exposed ? gs.exposed.includes(side) : open >= 3, frontage: false, tops: []};
+    return {side, plane, n, s0, s1, alongX, open: gs.exposed ? gs.exposed.includes(side) : open >= 3, frontage: false, tops: [], bare: []};
   });
   const front = gs.frontage ?? b.entrances[0]?.side ?? [...sides].sort((p, q) => roadScore.get(q.side)! - roadScore.get(p.side)! || (q.s1 - q.s0) - (p.s1 - p.s0))[0].side;
   for (const sd of sides) sd.frontage = sd.side === front;
@@ -849,7 +890,7 @@ function planBuilding(layout: StationLayout, b: SurfaceBuilding, ground: Uint8Ar
   }
   const key = `surface-facade-${style.wall}-${tint.toString(16).padStart(6, '0')}`;
   const trimKey = `surface-trim-${style.trim.toString(16).padStart(6, '0')}`;
-  return {id: b.id, b, style, tint, family, key, trimKey, storeyH, storeys, storeyY, storeyHs, top, deck, minTop, sides, holes, signs, escapes, decks, interiors, ceilTop};
+  return {id: b.id, b, style, tint, family, key, trimKey, storeyH, storeys, storeyY, storeyHs, top, deck, minTop, sides, holes, signs, escapes, decks, interiors, ceilTop, detail: EMPTY_FACADE_DETAIL};
 }
 
 function planTent(S: SurfaceInfo, owner: Int16Array, W: number, tb: SurfaceBuilding | null, floorAt: (x: number, z: number) => number): TentPlan | null {
@@ -949,6 +990,87 @@ function planRail(S: SurfaceInfo, buildings: BuildingLook[], segs: StreetSeg[], 
   const end = para ? (toLow ? para.s0 - 4 : para.s1 + 4) : c + sgn * 40;
   pts.push(P(end, out));
   return {points: pts, y: floorAt(pts[0].x, pts[0].z), gauge: 1.435, buffer: (() => { const p = pts[0]; return {x: p.x, z: p.z, yaw: alongX ? 0 : Math.PI / 2}; })()};
+}
+
+const OPPOSITE: Readonly<Record<Side, Side>> = {N: 'S', S: 'N', W: 'E', E: 'W'};
+
+/**
+ * Task studio-surface-run-field-followup-20261116-211729-01 (lane FACADE; user: "missing / see-through building faces"): the stretches of
+ * side `sd` of building `bl` no builder face covers although they stand exposed (BareRun). Measured on the built world (a face audit of
+ * every exposed wall plane, street to parapet, over three districts): every gap was a PARTY WALL where a building rises above a lower
+ * neighbour (~15,000 m² a district: no face at all, the neighbour's parapet back-faces behind it — the sky showed through the
+ * building), plus the Office host tower's top 8 m above the outdoor band (SKY_CEIL 40 m). Walked one grid cell at a time along the
+ * side: the cell just outside decides where the exposure starts (an open street cell: its band top, where the builder's face ends; a
+ * neighbour's mass: its roof line on the facing side; the cordon / debris / tent: their tops) and how it is lit. Runs whose bottom is
+ * not under the roof line anywhere are dropped; the arch clips the rest to the roof line (ruin profiles) and cuts its windows.
+ */
+export function bareRuns(layout: StationLayout, owner: Int16Array, buildings: readonly BuildingLook[], tent: TentPlan | null, bl: BuildingLook, sd: FacadeSide): BareRun[] {
+  const levels = layout.levels?.length ? layout.levels : [{grid: layout.grid, baseY: 0}];
+  const g0 = levels[0].grid, W = g0.w, H = g0.h;
+  const out: BareRun[] = [];
+  const c0 = Math.floor(sd.s0 / CELL + 1e-6), c1 = Math.ceil(sd.s1 / CELL - 1e-6);
+  const oc = Math.floor((sd.plane + sd.n * CELL / 2) / CELL);
+  const base0 = bl.storeyY[0] ?? 0;
+  for (let c = c0; c < c1; c++) {
+    const cx = sd.alongX ? c : oc, cz = sd.alongX ? oc : c;
+    if (cx < 0 || cz < 0 || cx >= W || cz >= H) continue;
+    const i = cz * W + cx, s = (c + 0.5) * CELL, own = owner[i];
+    let y0 = NaN, lit: BareRun['lit'] = 'outdoor', base = base0;
+    const neighbour = (id: number): number => {
+      const nb = buildings[id];
+      if (!nb || !nb.sides.length) return tent ? tent.ridge : nb ? nb.top : NaN;
+      const os = nb.sides.find(q => q.side === OPPOSITE[sd.side] && Math.abs(q.plane - sd.plane) < 1e-3);
+      return os ? topAt(os, s, nb.top) : nb.top;
+    };
+    if (g0.cells[i] === FLOOR) {
+      if (own >= 0 && own !== bl.id) y0 = neighbour(own); // another building's room: its mass above (its ceilings closed)
+      else if (own < 0) {
+        // open street: the builder's face stands over the cell's band (the highest open band of the column)
+        let top = -Infinity;
+        for (const lv of levels) {
+          const g = lv.grid;
+          if (g.cells[i] !== FLOOR) continue;
+          top = Math.max(top, g.hasCeil(i) ? g.ceil[i] : g.floor[i] + DEFAULT_CEIL);
+        }
+        y0 = top; lit = 'field'; base = g0.floor[i];
+      }
+    } else if (g0.cells[i] === SOLID) {
+      if (own >= 0 && own !== bl.id) y0 = neighbour(own);
+      // the cordon wall hides the side below its coping; a fog-boundary district's last-resort ring is never drawn (no wall: exposed from the floor)
+      else if (own === OWNER.cordon) y0 = layout.surface?.boundary ? base0 : LOOK_TUNE.cordonH + 0.18;
+      else if (own === OWNER.debris) y0 = LOOK_TUNE.debrisH;
+      else if (own === OWNER.tent) y0 = tent ? tent.ridge : LOOK_TUNE.tentRidge;
+    }
+    if (!Number.isFinite(y0) || !(topAt(sd, s, bl.top) > y0 + 0.05)) continue;
+    const a = Math.max(sd.s0, c * CELL), b = Math.min(sd.s1, (c + 1) * CELL), l = out[out.length - 1];
+    if (l && Math.abs(l.s1 - a) < 1e-6 && l.lit === lit && Math.abs(l.y0 - y0) < 1e-4 && Math.abs(l.base - base) < 1e-4) l.s1 = b;
+    else out.push({s0: a, s1: b, y0, lit, base});
+  }
+  return out;
+}
+
+/**
+ * (lane FACADE) The vertical steps between the decks of one building at different heights — a damaged shell's collapsed corner: its
+ * lower burnt deck beside the main roof (archPlan planBuilding). Nothing closed that step: from the street the eye looked over the
+ * notch's low walls straight under the main deck (the face audit: ~3,000 m² a district). One step per shared deck edge, facing the
+ * lower deck, from its floor to the higher deck.
+ */
+export function deckSteps(bl: Pick<BuildingLook, 'decks'>): DeckStep[] {
+  const out: DeckStep[] = [];
+  const D = bl.decks.filter(d => d.x1 - d.x0 > 0.2 && d.z1 - d.z0 > 0.2);
+  for (const lo of D) for (const hi of D) {
+    if (!(hi.y > lo.y + 0.05)) continue;
+    const zs = [Math.max(lo.z0, hi.z0), Math.min(lo.z1, hi.z1)], xs = [Math.max(lo.x0, hi.x0), Math.min(lo.x1, hi.x1)];
+    if (zs[1] - zs[0] > 0.05) {
+      if (Math.abs(lo.x1 - hi.x0) < 1e-3) out.push({alongX: false, plane: lo.x1, n: -1, s0: zs[0], s1: zs[1], y0: lo.y, y1: hi.y});
+      if (Math.abs(lo.x0 - hi.x1) < 1e-3) out.push({alongX: false, plane: lo.x0, n: 1, s0: zs[0], s1: zs[1], y0: lo.y, y1: hi.y});
+    }
+    if (xs[1] - xs[0] > 0.05) {
+      if (Math.abs(lo.z1 - hi.z0) < 1e-3) out.push({alongX: true, plane: lo.z1, n: -1, s0: xs[0], s1: xs[1], y0: lo.y, y1: hi.y});
+      if (Math.abs(lo.z0 - hi.z1) < 1e-3) out.push({alongX: true, plane: lo.z0, n: 1, s0: xs[0], s1: xs[1], y0: lo.y, y1: hi.y});
+    }
+  }
+  return out;
 }
 
 /** Look summary of one building (QA / tests). */

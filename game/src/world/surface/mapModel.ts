@@ -22,6 +22,7 @@
 import type {SRect, SurfaceBuildingKind, SurfaceInfo, SurfaceNote} from '../../gen/surface/surfaceTypes';
 import {EQUIPMENT, recoverableKind} from '../../craft/equipment';
 import {isSet, type ExploreGrid} from './mapExplore';
+import {depotRecoverables} from './cargoSeed'; // (lane FIXES: the one train upgrade a depot is seeded with)
 
 export type MapTone = SurfaceNote['kind'];
 
@@ -160,8 +161,17 @@ export function refHolds(s: SurfaceInfo, ref: MapRef, x: number, z: number): boo
     case 'block': { const bl = s.blocks.find(q => q.id === ref.id); return !!bl && inRect(bl.rect, x, z); }
     case 'checkpoint': return inRect(s.checkpoint.rect, x, z, 1);
     case 'portal': return Math.hypot(x - s.portal.pose.x, z - s.portal.pose.z) < 0.01;
-    case 'truck': case 'player': return inRect(s.extent, x, z, 2);
+    case 'truck': case 'player': return inRect(markerBounds(s), x, z, 2);
   }
+}
+
+/**
+ * Where the live truck / player markers are shown: the playable extent, or (a v2 district: task studio-surface-run-field-followup-
+ * 20261116-211729-01) out to the fog-pressure boundary's walkable edge — a truck broken down in the outer fog stays on the map.
+ */
+export function markerBounds(s: SurfaceInfo): SRect {
+  const e = s.boundary?.edge;
+  return e ? {x0: Math.min(e.x0, s.extent.x0), z0: Math.min(e.z0, s.extent.z0), x1: Math.max(e.x1, s.extent.x1), z1: Math.max(e.z1, s.extent.z1)} : s.extent;
 }
 
 /** Printed name of a depot recoverable / train unit kind (craft/equipment.ts: an equipment kind or an upgrade id -> its kit), lower case. */
@@ -244,10 +254,13 @@ export function buildPlanningMap(s: SurfaceInfo, st: MapState): PlanningMap {
       if (broken > 0) reports.push({x: c.x, z: c.z, text: `Broken windows (${broken}) — gas gets in`, kind: 'hazard', source: 'life', key: 'windows'});
     }
   }
-  if (!replaced.has('recoverables') && s.depot.recoverables.length) {
+  // (task studio-surface-run-field-followup-20261116-211729-01, lane FIXES: the depot reports the ONE train upgrade a first entry seeds —
+  // a live cargo source, which knows a depot seeded before that rule, replaces this)
+  const held = depotRecoverables(s, false);
+  if (!replaced.has('recoverables') && held.length) {
     const d = s.buildings.find(b => b.id === s.depot.building);
     if (d) {
-      const names = [...new Set(s.depot.recoverables.map(r => recoverableName(r.kind)))];
+      const names = [...new Set(held.map(r => recoverableName(r.kind)))];
       const c = centre(d.footprint);
       reports.push({x: c.x, z: c.z, text: `Train units reported: ${names.join(', ')}`, kind: 'supply', source: 'life', key: 'recoverables'});
     }
@@ -258,9 +271,14 @@ export function buildPlanningMap(s: SurfaceInfo, st: MapState): PlanningMap {
     markers.push({id: `r${k}`, kind: 'report', x: r.x, z: r.z, label: r.text, symbol: TONE_SYMBOL[r.kind] ?? 'info', grid: ref(r.x, r.z), ref: at, tone: r.kind});
   });
   // the live truck and the player
-  const inside = (p: MapPose | null | undefined): p is MapPose => !!p && Number.isFinite(p.x) && Number.isFinite(p.z) && inRect(s.extent, p.x, p.z, 2);
-  if (inside(st.truck)) markers.push({id: 'truck', kind: 'truck', x: st.truck.x, z: st.truck.z, yaw: st.truck.yaw, label: 'Truck', symbol: 'truck', grid: ref(st.truck.x, st.truck.z), ref: {type: 'truck'}});
-  if (inside(st.player)) markers.push({id: 'player', kind: 'player', x: st.player.x, z: st.player.z, yaw: st.player.yaw, label: 'You', symbol: 'player', grid: ref(st.player.x, st.player.z), ref: {type: 'player'}});
+  const inside = (p: MapPose | null | undefined): p is MapPose => !!p && Number.isFinite(p.x) && Number.isFinite(p.z) && inRect(markerBounds(s), p.x, p.z, 2);
+  // (lead, integration) beyond the drawn sheet (a v2 district's outer fog, out to its walkable edge): pinned to the sheet's edge, labelled
+  const pin = (p: MapPose, label: string) => {
+    const E = s.extent, x = Math.min(E.x1, Math.max(E.x0, p.x)), z = Math.min(E.z1, Math.max(E.z0, p.z));
+    return {x, z, label: x === p.x && z === p.z ? label : `${label} (in the fog)`};
+  };
+  if (inside(st.truck)) { const q = pin(st.truck, 'Truck'); markers.push({id: 'truck', kind: 'truck', x: q.x, z: q.z, yaw: st.truck.yaw, label: q.label, symbol: 'truck', grid: ref(q.x, q.z), ref: {type: 'truck'}}); }
+  if (inside(st.player)) { const q = pin(st.player, 'You'); markers.push({id: 'player', kind: 'player', x: q.x, z: q.z, yaw: st.player.yaw, label: q.label, symbol: 'player', grid: ref(q.x, q.z), ref: {type: 'player'}}); }
 
   // fog: the unexplored runs per row
   const runs: [number, number, number][] = [];

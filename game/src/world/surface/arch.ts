@@ -19,6 +19,9 @@
 // Follow-up 1 (draws): the facade wall families and the trims draw through their family's SHARED tinted material (archMaterials.ts
 // surfaceTintFamily: one material per family, the building's tint in a 'color' attribute), so a 96 m cell holds one mesh per family —
 // LOOK's own parts and the builder's walls (coarsenSurfaceArch) alike — instead of one per building tint.
+// Field follow-up (task studio-surface-run-field-followup-20261116-211729-01, lane FACADE): the exposed wall stretches no builder face
+// covers (party walls over lower neighbours, the tower's top storeys: archPlan.ts bareRuns), the steps of a collapsed corner's decks,
+// and the facade detail (facadeDetail.ts: closed windows, awnings, pilasters / columns, the base course).
 
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
@@ -28,9 +31,14 @@ import type {Area, Side, StationLayout} from '../../gen/stationTypes';
 import type {BuiltFace} from '../levelGeometry';
 import type {WorldMaterials} from '../materials';
 import {drainSync, type BuildSteps} from '../../core/pacedBuild';
-import {GROUND, GROUND_KEYS, LOOK_TUNE, OWNER, SIDE_NORMAL, entranceFloor, sideOfPlane, streetEndSpans, surfaceLookPlan, topAt, type BuildingLook, type FacadeHole, type SurfaceLookPlan, type TopSeg} from './archPlan';
-import {interiorKeys, surfaceArchMaterial, surfaceArchScale, surfaceSignMaterial, surfaceTintFamily, surfaceTintOf, isSurfaceKey} from './archMaterials';
-import {outdoorFlatMaterial} from './lookSky';
+import {GROUND, GROUND_KEYS, LOOK_TUNE, OWNER, SIDE_NORMAL, deckSteps, entranceFloor, sideOfPlane, streetEndSpans, surfaceLookPlan, topAt, type BuildingLook, type SurfaceLookPlan, type TopSeg} from './archPlan';
+import {interiorKeys, surfaceArchMaterial, surfaceArchScale, surfaceOutdoorFacade, surfaceSignMaterial, surfaceTexture, surfaceTintFamily, surfaceTintOf, isSurfaceKey, type SurfaceTexSlot} from './archMaterials';
+import {outdoorFacadeMaterial, outdoorFlatMaterial, type OutdoorFacadeKind} from './lookSky';
+import {buildRoofAccess} from './roofAccessView';
+
+/** (lane FACADE) Key prefix of the outdoor-lit facade accumulators ('surface-outfacade-<kind>': lookSky.ts outdoorFacadeMaterial). */
+export const OUTFACADE = 'surface-outfacade-';
+const OUTFACADE_SLOT: Readonly<Record<OutdoorFacadeKind, SurfaceTexSlot | null>> = {brick: 'brick', concrete: 'concrete:color', rusted: 'rusted:color', flat: null};
 
 /**
  * Geometry chunk (m) of the facade parts: twice the builder's architecture chunk (CHUNK_M 48). A district is ~530 m square and its
@@ -110,6 +118,16 @@ class TintView implements QuadSink {
   tri(p: readonly (readonly number[])[], n: readonly number[], uv: readonly (readonly number[])[]): void { this.q.tint = this.t; this.q.tri(p, n, uv); }
 }
 
+/** (lane FACADE) A sink seen with its UVs divided by a span (metre UVs -> a UV-mapped finish's tiles). */
+class ScaledUv implements QuadSink {
+  constructor(private readonly q: QuadSink, private readonly su: number, private readonly sv: number) {}
+  private s(uv: readonly (readonly number[])[]): number[][] { return uv.map(t => [t[0] / this.su, t[1] / this.sv]); }
+  quad(p: readonly (readonly number[])[], n: readonly number[], uv: readonly (readonly number[])[]): void { this.q.quad(p, n, this.s(uv)); }
+  quadFacing(p: readonly (readonly number[])[], f: readonly number[], n: readonly number[], uv: readonly (readonly number[])[]): void { this.q.quadFacing(p, f, n, this.s(uv)); }
+  triFacing(p: readonly (readonly number[])[], f: readonly number[], n: readonly number[], uv: readonly (readonly number[])[]): void { this.q.triFacing(p, f, n, this.s(uv)); }
+  tri(p: readonly (readonly number[])[], n: readonly number[], uv: readonly (readonly number[])[]): void { this.q.tri(p, n, this.s(uv)); }
+}
+
 type Hole2 = {s0: number; s1: number; y0: number; y1: number};
 
 /** ((b - a) x (c - a)) . f — the winding test of a polygon a, b, c against a facing vector. */
@@ -177,11 +195,15 @@ export interface SurfaceArchStats {
   builderTinted: number;
   /** The builder's door-frame trim meshes of the trim family before / after coarsenTrims. */
   trimMeshesBefore: number; trimMeshes: number;
+  /** (lane FACADE) Exposed wall pieces drawn where no builder face stood (archPlan.ts bareRuns), their area (m²), deck steps closed. */
+  bare: number; bareM2: number; steps: number;
+  /** (lane FACADE) Facade detail drawn (facadeDetail.ts): closed windows, awnings, relief strips. */
+  blinds: number; awnings: number; relief: number;
 }
 
 export class SurfaceArch {
   readonly plan: SurfaceLookPlan;
-  readonly stats: SurfaceArchStats = {faces: {}, holes: 0, airHoles: 0, signs: 0, escapes: 0, decks: 0, meshes: 0, triangles: 0, buildMs: 0, builderMeshesBefore: 0, builderMeshes: 0, builderTinted: 0, trimMeshesBefore: 0, trimMeshes: 0};
+  readonly stats: SurfaceArchStats = {faces: {}, holes: 0, airHoles: 0, signs: 0, escapes: 0, decks: 0, meshes: 0, triangles: 0, buildMs: 0, builderMeshesBefore: 0, builderMeshes: 0, builderTinted: 0, trimMeshesBefore: 0, trimMeshes: 0, bare: 0, bareM2: 0, steps: 0, blinds: 0, awnings: 0, relief: 0};
   /** The meshes this arch built (QA / tests). */
   readonly meshes: THREE.Mesh[] = [];
   /** The tent's door flap (AIR's open / closed seam: setTentFlap) and its hinge pivot. */
@@ -191,6 +213,8 @@ export class SurfaceArch {
   private readonly levelIdx = new Map<number, number>();
   /** AIR's span cuts by wall plane ('z<cm>' / 'x<cm>'): both planes of each span, with the face normal sign that takes them. */
   private readonly airCuts = new Map<string, (Hole2 & {sign: number})[]>();
+  /** (v2, lane INTERIOR, task studio-surface-run-field-followup-20261116-211729-01) A reachable roof's areas -> its building id (roofAccessView.ts). */
+  private readonly roofs = new Map<number, number>();
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): SurfaceArch | null {
     const plan = layout.surface && levels.length ? surfaceLookPlan(layout) : null;
@@ -212,6 +236,7 @@ export class SurfaceArch {
         l.push({...h, sign});
       }
     }
+    for (const b of layout.surface?.buildings ?? []) for (const a of b.roofAccess?.areas ?? []) this.roofs.set(a, b.id);
   }
 
   private count(k: string): void { this.stats.faces[k] = (this.stats.faces[k] ?? 0) + 1; }
@@ -260,6 +285,7 @@ export class SurfaceArch {
     const lvl = this.levels[L];
     if (!lvl) return null;
     const a = lvl.grid.area[i];
+    if (this.roofs.has(a)) return 'surface-roof'; // (v2: a reachable roof's walking surface, the outdoor flat look)
     if (this.plan.tentAreas.has(a)) return GROUND_KEYS[GROUND.tent];
     const b = this.plan.areaBuilding.get(a);
     if (b !== undefined) return interiorKeys(this.plan.buildings[b].family).floor;
@@ -269,7 +295,7 @@ export class SurfaceArch {
 
   /** Ceiling key of a run: none outdoors / over the tent (false), the programme's indoors, else the builder's rule. */
   ceilKey(_L: number, areaId: number, i?: number): string | false | null {
-    if (this.isOutdoorArea(areaId) || this.plan.tentAreas.has(areaId)) return false;
+    if (this.isOutdoorArea(areaId) || this.plan.tentAreas.has(areaId) || this.roofs.has(areaId)) return false; // (v2 roof: open sky)
     if (i !== undefined && _L === 0 && this.plan.ground[i] === GROUND.tent) return false;
     const b = this.plan.areaBuilding.get(areaId);
     return b !== undefined ? interiorKeys(this.plan.buildings[b].family).ceil : null;
@@ -284,7 +310,7 @@ export class SurfaceArch {
 
   /** Door frame trim: the building's trim colour. */
   doorTrimKey(_level: number, a: Area | undefined): string | null {
-    const id = a ? this.plan.areaBuilding.get(a.id) : undefined;
+    const id = a ? this.plan.areaBuilding.get(a.id) ?? this.roofs.get(a.id) : undefined;
     return id !== undefined ? this.plan.buildings[id].trimKey : 'surface-trim-2f3133';
   }
 
@@ -292,6 +318,10 @@ export class SurfaceArch {
   material(key: string): THREE.Material | undefined {
     if (key === 'surface-roof') return outdoorFlatMaterial('roof');
     if (key === 'surface-coping') return outdoorFlatMaterial('coping');
+    if (key.startsWith(OUTFACADE)) {
+      const kind = key.slice(OUTFACADE.length) as OutdoorFacadeKind;
+      return outdoorFacadeMaterial(kind, OUTFACADE_SLOT[kind] ? surfaceTexture(OUTFACADE_SLOT[kind]!) : null);
+    }
     return surfaceArchMaterial(this.mats, key);
   }
   meshName(key: string): string | undefined { return isSurfaceKey(key) ? `surface-arch-${key}` : undefined; }
@@ -329,6 +359,9 @@ export class SurfaceArch {
       const ci = (x: number, z: number) => { const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL); return cx < 0 || cz < 0 || cx >= W || cz >= P.H ? -1 : cz * W + cx; };
       const bi = ci(bx, bz), fi = ci(fx, fz);
       const own = bi >= 0 ? P.owner[bi] : OWNER.cordon;
+      // (v2, lane INTERIOR) a reachable roof's cell faces drop: against the parapet ring stands LOOK's parapet inner face, against the
+      // stair bulkhead its level-0 walls (roofAccessView.ts: seen from the street like the facade they stand on)
+      if (this.roofs.has(f.area)) continue;
       // the floor in front of the face: low walls (cordon, tent canvas, debris) cap at base + their height (the builder splits a
       // tall face into bands, so a band's own y0 is not the floor)
       const lv = this.levels.find(l => l.id === f.level) ?? this.levels[0];
@@ -363,6 +396,8 @@ export class SurfaceArch {
       }
       // not a building: the cordon ring, the tent's carved walls, debris / barricade blocks, kerb risers
       const y0 = base;
+      // (task studio-surface-run-field-followup-20261116-211729-01, lane FOG) a v2 district: no perimeter wall — its last-resort ring is not drawn
+      if (own === OWNER.cordon && !P.wall) continue;
       if (own === OWNER.cordon) {
         // where a street would run on through the cordon, the wall is a steel-plate barricade (the street reads closed, not cut):
         // the face splits at those stretches (a ring side is one long face)
@@ -394,26 +429,28 @@ export class SurfaceArch {
   *buildSteps(group: THREE.Group): BuildSteps<void> {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     const acc = new Map<string, {key: string; q: Quads}>();
-    // a family member's parts go to its family's accumulator of the cell, carrying the member's tint
-    const A = (key: string, x: number, z: number): QuadSink => {
+    // a family member's parts go to its family's accumulator of the cell, carrying the member's tint (an outdoor-lit facade's: `tint`)
+    const A = (key: string, x: number, z: number, tint?: readonly number[]): QuadSink => {
       const fam = surfaceTintFamily(key), ak = fam ?? key;
       const k = `${ak}@${Math.floor(x / FACADE_CHUNK)},${Math.floor(z / FACADE_CHUNK)}`;
       let e = acc.get(k);
-      if (!e) acc.set(k, (e = {key: ak, q: new Quads(fam !== null)}));
-      return fam ? new TintView(e.q, this.tint(key)) : e.q;
+      if (!e) acc.set(k, (e = {key: ak, q: new Quads(fam !== null || !!tint)}));
+      return fam ? new TintView(e.q, this.tint(key)) : tint ? new TintView(e.q, tint) : e.q;
     };
     const P = this.plan;
     // the sign atlas (runtime text; browser only)
     const atlas = signAtlas(P);
     if (atlas) this.owned.push(atlas.texture);
+    // (lane FACADE) the facade detail's parts join a mesh of their key already standing near them (detailSink): no new draws per cell
+    const has = (key: string, x: number, z: number) => acc.has(`${surfaceTintFamily(key) ?? key}@${Math.floor(x / FACADE_CHUNK)},${Math.floor(z / FACADE_CHUNK)}`);
     let k = 0;
     for (const bl of P.buildings) {
-      try { this.buildBuilding(bl, A, atlas); } catch (e) { console.warn('surface arch: building parts skipped', bl.id, e); }
+      try { this.buildBuilding(bl, A, atlas, has); } catch (e) { console.warn('surface arch: building parts skipped', bl.id, e); }
       if (++k % 4 === 0) yield 'world.surface.facades';
     }
     yield 'world.surface.tent';
     try { this.buildTent(group); } catch (e) { console.warn('surface arch: tent skipped', e); }
-    this.buildCordonCoping(A);
+    if (P.wall) this.buildCordonCoping(A); // (lane FOG: a v2 district has no wall to cap)
     yield 'world.surface.coarsen';
     try {
       const c = yield* coarsenSurfaceArchSteps(group, SURFACE_CHUNK, m => this.tintOfMaterial(m));
@@ -441,9 +478,12 @@ export class SurfaceArch {
     this.stats.buildMs = typeof performance !== 'undefined' ? performance.now() - t0 : 0;
   }
 
-  private buildBuilding(bl: BuildingLook, A: (key: string, x: number, z: number) => QuadSink, atlas: SignAtlas | null): void {
+  private buildBuilding(bl: BuildingLook, A0: (key: string, x: number, z: number, tint?: readonly number[]) => QuadSink, atlas: SignAtlas | null, has: (key: string, x: number, z: number) => boolean): void {
     const st = bl.style, trim = bl.trimKey, fac = bl.key;
     const sc = surfaceArchScale(fac) ?? {u: 1, v: 1};
+    // (lane FACADE) the sink the side's helpers draw into: the plain accumulator, or the detail's (detailSink) while the detail draws
+    let A = A0;
+    const detailA = this.detailSink(bl, A0, has);
     for (const sd of bl.sides) {
       const {alongX, n, plane} = sd;
       const nrm = alongX ? [0, 0, n] : [n, 0, 0];
@@ -456,11 +496,16 @@ export class SurfaceArch {
         const nn = facing > 0 ? nrm : nrm.map(v => -v);
         Q(key, (s0 + s1) / 2).quadFacing([pt(s0, d, y0), pt(s1, d, y0), pt(s1, d, y1), pt(s0, d, y1)], nn, nn, [[u(s0), y0 / m.v], [u(s1), y0 / m.v], [u(s1), y1 / m.v], [u(s0), y1 / m.v]]);
       };
-      /** An axis-aligned box in side space: s0..s1, depth d0..d1 (outward +), y0..y1 (all faces; normals true except `lit`). */
-      const box = (key: string, s0: number, s1: number, d0: number, d1: number, y0: number, y1: number) => {
+      /**
+       * An axis-aligned box in side space: s0..s1, depth d0..d1 (outward +), y0..y1 (all faces; normals true except `lit`). (lane FACADE:
+       * optional UV scale `m` — a UV-mapped finish's span, so a pilaster's bricks match the wall's.)
+       */
+      const box = (key: string, s0: number, s1: number, d0: number, d1: number, y0: number, y1: number, m?: {u: number; v: number}, buried?: boolean) => {
         const [x0, x1] = alongX ? [s0, s1] : [Math.min(plane + n * d0, plane + n * d1), Math.max(plane + n * d0, plane + n * d1)];
         const [z0, z1] = alongX ? [Math.min(plane + n * d0, plane + n * d1), Math.max(plane + n * d0, plane + n * d1)] : [s0, s1];
-        boxQuads(A(key, (x0 + x1) / 2, (z0 + z1) / 2), x0, x1, y0, y1, z0, z1);
+        const q = A(key, (x0 + x1) / 2, (z0 + z1) / 2);
+        // (lane FACADE) `buried`: the box stands on the wall (d0 <= 0) — its back face, inside the wall, is left out
+        boxQuads(m && (m.u !== 1 || m.v !== 1) ? new ScaledUv(q, m.u, m.v) : q, x0, x1, y0, y1, z0, z1, buried && d0 <= 0 ? nrm.map(v => -v || 0) : undefined);
       };
       /** The reveal of an opening: jambs, head, sill from depth d0 to d1 (inward = negative), lit as the facade (outward normal). */
       const reveal = (key: string, h: {s0: number; s1: number; y0: number; y1: number}, d0: number, d1: number) => {
@@ -567,7 +612,55 @@ export class SurfaceArch {
       }
       // fire escapes
       for (const fe of bl.escapes) if (fe.side === sd.side) this.fireEscape(fe, box);
+      // Task studio-surface-run-field-followup-20261116-211729-01 (lane FACADE): the facade detail (facadeDetail.ts) — closed windows of
+      // the interior storeys (drawn on the wall, never cut), shop awnings, pilasters / fins and the base course; the side's own finishes
+      A = detailA;
+      try { this.facadeDetail(bl, sd, {face, box, Q, pt, nrm}); } finally { A = A0; }
+      // Task studio-surface-run-field-followup-20261116-211729-01 (lane FACADE): the exposed stretches no builder face covers
+      // (archPlan.ts bareRuns: party walls over a lower neighbour, a roof line over the outdoor band), from their bottom up to the roof
+      // line, the side's windows cut out (their reveals / dark rooms are drawn above). Wound outward (front faces, culled as every
+      // facade). Over an open street cell: the facade's own field-lit family material and the builder's UV base (the courses run on
+      // from the face below); over a SOLID column: the outdoor-lit variant of the same finish (no light-field slot out there).
+      if (sd.bare.length) {
+        const cuts: Hole2[] = bl.holes.filter(h => h.side === sd.side && h.kind !== 'door-boarded');
+        for (const r of sd.bare) {
+          const proto = {x0: alongX ? r.s0 : plane, x1: alongX ? r.s1 : plane, z0: alongX ? plane : r.s0, z1: alongX ? plane : r.s1, y0: r.y0, y1: bl.top + 0.01, openings: []} as unknown as BuiltFace;
+          const od = r.lit === 'outdoor' ? surfaceOutdoorFacade(this.mats, fac) : null;
+          const m = od ? {u: od.span[0], v: od.span[1]} : sc;
+          const u = (s: number) => (alongX ? (n > 0 ? s : -s) : (n > 0 ? -s : s)) / m.u, v = (y: number) => (y - r.base) / m.v;
+          for (const p of cutFace(proto, cuts, sd.tops, bl.minTop)) {
+            const a = alongX ? p.x0 : p.z0, b = alongX ? p.x1 : p.z1, c = (a + b) / 2;
+            const q = od ? A(OUTFACADE + od.kind, alongX ? c : plane, alongX ? plane : c, [od.tint.r, od.tint.g, od.tint.b]) : Q(fac, c);
+            q.quadFacing([pt(a, 0, p.y0), pt(b, 0, p.y0), pt(b, 0, p.y1), pt(a, 0, p.y1)], nrm, nrm, [[u(a), v(p.y0)], [u(b), v(p.y0)], [u(b), v(p.y1)], [u(a), v(p.y1)]]);
+            this.stats.bare++;
+            this.stats.bareM2 += (b - a) * (p.y1 - p.y0);
+          }
+        }
+      }
     }
+    // (lane FACADE) the steps between decks of different heights (a damaged shell's collapsed corner): the broken edge of the upper
+    // floors toward the lower deck, outdoor-lit like the decks and ruin tops, with the snapped slab edges at its storey lines
+    for (const st of deckSteps(bl)) {
+      const P3 = (s: number, d: number, y: number): number[] => (st.alongX ? [s, y, st.plane + st.n * d] : [st.plane + st.n * d, y, s]);
+      const nn = st.alongX ? [0, 0, st.n] : [st.n, 0, 0], c = (st.s0 + st.s1) / 2;
+      const q = A('surface-coping', st.alongX ? c : st.plane, st.alongX ? st.plane : c);
+      q.quadFacing([P3(st.s0, 0, st.y0), P3(st.s1, 0, st.y0), P3(st.s1, 0, st.y1), P3(st.s0, 0, st.y1)], nn, nn, [[st.s0 / 2, st.y0 / 2], [st.s1 / 2, st.y0 / 2], [st.s1 / 2, st.y1 / 2], [st.s0 / 2, st.y1 / 2]]);
+      this.stats.steps++;
+      for (const y of bl.storeyY) {
+        if (!(y > st.y0 + 0.4 && y < st.y1 - 0.25)) continue;
+        // a slab edge snapped off unevenly: pieces of ~2.4 m sticking out 0.12 .. 0.42 m (deterministic: by piece index and storey)
+        const len = st.s1 - st.s0, k = Math.max(1, Math.round(len / 2.4));
+        for (let j = 0; j < k; j++) {
+          const a = st.s0 + (len * j) / k, b = st.s0 + (len * (j + 1)) / k, out = 0.12 + 0.3 * (((j * 7 + Math.round(y * 3)) % 5) / 4);
+          const [p0, p1] = [P3(a, 0, y - 0.11), P3(b, out, y + 0.11)];
+          boxQuads(A('surface-coping', (p0[0] + p1[0]) / 2, (p0[2] + p1[2]) / 2), Math.min(p0[0], p1[0]), Math.max(p0[0], p1[0]), y - 0.11, y + 0.11, Math.min(p0[2], p1[2]), Math.max(p0[2], p1[2]));
+        }
+      }
+    }
+    // (v2, lane INTERIOR, task studio-surface-run-field-followup-20261116-211729-01) a reachable roof: the builder draws its walking
+    // surface; the deck's rim, the stair bulkhead and the roof door's frame are roofAccessView.ts's
+    const ra = bl.b.roofAccess;
+    if (ra && bl.decks.length === 1) { this.stats.decks++; buildRoofAccess(bl, ra, bl.decks[0], A); return; }
     // roof decks (the outdoor flat look: SOLID columns have no light-field slot)
     for (const d of bl.decks) {
       if (d.x1 - d.x0 < 0.2 || d.z1 - d.z0 < 0.2) continue;
@@ -577,6 +670,107 @@ export class SurfaceArch {
           .quad([[xa, d.y, za], [xa, d.y, zb], [xb, d.y, zb], [xb, d.y, za]], [0, 1, 0], [[xa / 2, -za / 2], [xa / 2, -zb / 2], [xb / 2, -zb / 2], [xb / 2, -za / 2]]);
       }
     }
+  }
+
+  /**
+   * (lane FACADE) Where a facade-detail part goes: the accumulator of its key in its own cell when the building's parts already made one
+   * there, else one standing at the building's centre or a corner, else (an awning: the canvas family, rarely drawn otherwise) the ONE
+   * district-wide awning mesh, else its own cell. The detail so joins the meshes already drawn near it instead of adding a draw per cell.
+   */
+  private detailSink(bl: BuildingLook, A: (key: string, x: number, z: number, tint?: readonly number[]) => QuadSink, has: (key: string, x: number, z: number) => boolean) {
+    const f = bl.b.footprint, I = this.plan.inner;
+    const alts: [number, number][] = [[(f.x0 + f.x1) / 2, (f.z0 + f.z1) / 2], [f.x0, f.z0], [f.x1, f.z0], [f.x0, f.z1], [f.x1, f.z1]];
+    const awning = new Set(bl.detail.awnings.map(a => a.key));
+    return (key: string, x: number, z: number, tint?: readonly number[]): QuadSink => {
+      if (has(key, x, z)) return A(key, x, z, tint);
+      for (const [ax, az] of alts) if (has(key, ax, az)) return A(key, ax, az, tint);
+      if (awning.has(key)) return A(key, (I.x0 + I.x1) / 2, (I.z0 + I.z1) / 2, tint);
+      return A(key, x, z, tint);
+    };
+  }
+
+  /**
+   * (lane FACADE) One side's facade detail: closed windows (sill + head in the trim; boards / a shutter / an infill or spandrel panel of
+   * the facade's own finish, darker), awnings (the fabric family: a sloped canvas seen from above and below + its valance; a torn one
+   * only its steel frame), pilasters / fins (the facade's finish, its UV span) and the base course (a darker band of it; the trim on
+   * stucco). Everything stands on or proud of the wall plane: nothing is cut, no room behind is touched.
+   */
+  private facadeDetail(bl: BuildingLook, sd: BuildingLook['sides'][number], h: {
+    face: (key: string, s0: number, s1: number, y0: number, y1: number, d: number, m?: {u: number; v: number}, facing?: 1 | -1) => void;
+    box: (key: string, s0: number, s1: number, d0: number, d1: number, y0: number, y1: number, m?: {u: number; v: number}, buried?: boolean) => void;
+    Q: (key: string, s: number) => QuadSink;
+    pt: (s: number, d: number, y: number) => number[];
+    nrm: number[];
+  }): void {
+    const D = bl.detail, trim = bl.trimKey, fac = bl.key, {face, Q, pt, nrm} = h;
+    // every box here stands on the wall: its back face (in the wall) is never drawn
+    const box = (key: string, s0: number, s1: number, d0: number, d1: number, y0: number, y1: number, m?: {u: number; v: number}) => h.box(key, s0, s1, d0, d1, y0, y1, m, true);
+    if (!D.blinds.length && !D.awnings.length && !D.relief.length) return;
+    const sc = surfaceArchScale(fac) ?? {u: 1, v: 1};
+    for (const w of D.blinds) {
+      if (w.side !== sd.side) continue;
+      if (w.kind === 'panel') {
+        // a curtain wall's opaque spandrel panel and its mullion (as the glazed panes')
+        face(D.keys.panel, w.s0, w.s1, w.y0, w.y1, 0.012, sc);
+        box(trim, w.s1, w.s1 + 0.1, -0.02, 0.08, w.y0 - 0.25, w.y1 + 0.25);
+        continue;
+      }
+      if (w.kind === 'door') {
+        // a sealed personnel door: its frame, a painted steel leaf (the trim's paint), two planks nailed across
+        box(trim, w.s0 - 0.1, w.s0, -0.02, 0.07, w.y0, w.y1);
+        box(trim, w.s1, w.s1 + 0.1, -0.02, 0.07, w.y0, w.y1);
+        box(trim, w.s0 - 0.1, w.s1 + 0.1, -0.02, 0.07, w.y1, w.y1 + 0.1);
+        face(trim, w.s0, w.s1, w.y0, w.y1, 0.012);
+        for (const f of [0.3, 0.62]) { const y = w.y0 + (w.y1 - w.y0) * f; face('surface-boards', w.s0 - 0.12, w.s1 + 0.12, y, y + 0.22, 0.03); }
+        continue;
+      }
+      box(trim, w.s0 - 0.1, w.s1 + 0.1, -0.02, 0.06, w.y0 - 0.07, w.y0);
+      if (w.kind === 'shutter') {
+        face('surface-shutter', w.s0, w.s1, w.y0, w.y1, 0.015);
+        box(trim, w.s0 - 0.05, w.s1 + 0.05, -0.02, 0.18, w.y1, w.y1 + 0.3);
+        continue;
+      }
+      box(trim, w.s0 - 0.08, w.s1 + 0.08, -0.02, 0.05, w.y1, w.y1 + 0.08);
+      if (w.kind === 'boarded') boards(face, w, 0.03);
+      else face(D.keys.infill, w.s0, w.s1, w.y0, w.y1, 0.012, sc);
+    }
+    for (const a of D.awnings) {
+      if (a.side !== sd.side) continue;
+      const y0 = a.y, y1 = a.y - a.drop, dd = a.depth, c = (a.s0 + a.s1) / 2;
+      if (a.torn) {
+        // the bare frame (painted steel: the trim): a wall rail, the two arms, the front rail
+        box(trim, a.s0, a.s1, 0, 0.05, y0 - 0.05, y0);
+        box(trim, a.s0, a.s1, dd - 0.05, dd, y1 - 0.05, y1);
+        const q = Q(trim, c), L = Math.hypot(dd, a.drop), up = [nrm[0] * a.drop / L, dd / L, nrm[2] * a.drop / L];
+        for (const s of [a.s0, a.s1 - 0.05]) {
+          const p = [pt(s, 0, y0), pt(s + 0.05, 0, y0), pt(s + 0.05, dd, y1), pt(s, dd, y1)], uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
+          q.quadFacing(p, up, up, uv);
+          q.quadFacing(p, up.map(v => -v), up.map(v => -v), uv);
+        }
+        continue;
+      }
+      const q = Q(a.key, c), span = surfaceArchScale(a.key) ?? {u: 1.2, v: 1.2};
+      const L = Math.hypot(dd, a.drop), up = [nrm[0] * a.drop / L, dd / L, nrm[2] * a.drop / L], down = up.map(v => -v), back = nrm.map(v => -v);
+      const u0 = 0, u1 = (a.s1 - a.s0) / span.u, v1 = L / span.v, vv = v1 + 0.24 / span.v;
+      const slope = [pt(a.s0, 0, y0), pt(a.s1, 0, y0), pt(a.s1, dd, y1), pt(a.s0, dd, y1)];
+      const slopeUv = [[u0, 0], [u1, 0], [u1, v1], [u0, v1]];
+      q.quadFacing(slope, up, up, slopeUv);
+      q.quadFacing(slope, down, down, slopeUv);
+      const val = [pt(a.s0, dd, y1), pt(a.s1, dd, y1), pt(a.s1, dd, y1 - 0.24), pt(a.s0, dd, y1 - 0.24)];
+      const valUv = [[u0, v1], [u1, v1], [u1, vv], [u0, vv]];
+      q.quadFacing(val, nrm, nrm, valUv);
+      q.quadFacing(val, back, back, valUv);
+    }
+    for (const rl of D.relief) {
+      if (rl.side !== sd.side) continue;
+      // (the steel columns and a stucco front's pilasters in the trim's paint: the trim family stands in every cell — no new draw)
+      if (rl.kind === 'column') box(trim, rl.s0, rl.s1, -0.02, rl.out, rl.y0, rl.y1);
+      else if (rl.kind === 'pier' && bl.style.wall === 'stucco') box(trim, rl.s0, rl.s1, -0.02, rl.out, rl.y0, rl.y1);
+      else box(rl.kind === 'pier' ? fac : D.keys.plinth, rl.s0, rl.s1, -0.02, rl.out, rl.y0, rl.y1, sc);
+    }
+    this.stats.blinds += D.blinds.filter(w => w.side === sd.side).length;
+    this.stats.awnings += D.awnings.filter(a => a.side === sd.side).length;
+    this.stats.relief += D.relief.filter(r => r.side === sd.side).length;
   }
 
   /** A steel fire escape: a landing per storey (deck, rails), flights between them, a drop ladder from the first landing. */
@@ -728,7 +922,7 @@ export class SurfaceArch {
   }
 }
 
-function boards(face: (key: string, s0: number, s1: number, y0: number, y1: number, d: number) => void, h: FacadeHole, d: number): void {
+function boards(face: (key: string, s0: number, s1: number, y0: number, y1: number, d: number) => void, h: Hole2, d: number): void {
   // plywood sheets over the opening: two or three boards with a gap, slightly proud of it
   const n = h.y1 - h.y0 > 1.6 ? 3 : 2, gap = 0.05, bh = (h.y1 - h.y0 - gap * (n - 1)) / n;
   for (let i = 0; i < n; i++) face('surface-boards', h.s0 - 0.04, h.s1 + 0.04, h.y0 + i * (bh + gap), h.y0 + i * (bh + gap) + bh, d + 0.002 * i);
@@ -816,14 +1010,16 @@ function spans(a: number, b: number): [number, number][] {
 }
 
 /** An axis-aligned box's six faces (outward normals, world-metre UVs). */
-export function boxQuads(q: QuadSink, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number): void {
+export function boxQuads(q: QuadSink, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, skip?: readonly number[]): void {
   if (x1 - x0 < 1e-5 || y1 - y0 < 1e-5 || z1 - z0 < 1e-5) return;
-  q.quad([[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]], [0, 1, 0], [[x0, -z1], [x1, -z1], [x1, -z0], [x0, -z0]]);
-  q.quad([[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]], [0, -1, 0], [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]);
-  q.quad([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], [0, 0, 1], [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]);
-  q.quad([[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], [0, 0, -1], [[-x1, y0], [-x0, y0], [-x0, y1], [-x1, y1]]);
-  q.quad([[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], [1, 0, 0], [[-z1, y0], [-z0, y0], [-z0, y1], [-z1, y1]]);
-  q.quad([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], [-1, 0, 0], [[z0, y0], [z1, y0], [z1, y1], [z0, y1]]);
+  // (lane FACADE) `skip`: the one face whose outward normal this is — a face buried in the wall it stands on (never seen) is left out
+  const F = (p: number[][], n: number[], uv: number[][]) => { if (!skip || n[0] !== skip[0] || n[1] !== skip[1] || n[2] !== skip[2]) q.quad(p, n, uv); };
+  F([[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]], [0, 1, 0], [[x0, -z1], [x1, -z1], [x1, -z0], [x0, -z0]]);
+  F([[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]], [0, -1, 0], [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]);
+  F([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], [0, 0, 1], [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]);
+  F([[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], [0, 0, -1], [[-x1, y0], [-x0, y0], [-x0, y1], [-x1, y1]]);
+  F([[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], [1, 0, 0], [[-z1, y0], [-z0, y0], [-z0, y1], [-z1, y1]]);
+  F([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], [-1, 0, 0], [[z0, y0], [z1, y0], [z1, y1], [z0, y1]]);
 }
 
 /** A thin square bar between two points (ropes, stays). */

@@ -29,6 +29,8 @@ export interface SurfaceWay {
   focus: {x: number; z: number};
   /** The prompt's action ("Go up to the street", "Back down to Bramley Rd"). */
   label: string;
+  /** (version 2, lane ACCESS follow-up) A cargo lift's car: standing anywhere in it aims at it (whatever the facing). */
+  inside?: boolean;
 }
 
 const runtimes = new WeakMap<object, SurfaceAccessRuntime>();
@@ -63,9 +65,9 @@ export class SurfaceAccessRuntime {
     if (layout.surface) {
       const p = layout.surface.portal;
       const host = hostKeyOf(g.run.current), name = g.surfaceStationName(host);
-      p.label = p.kind === 'stair' ? `Back down to ${name}` : `Back inside ${name}`;
+      p.label = p.kind === 'lift' ? `Ride down to ${name}` : p.kind === 'stair' ? `Back down to ${name}` : `Back inside ${name}`;
       const t = p.trigger;
-      this.way = {dir: 'down', trigger: t, focus: {x: (t.x0 + t.x1) / 2, z: (t.z0 + t.z1) / 2}, label: p.label};
+      this.way = {dir: 'down', trigger: t, focus: {x: (t.x0 + t.x1) / 2, z: (t.z0 + t.z1) / 2}, label: p.label, ...(p.kind === 'lift' ? {inside: true} : {})};
     } else if (layout.surfaceAccess) {
       const a = layout.surfaceAccess, t = a.trigger;
       let focus = {x: (t.x0 + t.x1) / 2, z: (t.z0 + t.z1) / 2};
@@ -74,7 +76,7 @@ export class SurfaceAccessRuntime {
         const e = layout.mall?.exits?.find(x => x.id === a.exit);
         if (e) focus = e.side === 'N' || e.side === 'S' ? {x: (e.door.s0 + e.door.s1) / 2, z: e.door.plane} : {x: e.door.plane, z: (e.door.s0 + e.door.s1) / 2};
       }
-      this.way = {dir: 'up', trigger: t, focus, label: a.kind === 'subway-stair' ? 'Go up to the street' : 'Go out to the street'};
+      this.way = {dir: 'up', trigger: t, focus, label: a.kind === 'lift' ? 'Ride up to the street' : a.kind === 'subway-stair' ? 'Go up to the street' : 'Go out to the street', ...(a.kind === 'lift' ? {inside: true} : {})};
       if (a.door && g.world && g.mats) {
         this.door = buildAccessDoor(g.mats, a.door, a.kind === 'subway-stair');
         g.world.group.add(this.door);
@@ -97,6 +99,7 @@ export class SurfaceAccessRuntime {
     if (!w || g.state !== 'playing' || g.surfaceCrossing) return false;
     const t = w.trigger;
     if (p.x < t.x0 || p.x > t.x1 || p.z < t.z0 || p.z > t.z1 || p.y < t.y0 || p.y > t.y1) return false;
+    if (w.inside) return true;
     const dx = w.focus.x - p.x, dz = w.focus.z - p.z, d = Math.hypot(dx, dz);
     if (d < ACCESS_AIM.near) return true;
     // the view's forward is (-sin yaw, -cos yaw)

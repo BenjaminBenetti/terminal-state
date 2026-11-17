@@ -182,6 +182,12 @@ export interface ExitAperture { nx: number; nz: number; plane: number; s0: numbe
 export interface SeeRect { x0: number; z0: number; x1: number; z1: number; y0?: number; y1?: number }
 /** Task studio-skywalk-variety (lane PERF): a glazed span (world m: its wall cells' box) of storey `level` (a level id), open y0 .. y1. */
 export interface WindowSpan { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; level: number }
+/**
+ * Task studio-surface-run-field-followup-20261116-211729-01 (lane INTERIOR): open air over a walkable roof (Surface Run v2: world/builder.ts
+ * passes `slabs.sky` from the district's roof access records) — an eye inside it (x / z in the rect, at or above y0) is current on
+ * `level` too: the street's storey renders from the roof as from the street (frustum, fog, slab + storey occlusion still decide).
+ */
+export interface SkyVolume { x0: number; z0: number; x1: number; z1: number; y0: number; level: number }
 /** A window tile: its span, storey and the cell centres along it (sight targets, x z pairs). */
 interface WindowTile extends WindowSpan { pts: Float64Array }
 /** The cells of the rects of `see` that `use` keeps (1 = see-through), on a W x H grid. */
@@ -430,6 +436,8 @@ export class LevelCuller {
   /** Per window tile: its sight result (1 / 0) for the eye position of stamp winSeeK (LevelCuller.posStamp). */
   private winSeeK = new Int32Array(0);
   private winSeeV = new Uint8Array(0);
+  /** (lane INTERIOR) Sky volumes (slabs.sky; Surface Run v2 roofs): an eye inside one is on its level too. Empty elsewhere. */
+  private readonly skyVols: readonly SkyVolume[];
   /** See-through volumes of the sight rays (slabs.windows only): per column (CSR) the [y0, y1] of every see rect over it. */
   private seeStart: Int32Array | null = null;
   private seeY = new Float64Array(0);
@@ -451,12 +459,13 @@ export class LevelCuller {
 
   constructor(private readonly levels: readonly Level[], private readonly cols: LevelColumns, private readonly levelAt: LevelResolver,
     opts?: {atrium?: Uint8Array; slabs?: {see?: readonly SeeRect[]; glass?: readonly {x0: number; z0: number; x1: number; z1: number}[]; everyStorey?: boolean;
-      windows?: readonly WindowSpan[]}}, deferBuild = false) {
+      windows?: readonly WindowSpan[]; sky?: readonly SkyVolume[]}}, deferBuild = false) {
     this.levelIds = levels.map(l => l.id);
     this.allLevelIds = new Set(this.levelIds);
     this.everyStorey = levels.length > 1 && !!opts?.slabs?.everyStorey;
     // (task studio-reactor-submit, lane CPU: `glass` when given — the Reactor's see-through vessel column is no lift shaft — else `see`)
     this.glassShafts = opts?.atrium ? [...(opts.slabs?.glass ?? opts.slabs?.see ?? [])] : [];
+    this.skyVols = levels.length > 1 ? (opts?.slabs?.sky ?? []).filter(v => this.levelIds.includes(v.level)) : [];
     if (!deferBuild) drainSync(this.buildSteps(opts)); // (task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): `deferBuild` = LevelCuller.steps runs them)
   }
 
@@ -1305,6 +1314,9 @@ export class LevelCuller {
     // Iteration 12 (ARCH): every level whose band holds the eye is current (a shared stair run = both). An override
     // (the eye in the elevator cab) is the only current level.
     const here = ov !== null ? this.onlyLevel(ov) : this.eyeLevels(e, camLevel);
+    // (task studio-surface-run-field-followup-20261116-211729-01, lane INTERIOR) an eye in a SKY volume — a reachable roof's open air
+    // (Surface Run v2): it stands outdoors, on the volume's level as well (the street, the facades round it)
+    if (ov === null) for (const v of this.skyVols) if (e.x >= v.x0 && e.x <= v.x1 && e.z >= v.z0 && e.z <= v.z1 && e.y >= v.y0) here.add(v.level);
     this.stats.level = camLevel;
     this.stats.levels = [...here];
     // Visible portal tiles from the camera's level(s), per other level. (lane RENDER-CPU: reused map / set; lists emptied)
