@@ -295,7 +295,11 @@ describe('GLB swap registry, texture slots, level ownership', () => {
 
   it('Reactor-only: levelAssets owns reactor-*.glb + textures/reactor/** for the reactor; the CI packager families agree', async () => {
     const urls = [...Object.values(REACTOR_KIT).map(m => m.url), ...reactorTextureLoads().map(l => l.url)];
-    for (const u of urls) { expect(levelOfAsset(u), u).toBe('reactor'); expect(assetAllowedIn('subway', u)).toBe(false); expect(assetAllowedIn('reactor', u)).toBe(true); }
+    // (task studio-subway-station-variety-20261117-043926-01: a version-2 Subway station's painted-rock / cast-concrete identity may load
+    // exactly the mine-rock and pit-concrete maps; every Reactor model and every other Reactor texture stays the Reactor's)
+    const subwayShared = (u: string) => /\/(mine-rock|pit-concrete)-(color|normal|orm)\.jpg$/.test(u);
+    for (const u of urls) { expect(levelOfAsset(u), u).toBe('reactor'); expect(assetAllowedIn('subway', u), u).toBe(subwayShared(u)); expect(assetAllowedIn('reactor', u)).toBe(true); }
+    expect(urls.filter(subwayShared).length, 'the shared pit-concrete set is among the Reactor arch loads').toBe(3);
     expect(levelOfAsset('assets/models/mall-fountain.glb')).toBe('mall');
     expect(levelOfAsset('assets/audio/reactor-hum-loop.mp3')).toBeNull();
     type Fam = Record<string, {files: number}>;
