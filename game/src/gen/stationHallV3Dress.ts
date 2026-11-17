@@ -191,7 +191,7 @@ function reserveCirculation(ctx: PlaceCtx, a: Area, S: HallSection): void {
  * The backlight (SignPlacement.lit) of the hall's destination plates: illuminated boxes, as real concourse signage — the ticket office's
  * fascia brightest, the pocket name plates and hung wayfinding boxes, then the clerestory tablets (world/builder.ts SIGN_GLOW).
  */
-export const SIGN_LIT = {fascia: 1, plate: 0.9, hung: 0.9, tablet: 0.75} as const;
+export const SIGN_LIT = {fascia: 0.8, plate: 0.7, hung: 0.7, tablet: 0.55} as const;
 
 /** The ticket office's fascia name plate: centred on the office, 0.32 m out from the wall (in front of the kit's fascia box). */
 export const OFFICE_FASCIA = {text: 'TICKETS · TRAVEL INFORMATION', y: 3.1, out: 0.32, maxW: 6} as const;

@@ -1038,7 +1038,10 @@ const inkOn = (hex: string): string => {
  */
 function signTexture(s: SignPlacement, w: number, h: number, pal: PlatePalette | null = null): THREE.Texture {
   const p = s.style || s.kind === 'service' ? null : pal;
-  const key = `${s.kind}|${s.text}|${s.arrow ?? ''}|${w.toFixed(2)}${s.h ? `x${h.toFixed(2)}` : ''}${signStyleKey(s)}${p ? `|${p.bg}${p.fg}${p.accent}` : ''}`;
+  // (task studio-subway-rework-m2-finishing-20261117-111246-01) a backlit plate (SignPlacement.lit) is a LIGHT BOX: the plate's own colours
+  // swapped — a light field with dark lettering, as an illuminated concourse sign — so the whole face glows, not only its letters
+  const box = !!s.lit && !s.style && s.kind !== 'service' && s.kind !== 'station';
+  const key = `${s.kind}|${s.text}|${s.arrow ?? ''}|${w.toFixed(2)}${s.h ? `x${h.toFixed(2)}` : ''}${box ? '|box' : ''}${signStyleKey(s)}${p ? `|${p.bg}${p.fg}${p.accent}` : ''}`;
   let tex = signTexCache.get(key);
   if (tex) return tex;
   if (s.style) tex = companySignTexture(s, w, h); // Task office-overhaul-20261030 (lane TENANTS): company / directory plates
@@ -1047,7 +1050,8 @@ function signTexture(s: SignPlacement, w: number, h: number, pal: PlatePalette |
     const W = 1024, H = Math.max(160, Math.round(1024 * h / w));
     tex = canvasTexture(W, H, s.text.length * 17 + s.kind.length, (ctx, cw, ch) => {
       const light = s.kind === 'service';
-      ctx.fillStyle = light ? '#d8cfb6' : p?.bg ?? '#1f2225';
+      const field = box ? p?.fg ?? '#ece4cf' : p?.bg ?? '#1f2225', ink = box ? p?.bg ?? '#1f2225' : p?.fg ?? '#ece4cf';
+      ctx.fillStyle = light ? '#d8cfb6' : field;
       ctx.fillRect(0, 0, cw, ch);
       ctx.fillStyle = light ? '#b53a2c' : s.kind === 'exit' ? '#c2463a' : p?.accent ?? '#d9a520';
       ctx.fillRect(0, ch - ch * 0.1, cw, ch * 0.045);
@@ -1069,7 +1073,7 @@ function signTexture(s: SignPlacement, w: number, h: number, pal: PlatePalette |
         }
       }
       const arrowW = s.arrow ? ch * 0.6 : 0;
-      ctx.fillStyle = light ? '#1f2225' : p?.fg ?? '#ece4cf';
+      ctx.fillStyle = light ? '#1f2225' : ink;
       let size = Math.round(ch * 0.5);
       const font = () => `bold ${size}px "Helvetica Neue", Arial, sans-serif`;
       ctx.font = font();
