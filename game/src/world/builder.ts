@@ -34,7 +34,8 @@ import {planCohorts, trianglesOf} from './staticCohorts'; // task static-batchin
 import type {WallFace} from './wallFaces';
 import {LEGACY_STACK, LevelCuller} from './levelCulling';
 import {MeshBasicNodeMaterial, MeshStandardNodeMaterial} from 'three/webgpu'; // Iteration 13 (MAT-A)
-import {SIGN_ATLAS_CONTEXT} from './surfaceNodes';
+import {SIGN_ATLAS_CONTEXT, SIGN_ATLAS_UV} from './surfaceNodes';
+import {attribute, texture as tslTexture} from 'three/tsl'; // (task studio-subway-rework-m2-finishing-20261117-111246-01: lit sign faces)
 import {buildWallDetailSteps} from './wallDetail';
 import {applyStationDecaySteps, archShopMaterial} from './decay';
 import {buildOfficeProp, cutOfficeWindows, isOfficeBuilt} from './officeProps'; // Iteration 16 (WORLD-GEN)
@@ -1095,8 +1096,15 @@ function buildSigns(group: THREE.Group, layout: StationLayout, mats: WorldMateri
   const plates: THREE.Matrix4[] = [];
   const stationFrames: THREE.Matrix4[] = [];
   const faces = new Map<THREE.Texture, THREE.Matrix4[]>();
+  // (task studio-subway-rework-m2-finishing-20261117-111246-01) backlit plates (SignPlacement.lit): their own emissive atlas pages
+  const litFaces = new Map<THREE.Texture, THREE.Matrix4[]>(), litGlow = new Map<THREE.Texture, number[]>();
   const q = new THREE.Quaternion();
-  const addFace = (tex: THREE.Texture, m: THREE.Matrix4) => { let l = faces.get(tex); if (!l) faces.set(tex, (l = [])); l.push(m); };
+  let curLit = 0;
+  const addFace = (tex: THREE.Texture, m: THREE.Matrix4) => {
+    const map = curLit > 0 ? litFaces : faces;
+    let l = map.get(tex); if (!l) map.set(tex, (l = [])); l.push(m);
+    if (curLit > 0) { let gl = litGlow.get(tex); if (!gl) litGlow.set(tex, (gl = [])); gl.push(curLit); }
+  };
   // Station sign model fit (as WorldMaterials.makeSign): back at z = 0, front at frameDepth.
   let frameDepth = 0.02;
   let frameLocal: {mesh: THREE.Mesh; local: THREE.Matrix4}[] = [];
@@ -1115,6 +1123,7 @@ function buildSigns(group: THREE.Group, layout: StationLayout, mats: WorldMateri
     const size = SIGN_SIZE[s.kind];
     const {w, h} = signDims(s);
     const tex = signTexture(s, w, h, pal);
+    curLit = Math.max(0, Math.min(1, s.lit ?? 0));
     const sides = s.hang ? [s.rot, s.rot + Math.PI] : [s.rot];
     const useFrame = s.kind === 'station' && frameLocal.length && !s.hang && (s.w === undefined || s.w === size.w);
     const depth = useFrame ? frameDepth : 0.02;
@@ -1152,6 +1161,7 @@ function buildSigns(group: THREE.Group, layout: StationLayout, mats: WorldMateri
     for (const {mesh, local} of frameLocal) n += addInstanced(group, mesh.geometry, mesh.material as THREE.Material, stationFrames.map(m => m.clone().multiply(local)), 'sign-frame');
   }
   n += buildSignFaces(group, faces);
+  if (litFaces.size) n += buildSignFaces(group, litFaces, litGlow);
   return n;
 }
 
@@ -1185,7 +1195,22 @@ export function packSignAtlas(sizes: readonly {width: number; height: number}[])
   return {cells, pages: pages.map(hh => Math.max(16, Math.ceil(hh / 4) * 4))};
 }
 
-function buildSignFaces(group: THREE.Group, faces: Map<THREE.Texture, THREE.Matrix4[]>): number {
+/**
+ * Task studio-subway-rework-m2-finishing-20261117-111246-01: the backlight gain of a lit sign face (a v3 hall's illuminated destination
+ * plates: the ticket office fascia, pocket name plates, hung wayfinding boxes, clerestory tablets) — emissive = the face's own colour x its
+ * SignPlacement.lit x this, as the mall's backlit ad boxes (world/mallAds.ts adAtlasMaterial). A local light box: no light-field or exposure
+ * change; every unlit plate draws exactly as before.
+ */
+export const SIGN_GLOW = 0.85;
+/** The sign-atlas program plus a per-instance backlight (aGlow). */
+export const litSignAtlasMat = (atlas: THREE.Texture): MeshStandardNodeMaterial => {
+  const m = signAtlasMat(atlas);
+  m.emissiveNode = tslTexture(atlas, SIGN_ATLAS_UV).rgb.mul(attribute('aGlow', 'float')).mul(SIGN_GLOW);
+  m.name = 'sign-atlas-lit';
+  return m;
+};
+
+function buildSignFaces(group: THREE.Group, faces: Map<THREE.Texture, THREE.Matrix4[]>, glow?: Map<THREE.Texture, number[]>): number {
   if (!faces.size) return 0;
   const texs = [...faces.keys()];
   const imgs = texs.map(t => t.image as {width: number; height: number});
@@ -1204,15 +1229,17 @@ function buildSignFaces(group: THREE.Group, faces: Map<THREE.Texture, THREE.Matr
       }
     });
     atlas.wrapS = atlas.wrapT = THREE.ClampToEdgeWrapping;
-    const mats4: THREE.Matrix4[] = [], rects: number[] = [];
-    for (const [[, x, y, w, h], i] of mine) for (const m of faces.get(texs[i])!) {
+    const mats4: THREE.Matrix4[] = [], rects: number[] = [], glows: number[] = [];
+    for (const [[, x, y, w, h], i] of mine) for (const [k, m] of faces.get(texs[i])!.entries()) {
       mats4.push(m);
+      if (glow) glows.push(glow.get(texs[i])?.[k] ?? 0);
       // Canvas y runs down, texture v up (flipY).
       rects.push(x / SIGN_PAGE_W, 1 - (y + h) / H, w / SIGN_PAGE_W, h / H);
     }
     const geo = new THREE.PlaneGeometry(1, 1);
     geo.setAttribute('aUvRect', new THREE.InstancedBufferAttribute(new Float32Array(rects), 4));
-    n += addInstanced(group, geo, signAtlasMat(atlas), mats4, 'sign-face');
+    if (glow) geo.setAttribute('aGlow', new THREE.InstancedBufferAttribute(new Float32Array(glows), 1));
+    n += addInstanced(group, geo, glow ? litSignAtlasMat(atlas) : signAtlasMat(atlas), mats4, glow ? 'sign-face-lit' : 'sign-face');
   });
   return n;
 }

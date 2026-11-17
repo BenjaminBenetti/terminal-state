@@ -272,6 +272,9 @@ export interface SignPlacement {
   w?: number;
   /** Task studio-subway-rework-m2-finishing-20261117-111246-01: plate height override (m; a v3 hall's clerestory tablet). Absent = signDims. */
   h?: number;
+  /** Task studio-subway-rework-m2-finishing-20261117-111246-01: a BACKLIT plate's glow (0..1: an illuminated destination sign of a v3 hall;
+   *  world/builder.ts draws its face emissive). Absent = an ordinary plate. */
+  lit?: number;
   /** Iteration 08: level the sign is mounted on (default 0; hang rods reach that level's ceiling); y is absolute. */
   level?: number;
   /** Task office-overhaul-20261030 (lane TENANTS): company-styled plate (world/builder.ts signTexture); absent = the default plate. */

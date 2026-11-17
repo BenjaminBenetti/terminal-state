@@ -187,6 +187,12 @@ function reserveCirculation(ctx: PlaceCtx, a: Area, S: HallSection): void {
   }
 }
 
+/**
+ * The backlight (SignPlacement.lit) of the hall's destination plates: illuminated boxes, as real concourse signage — the ticket office's
+ * fascia brightest, the pocket name plates and hung wayfinding boxes, then the clerestory tablets (world/builder.ts SIGN_GLOW).
+ */
+export const SIGN_LIT = {fascia: 1, plate: 0.9, hung: 0.9, tablet: 0.75} as const;
+
 /** The ticket office's fascia name plate: centred on the office, 0.32 m out from the wall (in front of the kit's fascia box). */
 export const OFFICE_FASCIA = {text: 'TICKETS · TRAVEL INFORMATION', y: 3.1, out: 0.32, maxW: 6} as const;
 
@@ -250,7 +256,7 @@ function ticketOffice(ctx: PlaceCtx, a: Area, S: HallSection, palette: ReadonlyS
         const fw = r2(Math.min(W - 0.6, OFFICE_FASCIA.maxW)), fx = r3(x0 + W / 2), fh = signDims({kind: 'info', w: fw}).h;
         const base = a.floorY ?? 0;
         if (backed(ctx, a, side, fx - fw / 2, fx + fw / 2, base + OFFICE_FASCIA.y - fh / 2)) {
-          ctx.layout.signs.push({x: fx, y: OFFICE_FASCIA.y, z: r3(a.y * CELL + OFFICE_FASCIA.out), rot: 0, kind: 'info', text: OFFICE_FASCIA.text, area: a.id, w: fw});
+          ctx.layout.signs.push({x: fx, y: OFFICE_FASCIA.y, z: r3(a.y * CELL + OFFICE_FASCIA.out), rot: 0, kind: 'info', text: OFFICE_FASCIA.text, area: a.id, w: fw, lit: SIGN_LIT.fascia});
           sum.frontSigns++;
         }
         return [x0, x0 + W];
@@ -273,7 +279,7 @@ function naveSigns(ctx: PlaceCtx, a: Area, S: HallSection, api: HallV3Api, sum: 
   picks.forEach((li, k) => {
     const x = S.lines[li];
     if (!api.hungRoofed(ctx.g, x, z, rot, w, a.ceil)) return;
-    layout.signs.push({x: r3(x), y, z: r3(z), rot, kind: 'info', text: texts[k % texts.length], area: a.id, hang: true, w});
+    layout.signs.push({x: r3(x), y, z: r3(z), rot, kind: 'info', text: texts[k % texts.length], area: a.id, hang: true, w, lit: SIGN_LIT.hung});
     sum.signs++;
   });
 }
@@ -312,7 +318,7 @@ function clerestory(ctx: PlaceCtx, a: Area, S: HallSection, office: [number, num
     const {face, facing} = faces[fi];
     feats.set(key(fi, bi), {kind: 'tablet', face, facing, along: [p, q], text});
     // (a tablet is a tall plate — lettering that reads across the nave, not a thin strip: TABLET_H, within the panel band)
-    layout.signs.push({x: r3((p + q) / 2), y: r2((b0 + b1) / 2 - base), z: r3(face + 0.06 * facing), rot: facing > 0 ? 0 : Math.PI, kind, text, area: a.id, w,
+    layout.signs.push({x: r3((p + q) / 2), y: r2((b0 + b1) / 2 - base), z: r3(face + 0.06 * facing), rot: facing > 0 ? 0 : Math.PI, kind, text, area: a.id, w, lit: SIGN_LIT.tablet,
       h: r2(Math.min(TABLET_H, (b1 - b0) * 0.6))});
     sum.tablets++;
   };
@@ -624,7 +630,7 @@ function pocketPlate(ctx: PlaceCtx, a: Area, side: 'N' | 'S', along: [number, nu
   if (!backed(ctx, a, side, x - w / 2, x + w / 2, base + y - h / 2) || !wallPlateFree(ctx, a, side, x - w / 2, x + w / 2, y - h / 2, y + h / 2)) return;
   const [zb0, zb1] = side === 'N' ? [z, z + 0.08] : [z - 0.08, z];
   if (!boxClear(ctx, x - w / 2, x + w / 2, y - h / 2, y + h / 2, zb0, zb1) || propBlocksDoorway(ctx.layout, x, (zb0 + zb1) / 2, w / 2, 0.04, base + y - h / 2, h)) return;
-  ctx.layout.signs.push({x, y, z: r3(z), rot: side === 'N' ? 0 : Math.PI, kind: 'info', text, area: a.id, w});
+  ctx.layout.signs.push({x, y, z: r3(z), rot: side === 'N' ? 0 : Math.PI, kind: 'info', text, area: a.id, w, lit: SIGN_LIT.plate});
   sum.frontSigns++;
 }
 
@@ -675,7 +681,7 @@ function waitingSigns(ctx: PlaceCtx, a: Area, S: HallSection, sum: HallV3Summary
       if (!(top > y + 0.4) || !far(x, cz) || !boxClear(ctx, s0, s1, y - 0.2, top, cz - 0.1, cz + 0.1)) continue;
       if (!hungRoofed(g, x, cz, 0, w, a.ceil)) continue;
       const arrow = Math.abs(gate - x) < 2.5 ? 'up' : gate > x ? 'right' : 'left';
-      layout.signs.push({x, y, z: cz, rot: 0, kind: 'info', text: texts[n % texts.length], area: a.id, hang: true, w, arrow});
+      layout.signs.push({x, y, z: cz, rot: 0, kind: 'info', text: texts[n % texts.length], area: a.id, hang: true, w, arrow, lit: SIGN_LIT.hung});
       sum.waitingSigns++;
       n++;
       break;
