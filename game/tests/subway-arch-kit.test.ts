@@ -14,7 +14,8 @@ import {LEVELS} from '../src/levels/registry';
 import {PENDANT_Y, type LightPlacement, type StationLayout} from '../src/gen/stationTypes';
 import {STATION_THEMES} from '../src/gen/stationPlans';
 import {FORM_MIN_CLEAR, VAULT_GAP, areaFloor, ceilingFormOf, soffitAt} from '../src/gen/subwayCeilings';
-import {CELL} from '../src/gen/grid';
+import {CELL, FLOOR, Grid} from '../src/gen/grid';
+import {STYLE_EMISSION, bakeLightField, sampleField, type BakedField} from '../src/world/lightField';
 import {WorldMaterials} from '../src/world/materials';
 import {buildWorld, type BuiltWorld} from '../src/world/builder';
 import {normalizeFaces} from '../src/world/wallDetailFaces';
@@ -204,4 +205,39 @@ describe('styled hall lights', () => {
     expect(w.subwayArch!.kit!.lanterns).toBeGreaterThanOrEqual(1);
     expect(w.subwayArch!.kit!.coves).toBeGreaterThanOrEqual(1);
   }, 240_000);
+});
+
+describe('styled hall light photometry (the baked field)', () => {
+  // a 30 x 30 m hall with a 9.3 m ceiling; one fixture at its centre
+  const hall = (): Grid => {
+    const w = 62, g = new Grid(w, w);
+    for (let y = 1; y < w - 1; y++) for (let x = 1; x < w - 1; x++) { g.set(x, y, FLOOR); g.ceil[y * w + x] = 9.3; g.area[y * w + x] = 0; }
+    return g;
+  };
+  const lum = (v: readonly number[]) => 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+  const irr = (f: BakedField, x: number, y: number, z: number, n: [number, number, number]) => {
+    const s = sampleField(f, x, y, z, [1, 1, 1], n);
+    return lum(s.amb) + lum(s.dirColor) * Math.max(0, n[0] * s.dir[0] + n[1] * s.dir[1] + n[2] * s.dir[2]);
+  };
+  const at = (y: number, style?: LightPlacement['style']): LightPlacement =>
+    ({x: 15.25, y, z: 15.25, rot: 0, area: 0, broken: false, flicker: false, warm: true, power: 0.9, dying: false, ...(style ? {style} : {})});
+  const bake = (l: LightPlacement) => bakeLightField({grid: hall(), lights: [l], trenchFloorY: -1.15});
+  const up: [number, number, number] = [0, 1, 0], down: [number, number, number] = [0, -1, 0];
+
+  it('every style has its photometry; a lantern lights the floor below it and further out than a tube at the same height', () => {
+    expect(Object.keys(STYLE_EMISSION).sort()).toEqual(['cove', 'downlight', 'drum']);
+    const tube = bake(at(4.5)), drum = bake(at(4.5, 'drum'));
+    expect(irr(drum, 15.25, 0.05, 15.25, up)).toBeGreaterThan(irr(tube, 15.25, 0.05, 15.25, up) * 1.4);
+    expect(irr(drum, 22.25, 0.05, 15.25, up)).toBeGreaterThan(irr(tube, 22.25, 0.05, 15.25, up) * 2);
+    // it glows all round: the soffit above it gets light too
+    expect(irr(drum, 17.25, 9.2, 15.25, down)).toBeGreaterThan(irr(tube, 17.25, 9.2, 15.25, down) * 1.5);
+  });
+
+  it('a cove washes the soffit above it and sends little to the floor straight below', () => {
+    const tube = bake(at(9.0)), cove = bake(at(9.0, 'cove'));
+    const soffit = (f: BakedField) => irr(f, 16.75, 9.25, 15.25, down), floor = (f: BakedField) => irr(f, 15.25, 0.05, 15.25, up);
+    expect(soffit(cove)).toBeGreaterThan(soffit(tube) * 1.5);
+    // its light goes up: the floor's share of it is well under the tube's (whose 9 m drop is past its reach anyway)
+    expect(floor(cove) / soffit(cove)).toBeLessThan(0.5 * floor(tube) / soffit(tube));
+  });
 });

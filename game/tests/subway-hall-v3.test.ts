@@ -244,13 +244,18 @@ describe('the version-3 great hall at natural seeds', () => {
       expect(validateLayout(L), `${s}`).toEqual([]);
       expect(playerTrainPlacement(L), `${s}`).not.toBeNull();
     }
-    const L0 = gen(VARIANT_SEEDS.basilica, 3, 0), L1 = gen(VARIANT_SEEDS.basilica, 3);
+    // each Surface Run version explicitly (as subway-plan-families): version 1 opens the closed exit's stairwell, version 2 puts its
+    // cargo lift at the far end of a closed exit hall
+    const L0 = gen(VARIANT_SEEDS.basilica, 3, 0);
     expect(L0.surfaceAccess).toBeUndefined();
-    const a = L1.surfaceAccess!;
-    expect(a?.kind).toBe('subway-stair');
-    expect(L1.areas[a.hall!].type).toBe('exit-stair');
     const base = new Set(validateLayout(L0));
-    expect(validateLayout(L1).filter(x => !base.has(x))).toEqual([]);
+    for (const [v, kind] of [[1, 'subway-stair'], [2, 'lift']] as const) {
+      const L1 = gen(VARIANT_SEEDS.basilica, 3, v);
+      const a = L1.surfaceAccess!;
+      expect(a?.kind, `v${v}`).toBe(kind);
+      expect(L1.areas[a.hall!].type, `v${v}`).toBe('exit-stair');
+      expect(validateLayout(L1).filter(x => !base.has(x)), `v${v}`).toEqual([]);
+    }
   }, 240_000);
 
   it('deterministic, and within the generation budget (warm)', () => {
