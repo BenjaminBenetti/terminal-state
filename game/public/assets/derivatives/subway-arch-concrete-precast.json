@@ -1,0 +1,193 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "subway-arch-concrete-precast",
+ "task": "studio-subway-architecture-materials-rework-20261117-072826-01",
+ "lane": "TEX",
+ "status": "runtime PBR derivative (period crop / seam feather / resize / derived normal + ORM / JPEG; deterministic processing only) of an ORIGINAL tileable surface texture generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization for the Subway architecture + materials rework; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Subway brutalist halls: precast wall panels",
+ "subject": "fair-faced precast concrete 1.2 x 1.2 m panels with tie holes",
+ "cls": "concrete",
+ "rebuild": "node tools/asset-pipeline/props/build-subway-arch-textures.mjs",
+ "rawStorage": "reference/tasks/subway-architecture-materials-rework-20261117-072826/gen/{LEDGER.jsonl, raw/codex-<n>-<id>-exec-<uuid>.png, prompts/frozen/<id>-c<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 4,
+  "session": "01a1e876-eb2e-71e3-87ff-e10b94b87347",
+  "requested": "2026-11-17T07:44:29.287849Z",
+  "finished": "2026-11-17T07:45:19.477597Z",
+  "seconds": 50.2,
+  "imageGenGenerations": 1
+ },
+ "prompt": {
+  "file": "frozen/concrete-precast-c4.txt",
+  "sha256": "a24a06843cfe703c0713f843fee5ec457660c1fc0dd467fb8ad27731f68fcdbb"
+ },
+ "source": {
+  "file": "codex-4-concrete-precast-exec-063d1e19-3b04-41b1-801a-a828b1262181.png",
+  "sha256": "ffa5d689fb6ef58661c791928034b604f94a5200a1da134a2bc76b384072be41",
+  "bytes": 2848735,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "jointPolarity": "dark",
+  "profileHighPassPx": 31,
+  "crop": {
+   "x": 313,
+   "y": 311,
+   "w": 627,
+   "h": 627,
+   "u": {
+    "mode": "single",
+    "module": 1.2,
+    "cropStart": 313,
+    "cropSize": 627,
+    "periods": 1,
+    "periodPx": 627,
+    "mmPerPx": 1.9139,
+    "featherPx": 96,
+    "why": "one period (627 px = 1.2 m) centred on the joint at 626.218 (inferred scale 1.9139 mm/px)"
+   },
+   "v": {
+    "mode": "single",
+    "module": 1.2,
+    "cropStart": 311,
+    "cropSize": 627,
+    "periods": 1,
+    "periodPx": 627,
+    "mmPerPx": 1.9139,
+    "featherPx": 96,
+    "why": "one period (627 px = 1.2 m) centred on the joint at 624.437 (inferred scale 1.9139 mm/px)"
+   }
+  },
+  "seam": {
+   "feather": "cropped axes: the last featherPx columns / rows cross-fade (cosine) into the source pixels just before the crop start (the true wrap neighbours)",
+   "fullFramePatch": null
+  },
+  "lighting": {
+   "threshold": {
+    "cornerToCentre": 0.04,
+    "lowRange": 0.08
+   },
+   "eligible": false,
+   "before": {
+    "cornerToCentre": -0.015,
+    "spread": 0.018,
+    "lowRange": 0.03
+   },
+   "applied": false,
+   "after": {
+    "cornerToCentre": -0.016,
+    "spread": 0.017,
+    "lowRange": 0.03
+   }
+  },
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill",
+   "wrap": "3 x 3 tiled, centre extract"
+  },
+  "height": {
+   "jointDepthM": 0.008,
+   "bevelM": 0.004,
+   "detailSlope": 0.12,
+   "jointHalfWidthPx": 4,
+   "rowJoints": 1,
+   "courses": 1,
+   "runningBond": null
+  },
+  "normal": {
+   "convention": "tangent space, R = -dh/dx, G = +dh/dy (image y down), B = z (build-reactor-kit.mjs)",
+   "slopes": "metres per metre from the height (m) and the span per texel"
+  },
+  "orm": {
+   "r": "ambient occlusion from cavity",
+   "g": "roughness 0.82-0.95 faces, 0.95 joints / gaps",
+   "b": "metalness 0",
+   "aoGainPerM": 90,
+   "aoBlurPx": 8,
+   "aoFloor": 0.35
+  },
+  "encode": {
+   "color": {
+    "quality": 85,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:2:0"
+   },
+   "normal": {
+    "quality": 90,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "orm": {
+    "quality": 88,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) + plain JS via tools/asset-pipeline/props/build-subway-arch-textures.mjs"
+ },
+ "tileCheck": {
+  "before": {
+   "seamLR": 4.1,
+   "interiorLR": 3.8,
+   "meanLR": 2.6,
+   "ratioLR": 1.565,
+   "seamTB": 3.8,
+   "interiorTB": 6.4,
+   "meanTB": 3.4,
+   "ratioTB": 1.127
+  },
+  "after": {
+   "seamLR": 2.2,
+   "interiorLR": 3.8,
+   "meanLR": 2.5,
+   "ratioLR": 0.881,
+   "seamTB": 2.5,
+   "interiorTB": 6.3,
+   "meanTB": 3.3,
+   "ratioTB": 0.771
+  },
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs interior neighbour rows / columns (pre-JPEG 1024 buffers); phase = the same position in every other whole period; ratio = seam / phase (else / mean); before = the plain crop"
+ },
+ "spanM": {
+  "u": 1.2,
+  "v": 1.2
+ },
+ "meanLinearAlbedo": [
+  0.4609,
+  0.4223,
+  0.3709
+ ],
+ "meanRoughness": 0.882,
+ "outputs": {
+  "color": {
+   "url": "assets/textures/subway/arch/subway-arch-concrete-precast-color.jpg",
+   "bytes": 107696,
+   "sha256": "9b14db88232f82f71ab08578d62b83ed21a70b2ff002ba0e6d6cf08beeb16aeb",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "normal": {
+   "url": "assets/textures/subway/arch/subway-arch-concrete-precast-normal.jpg",
+   "bytes": 101550,
+   "sha256": "f6a90f39f714f8d65d5fca5d2f6b6d53ab6a8531917d86239d0954c8ab767211",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "orm": {
+   "url": "assets/textures/subway/arch/subway-arch-concrete-precast-orm.jpg",
+   "bytes": 104221,
+   "sha256": "0efc205a8d96a120cab8e1594f8d0f9c9b06f40f291488af0ba6d2f807a91d62",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  }
+ }
+}

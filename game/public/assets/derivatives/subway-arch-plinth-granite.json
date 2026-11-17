@@ -1,0 +1,197 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "subway-arch-plinth-granite",
+ "task": "studio-subway-architecture-materials-rework-20261117-072826-01",
+ "lane": "TEX",
+ "status": "runtime PBR derivative (period crop / seam feather / resize / derived normal + ORM / JPEG; deterministic processing only) of an ORIGINAL tileable surface texture generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization for the Subway architecture + materials rework; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Subway wall plinths / skirting",
+ "subject": "dark honed granite 600 x 300 mm cladding panels, stack bond",
+ "cls": "stone",
+ "rebuild": "node tools/asset-pipeline/props/build-subway-arch-textures.mjs",
+ "rawStorage": "reference/tasks/subway-architecture-materials-rework-20261117-072826/gen/{LEDGER.jsonl, raw/codex-<n>-<id>-exec-<uuid>.png, prompts/frozen/<id>-c<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 7,
+  "session": "01a1e877-ad51-7121-b13a-8d8b351b4480",
+  "requested": "2026-11-17T07:45:19.567914Z",
+  "finished": "2026-11-17T07:45:56.697119Z",
+  "seconds": 37.1,
+  "imageGenGenerations": 1
+ },
+ "prompt": {
+  "file": "frozen/plinth-granite-c7.txt",
+  "sha256": "9d2c48198f37a1a846f2694f9dbd97c9e697915ff117320f11f40a54c5ae3475"
+ },
+ "source": {
+  "file": "codex-7-plinth-granite-exec-13cd24dd-6481-4f0d-9d03-fa1cf7514434.png",
+  "sha256": "a920ff4b0ed7df5607893a51188089a426de8ec49e8d2d25fd5f772c0c9c81b8",
+  "bytes": 3381681,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "jointPolarity": "dark",
+  "profileHighPassPx": 31,
+  "crop": {
+   "x": 627,
+   "y": 313,
+   "w": 627,
+   "h": 627,
+   "u": {
+    "mode": "single",
+    "module": 0.6,
+    "cropStart": 627,
+    "cropSize": 627,
+    "periods": 1,
+    "periodPx": 627.092,
+    "mmPerPx": 0.9568,
+    "featherPx": 6,
+    "why": "one period (627.092 px = 0.6 m) starting on the joint at 626.549: one whole source panel (inferred scale 0.9568 mm/px)"
+   },
+   "v": {
+    "mode": "joints",
+    "module": 0.3,
+    "cropStart": 313,
+    "cropSize": 627,
+    "periods": 2,
+    "periodPx": 313.546,
+    "mmPerPx": 0.9568,
+    "featherPx": 40,
+    "jointStepPx": 313.5,
+    "jointLines": 3,
+    "why": "from joint centre 312.73 to joint centre 939.822: 2 whole periods of 313.546 px (1 joint line per period)"
+   }
+  },
+  "seam": {
+   "feather": "cropped axes: the last featherPx columns / rows cross-fade (cosine) into the source pixels just before the crop start (the true wrap neighbours)",
+   "fullFramePatch": null
+  },
+  "lighting": {
+   "threshold": {
+    "cornerToCentre": 0.04,
+    "lowRange": 0.08
+   },
+   "eligible": false,
+   "before": {
+    "cornerToCentre": -0.008,
+    "spread": 0.191,
+    "lowRange": 0.138
+   },
+   "applied": false,
+   "after": {
+    "cornerToCentre": -0.013,
+    "spread": 0.186,
+    "lowRange": 0.138
+   }
+  },
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill",
+   "wrap": "3 x 3 tiled, centre extract"
+  },
+  "height": {
+   "jointDepthM": 0.002,
+   "bevelM": 0.0008,
+   "detailSlope": 0.04,
+   "jointHalfWidthPx": 2.5,
+   "rowJoints": 2,
+   "courses": 2,
+   "runningBond": null
+  },
+  "normal": {
+   "convention": "tangent space, R = -dh/dx, G = +dh/dy (image y down), B = z (build-reactor-kit.mjs)",
+   "slopes": "metres per metre from the height (m) and the span per texel"
+  },
+  "orm": {
+   "r": "ambient occlusion from cavity",
+   "g": "roughness 0.45-0.6 faces, 0.85 joints / gaps",
+   "b": "metalness 0",
+   "aoGainPerM": 260,
+   "aoBlurPx": 6,
+   "aoFloor": 0.35
+  },
+  "encode": {
+   "color": {
+    "quality": 85,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:2:0"
+   },
+   "normal": {
+    "quality": 90,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "orm": {
+    "quality": 88,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) + plain JS via tools/asset-pipeline/props/build-subway-arch-textures.mjs"
+ },
+ "tileCheck": {
+  "before": {
+   "seamLR": 5.3,
+   "interiorLR": 6.5,
+   "meanLR": 4.9,
+   "ratioLR": 1.084,
+   "seamTB": 7.1,
+   "interiorTB": 6,
+   "meanTB": 5,
+   "phaseTB": 4.1,
+   "ratioTB": 1.745
+  },
+  "after": {
+   "seamLR": 4.4,
+   "interiorLR": 6.5,
+   "meanLR": 4.9,
+   "ratioLR": 0.901,
+   "seamTB": 6.7,
+   "interiorTB": 6,
+   "meanTB": 5,
+   "phaseTB": 4.1,
+   "ratioTB": 1.628
+  },
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs interior neighbour rows / columns (pre-JPEG 1024 buffers); phase = the same position in every other whole period; ratio = seam / phase (else / mean); before = the plain crop"
+ },
+ "spanM": {
+  "u": 0.5999,
+  "v": 0.5999
+ },
+ "meanLinearAlbedo": [
+  0.036,
+  0.0363,
+  0.0367
+ ],
+ "meanRoughness": 0.533,
+ "outputs": {
+  "color": {
+   "url": "assets/textures/subway/arch/subway-arch-plinth-granite-color.jpg",
+   "bytes": 152331,
+   "sha256": "71f03e490214c2c1b692ab11dd3f31b291feba6c9b1baf0ad52ceb4b1e651368",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "normal": {
+   "url": "assets/textures/subway/arch/subway-arch-plinth-granite-normal.jpg",
+   "bytes": 63293,
+   "sha256": "6f4a8763fb47b628b4419eb0fc6d2a47e9fde66776db55d7af6747854359dca1",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "orm": {
+   "url": "assets/textures/subway/arch/subway-arch-plinth-granite-orm.jpg",
+   "bytes": 171931,
+   "sha256": "ebb8600182c98ea5330df34de1e02bc11e55539365cdd751f250f818ff31b62e",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  }
+ }
+}

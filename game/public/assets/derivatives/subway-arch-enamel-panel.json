@@ -1,0 +1,195 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "subway-arch-enamel-panel",
+ "task": "studio-subway-architecture-materials-rework-20261117-072826-01",
+ "lane": "TEX",
+ "status": "runtime PBR derivative (period crop / seam feather / resize / derived normal + ORM / JPEG; deterministic processing only) of an ORIGINAL tileable surface texture generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization for the Subway architecture + materials rework; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Subway modern stations: enamel wall cladding",
+ "subject": "warm white vitreous enamel 1200 x 600 mm panels with shadow-gap joints",
+ "cls": "enamel",
+ "rebuild": "node tools/asset-pipeline/props/build-subway-arch-textures.mjs",
+ "rawStorage": "reference/tasks/subway-architecture-materials-rework-20261117-072826/gen/{LEDGER.jsonl, raw/codex-<n>-<id>-exec-<uuid>.png, prompts/frozen/<id>-c<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 1,
+  "session": "01a1e876-eb29-7103-b3a0-541ae49c2fe5",
+  "requested": "2026-11-17T07:44:29.210656Z",
+  "finished": "2026-11-17T07:45:05.907478Z",
+  "seconds": 36.7,
+  "imageGenGenerations": 1
+ },
+ "prompt": {
+  "file": "frozen/enamel-panel-c1.txt",
+  "sha256": "77d8f54e66bb0ab40dbaa647863362f70d928ac11542f04905afd22020d3474b"
+ },
+ "source": {
+  "file": "codex-1-enamel-panel-exec-b06583bf-bcd7-4c6e-87b4-ec6f8eaa60c1.png",
+  "sha256": "8d721ec70094f9bf9037a996180ddacad0b4e1c7519f6f7fb7079ebcaffaf18a",
+  "bytes": 2299947,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "jointPolarity": "dark",
+  "profileHighPassPx": 31,
+  "crop": {
+   "x": 207,
+   "y": 413,
+   "w": 840,
+   "h": 420,
+   "u": {
+    "mode": "single",
+    "module": 1.2,
+    "cropStart": 207,
+    "cropSize": 840,
+    "periods": 1,
+    "periodPx": 840.174,
+    "mmPerPx": 1.4283,
+    "featherPx": 96,
+    "why": "one period (840.174 px = 1.2 m) centred on the joint at 626.609 (inferred scale 1.4283 mm/px)"
+   },
+   "v": {
+    "mode": "joints",
+    "module": 0.6,
+    "cropStart": 413,
+    "cropSize": 420,
+    "periods": 1,
+    "periodPx": 420.087,
+    "mmPerPx": 1.4283,
+    "featherPx": 40,
+    "jointStepPx": 420.52,
+    "jointLines": 2,
+    "why": "from joint centre 412.965 to joint centre 833.052: 1 whole periods of 420.087 px (1 joint line per period)"
+   }
+  },
+  "seam": {
+   "feather": "cropped axes: the last featherPx columns / rows cross-fade (cosine) into the source pixels just before the crop start (the true wrap neighbours)",
+   "fullFramePatch": null
+  },
+  "lighting": {
+   "threshold": {
+    "cornerToCentre": 0.04,
+    "lowRange": 0.08
+   },
+   "eligible": false,
+   "before": {
+    "cornerToCentre": 0.004,
+    "spread": 0.01,
+    "lowRange": 0.099
+   },
+   "applied": false,
+   "after": {
+    "cornerToCentre": -0.001,
+    "spread": 0.007,
+    "lowRange": 0.074
+   }
+  },
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill",
+   "wrap": "3 x 3 tiled, centre extract"
+  },
+  "height": {
+   "jointDepthM": 0.01,
+   "bevelM": 0.002,
+   "detailSlope": 0.02,
+   "jointHalfWidthPx": 1.5,
+   "rowJoints": 1,
+   "courses": 1,
+   "runningBond": null
+  },
+  "normal": {
+   "convention": "tangent space, R = -dh/dx, G = +dh/dy (image y down), B = z (build-reactor-kit.mjs)",
+   "slopes": "metres per metre from the height (m) and the span per texel"
+  },
+  "orm": {
+   "r": "ambient occlusion from cavity",
+   "g": "roughness 0.3-0.42 faces, 0.9 joints / gaps",
+   "b": "metalness 0",
+   "aoGainPerM": 90,
+   "aoBlurPx": 8,
+   "aoFloor": 0.35
+  },
+  "encode": {
+   "color": {
+    "quality": 85,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:2:0"
+   },
+   "normal": {
+    "quality": 90,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "orm": {
+    "quality": 88,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) + plain JS via tools/asset-pipeline/props/build-subway-arch-textures.mjs"
+ },
+ "tileCheck": {
+  "before": {
+   "seamLR": 1.7,
+   "interiorLR": 1.2,
+   "meanLR": 1.8,
+   "ratioLR": 0.934,
+   "seamTB": 7.4,
+   "interiorTB": 2.9,
+   "meanTB": 1.5,
+   "ratioTB": 4.929
+  },
+  "after": {
+   "seamLR": 1.4,
+   "interiorLR": 1.2,
+   "meanLR": 1.8,
+   "ratioLR": 0.749,
+   "seamTB": 6.4,
+   "interiorTB": 2.7,
+   "meanTB": 1.5,
+   "ratioTB": 4.35
+  },
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs interior neighbour rows / columns (pre-JPEG 1024 buffers); phase = the same position in every other whole period; ratio = seam / phase (else / mean); before = the plain crop"
+ },
+ "spanM": {
+  "u": 1.1998,
+  "v": 0.5999
+ },
+ "meanLinearAlbedo": [
+  0.7684,
+  0.7183,
+  0.6239
+ ],
+ "meanRoughness": 0.362,
+ "outputs": {
+  "color": {
+   "url": "assets/textures/subway/arch/subway-arch-enamel-panel-color.jpg",
+   "bytes": 57519,
+   "sha256": "a9f26ffaf40043fec1b8bca1756939c7c5a1d31be56b50a069b35aa8c4ca9435",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "normal": {
+   "url": "assets/textures/subway/arch/subway-arch-enamel-panel-normal.jpg",
+   "bytes": 32717,
+   "sha256": "d613c4ccaa66053dee6eeb21283b180491eb88bff332ded23cd7d258eafd1f01",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "orm": {
+   "url": "assets/textures/subway/arch/subway-arch-enamel-panel-orm.jpg",
+   "bytes": 30560,
+   "sha256": "c9429602cbd8b1d3e9b3df4cf256c1c0fd61da546701d10d2f6ba22ef5db0485",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  }
+ }
+}
