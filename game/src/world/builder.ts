@@ -318,6 +318,19 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     const out = levels.filter(L => { const r = L.grid.rampIdx[i]; return r >= 0 && rampsEqual(L.grid.ramps[r], R); }).map(L => L.id);
     return out.length ? out : [level];
   };
+  // Task mall-roof-stairwell-fix-20261117: the level indices (bit k = levels[k]) whose grid holds the SAME band as level index L in
+  // column i — a public run carved into both grids it joins (flights + run-out cells; LevelColumns keeps one band, owned by the lower
+  // storey). The LevelColumns dedupe rule.
+  const sharedBands = (L: number, i: number): number => {
+    const g = levels[L].grid, r = g.rampIdx[i];
+    let m = 0;
+    for (let k = 0; k < levels.length; k++) {
+      const h = levels[k].grid, q = h.rampIdx[i], c = h.cells[i];
+      if (c !== FLOOR && c !== VOID) continue;
+      if (r >= 0 ? q >= 0 && rampsEqual(h.ramps[q], g.ramps[r]) : q < 0 && Math.abs(h.floorOf(i) - g.floorOf(i)) < 1e-3 && Math.abs(cellCeilAt(h, i) - cellCeilAt(g, i)) < 1e-3) m |= 1 << k;
+    }
+    return m;
+  };
   // Subway stations (<= LEGACY_STACK levels) keep one merged, never level-culled flight chunk per material (draw calls).
   const tagFlights = levels.length > LEGACY_STACK;
   const stairChunk = (x: number, z: number, ids: number[]) => (tagFlights ? `${chunkKey(STAIR_LEVEL, x, z)}#${ids.join('-')}` : chunkKey(STAIR_LEVEL, x, z));
@@ -422,11 +435,12 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
       floorQuadTo(typeof mat === 'string' ? A(mat, ck) : S(mat.shop, ck), m, xa, za, xb, zb, y, vFrom, flip);
     }
   };
-  const ceilRect = (mat: MatKey | string, level: number, x0: number, z0: number, x1: number, z1: number, y: number) => {
+  const ceilRect = (mat: MatKey | string, level: number, x0: number, z0: number, x1: number, z1: number, y: number, storeys?: number[]) => {
     const m = scaleOf(mat);
     drawnCeils.push(level, x0, z0, x1, z1, y, drawnKey(mat));
     for (const [xa, xb] of chunkSpans(x0, x1)) for (const [za, zb] of chunkSpans(z0, z1)) {
-      A(mat, chunkKey(level, (xa + xb) / 2, (za + zb) / 2)).quad([[xa, y, za], [xb, y, za], [xb, y, zb], [xa, y, zb]], [0, -1, 0],
+      const ck = storeys ? stairChunk((xa + xb) / 2, (za + zb) / 2, storeys) : chunkKey(level, (xa + xb) / 2, (za + zb) / 2);
+      A(mat, ck).quad([[xa, y, za], [xb, y, za], [xb, y, zb], [xa, y, zb]], [0, -1, 0],
         [[xa / m.u, za / m.v], [xb / m.u, za / m.v], [xb / m.u, zb / m.v], [xa / m.u, zb / m.v]]);
     }
   };
@@ -529,7 +543,21 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     // height for its rooms and bridge decks — versions 1-4 answer exactly as before)
     const oc = r.voidCell ? (mall?.ceilKey(r.level, -1, r.row * g0.w + r.x0, r.y) ?? reactor?.ceilKey(r.level, -1, r.row * g0.w + r.x0, r.y) ?? mkt?.voidCeilKey(r.level, r.row * g0.w + r.x0, r.y) ?? null) : office?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? mall?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? reactor?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? sky?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? mkt?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? bunk?.ceilKey(r.level, r.area) ?? surf?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? null; // (+ reactor: lane ARCH; + sky: lane VIEW, none inside an atrium opening)
     if (oc === false) { drawnCeils.push(levels[r.level].id, r.x0 * CELL, r.row * CELL, r.x1 * CELL, (r.row + 1) * CELL, r.y, -1); continue; }
-    ceilRect(oc ?? (r.voidCell || !a || a.publicSpace ? 'ceiling' : 'ceilingService'), levels[r.level].id, r.x0 * CELL, r.row * CELL, r.x1 * CELL, (r.row + 1) * CELL, r.y);
+    const ck = oc ?? (r.voidCell || !a || a.publicSpace ? 'ceiling' : 'ceilingService');
+    // Task mall-roof-stairwell-fix-20261117 (user: "a massive hole in the roof ... above a stairwell"): the mall's ceiling over a band two
+    // storeys share — a public run's capped open well (gen/mall/carve.ts OPEN_HEADROOM), its flat ceiling at the UPPER storey's gallery
+    // ceiling — is drawn with both storeys (the flight's chunk tag, like its side walls): as the lower storey's mesh the level culler hid
+    // it from the upper storey it belongs to. Every other ceiling (and every other level) keeps its storey's chunk.
+    if (mall && tagFlights) {
+      const row = r.row * g0.w;
+      for (let x = r.x0; x < r.x1;) {
+        const m = sharedBands(r.level, row + x);
+        let e = x + 1;
+        while (e < r.x1 && sharedBands(r.level, row + e) === m) e++;
+        ceilRect(ck, levels[r.level].id, x * CELL, r.row * CELL, e * CELL, (r.row + 1) * CELL, r.y, m & (m - 1) ? levels.filter((_, k) => (m >> k) & 1).map(l => l.id) : undefined);
+        x = e;
+      }
+    } else ceilRect(ck, levels[r.level].id, r.x0 * CELL, r.row * CELL, r.x1 * CELL, (r.row + 1) * CELL, r.y);
     if (++step % 128 === 0) yield;
   }
   yield 'world.stairs';
