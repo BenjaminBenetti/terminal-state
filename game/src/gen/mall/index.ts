@@ -44,7 +44,9 @@ import {dressMallShops} from './shopsDress'; // lane SHOPS: the shop interiors (
 import {placeMallWeapons} from './shopsWeapons'; // lane SHOPS: the bounded once-per-run gun-shop weapon plan
 import {placeMallLandmarks, type LandmarkReport} from './landmarks'; // lane ARCH: fountain, directory pylons, wayfinding signs
 import {placeAtriumColumns, type ColumnReport} from './columns'; // task mall-playtest-revision-20261031 (lane FIX, U04): round atrium columns = props
-import {CROP_MARGIN, FLOORS, MALL_CANVAS, mallFrame, mallSeed, type MallFrame, type MallVariant} from './frame';
+import {CROP_MARGIN, FLOORS, MALL_CANVAS, isPlanVariant, mallFrame, mallSeed, mallVariantAt, type MallFrame, type MallVariant} from './frame';
+import {MALL_LAYOUT_VERSION, MALL_PLANS_MIN_VERSION} from './layoutVersion'; // task studio-mall-layout-variety-20261117-005520-01
+import {placeMallWindows, windowReserveRect, type DesignedWindowEnd} from './windows';
 import {carveMall, type MallCarve} from './carve';
 import {exitHolds, mallInfo, mallLinks, mouthHolds, patrolGraph, runRails, subwayRoot, type Crop} from './structure';
 import {mallIssues} from './validate';
@@ -55,7 +57,9 @@ import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EX
 import {populateExtensions} from '../annexContent'; // Track 2 (lane CONTENT): the extensions' appended content
 import {placeLingerieSpawns, retagLingerieSpawns} from './lingerieSpawns'; // task mall-lingerie-20261102-221554 (lane CONTEXT): store-local variants
 
-export {MALL_VARIANTS, mallFrame, mallVariantOf, mallVariantV2Of, mallStoreyLabel, setMallVariantOverride, type MallVariant} from './frame';
+export {MALL_VARIANTS, MALL_PLAN_VARIANTS, MALL_ALL_VARIANTS, mallFrame, mallVariantAt, mallVariantOf, mallVariantV2Of, mallPlanFamilyOf, mallStoreyLabel, setMallVariantOverride, type MallVariant} from './frame';
+export {MALL_LAYOUT_LANE, MALL_LAYOUT_VERSION, mallLayoutVersionFor} from './layoutVersion';
+export {placeMallWindows, MALL_WINDOW_STATS, WINDOW, windowColliderCells} from './windows';
 export {mallIssues, mallVoidCells, mallRouteGroups} from './validate';
 export {mallNameOf, MALL_GENERIC_NAME} from './names';
 export {placeStreetExits, MALL_STREET_LEVEL, MALL_EXIT_STATS, EXIT, exitColliderCells} from './exits';
@@ -76,6 +80,8 @@ export interface MallGenOptions {
   trackExt?: TrackExtConfig | 'none';
   /** Task mall-round2-20261031 (lane GEN, M09): the locked street-exit post-pass (default true; false = the core layout only). */
   streetExits?: boolean;
+  /** Task studio-mall-layout-variety-20261117-005520-01: the version-2 window-wall post-pass (default: with the street exits). */
+  windows?: boolean;
   /** Task mall-round3-20261031 (lane LIGHT, R7): the walkway light decay pass (default true; false = applyLighting's walkway state). */
   walkwayDecay?: boolean;
   /** Task mall-lingerie-20261102 (lane STORE): tests / QA — force programs onto shop ids (assignMallPrograms AssignOpts.force). */
@@ -84,11 +90,26 @@ export interface MallGenOptions {
 
 /** The designed street-exit corridor ends of a layout's skeleton (cropped cells), for the post-pass (set by tryLevel). */
 const DESIGNED_EXITS = new WeakMap<StationLayout, DesignedExitEnd[]>();
+/** Task studio-mall-layout-variety-20261117-005520-01: the designed glazed (window) ends of a layout's skeleton (cropped cells). */
+const DESIGNED_WINDOWS = new WeakMap<StationLayout, DesignedWindowEnd[]>();
+
+/**
+ * Task studio-mall-layout-variety-20261117-005520-01: the version a build uses (SectionGenContext.layoutVersion, absent = current) and
+ * its variant: version 1 = the atrium family's roll, exactly as before; version 2 = the plan-family roll (gen/mall/frame.ts mallVariantAt).
+ */
+function versionOf(ctx: SectionGenContext): number { return ctx.layoutVersion ?? MALL_LAYOUT_VERSION; }
+
+/** The append-only post-passes on a chosen layout: the street exits, then (version >= 2) the parking-lot window walls. */
+function postPasses(L: StationLayout, ctx: SectionGenContext, opts: MallGenOptions): void {
+  const windows = DESIGNED_WINDOWS.get(L) ?? [];
+  if (opts.streetExits !== false) placeStreetExits(L, DESIGNED_EXITS.get(L) ?? [], ctx.levelSeed, windows.map(windowReserveRect), L.mall && isPlanVariant(L.mall.variant) ? 1 : 0);
+  if ((opts.windows ?? opts.streetExits !== false) && versionOf(ctx) >= MALL_PLANS_MIN_VERSION) placeMallWindows(L, windows, ctx.levelSeed);
+}
 
 /** The ONE continuous mall layout (station + three retail floors + the roof record). */
 export function generateMallLevel(ctx: SectionGenContext, opts: MallGenOptions = {}): StationLayout {
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
-  let f = mallFrame(ctx.levelSeed, opts.variant);
+  let f = mallFrame(ctx.levelSeed, opts.variant ?? mallVariantAt(ctx.levelSeed, versionOf(ctx)));
   const loot = opts.loot ?? lootProfile('mall');
   const spawns = opts.spawns ?? spawnProfile('mall');
   const trackExt = opts.trackExt ?? trackExtConfig('mall');
@@ -117,7 +138,8 @@ export function generateMallLevel(ctx: SectionGenContext, opts: MallGenOptions =
   }
   // Task mall-round2-20261031 (lane GEN, M09): the locked street exits — an APPEND-ONLY post-pass on the chosen layout (its areas /
   // lights are the last records: the core of an existing (seed, variant) stays identical; gen/mall/exits.ts).
-  if (fallback && opts.streetExits !== false) placeStreetExits(fallback, DESIGNED_EXITS.get(fallback) ?? [], ctx.levelSeed);
+  // (task studio-mall-layout-variety-20261117-005520-01: + the version-2 window walls after them, append-only too)
+  if (fallback) postPasses(fallback, ctx, opts);
   MALL_GEN_STATS.ms = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;
   if (fallback) return fallback;
   throw new Error('mall level generation failed');
@@ -243,10 +265,19 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
   assignEnemyArchetypes(layout, spawns);
   applyFamilySpacing(layout, spawns);
   DESIGNED_EXITS.set(layout, designedExitEnds(mc, crop));
+  DESIGNED_WINDOWS.set(layout, designedWindowEnds(mc, crop));
   return layout;
 }
 
 /** The skeleton's designed street-exit corridor ends (EndSpec.exit, floor 1) in cropped grid cells. */
+/** Task studio-mall-layout-variety-20261117-005520-01: the skeleton's designed window ends (cropped cells). */
+function designedWindowEnds(mc: MallCarve, c: Crop): DesignedWindowEnd[] {
+  return mc.sk.ends.filter(e => e.window).map(e => {
+    const alongX = e.dir === 'N' || e.dir === 'S';
+    return {dir: e.dir, line: e.line - (alongX ? c.oy : c.ox), a0: e.a0 - (alongX ? c.ox : c.oy), a1: e.a1 - (alongX ? c.ox : c.oy)};
+  });
+}
+
 function designedExitEnds(mc: MallCarve, c: Crop): DesignedExitEnd[] {
   return mc.sk.ends.filter(e => e.exit).map(e => {
     const alongX = e.dir === 'N' || e.dir === 'S';
@@ -311,8 +342,8 @@ function dropFloatingFixtures(layout: StationLayout): number {
 
 /** QA / tests: one attempt (null when the program does not fit). */
 export function mallAttempt(ctx: SectionGenContext, attempt: number, opts: MallGenOptions & {salt?: number} = {}): StationLayout | null {
-  const f = mallFrame(ctx.levelSeed, opts.variant, opts.salt ?? 0), seed = mallSeed(ctx.levelSeed);
+  const f = mallFrame(ctx.levelSeed, opts.variant ?? mallVariantAt(ctx.levelSeed, versionOf(ctx)), opts.salt ?? 0), seed = mallSeed(ctx.levelSeed);
   const L = tryLevel(f, attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, opts.loot ?? lootProfile('mall'), opts.spawns ?? spawnProfile('mall'), opts.trackExt ?? trackExtConfig('mall'), opts.walkwayDecay !== false, opts.shopForce);
-  if (L && opts.streetExits !== false) placeStreetExits(L, DESIGNED_EXITS.get(L) ?? [], ctx.levelSeed);
+  if (L) postPasses(L, ctx, opts);
   return L;
 }

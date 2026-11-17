@@ -451,9 +451,13 @@ describe('the original variants are unchanged (M08 stability, M05 matched views)
     expect(L.areas.slice(0, P.areas.length)).toEqual(P.areas);
     expect(L.areas.length - P.areas.length).toBe(L.mall!.exits!.filter(e => e.kind === 'entrance-hall').length);
     expect(L.lights.slice(0, P.lights.length)).toEqual(P.lights);
-    expect(L.lights.slice(P.lights.length).every(l => l.virtual && l.level === MALL_STREET_LEVEL)).toBe(true);
+    // (task studio-mall-layout-variety-20261117-005520-01: + the version-2 window walls' virtual daylight on their glazed storeys, after
+    // the exits' — the window record is the other append-only post-pass, off with streetExits: false like the exits)
+    const winBands = new Set((L.mall!.windows ?? []).flatMap(w => w.bands.map(b => b.level)));
+    expect(L.lights.slice(P.lights.length).every(l => l.virtual && (l.level === MALL_STREET_LEVEL || winBands.has(l.level!)))).toBe(true);
     for (const k of ['doors', 'props', 'pickups', 'zombies', 'signs', 'rails', 'levelLinks', 'playerSpawn'] as const) expect(L[k], k).toEqual(P[k]);
-    const {exits: _e, ...core} = L.mall!;
+    expect(P.mall!.windows).toBeUndefined();
+    const {exits: _e, windows: _w, ...core} = L.mall!;
     expect(core).toEqual(P.mall);
     // grids: identical except the hall cells (rock before, hall floor after); connectivity of every core cell unchanged
     const halls = new Set(L.mall!.exits!.map(e => e.hall.area));

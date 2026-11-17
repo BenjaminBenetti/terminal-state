@@ -25,6 +25,9 @@ import {CLEAR, CORE, FLOORS, ROOF, RUN, STOREY, mallStoreyLabel, type MallFrame}
 import {MALL_LOTS, type MallLotId, type MallLotStock, type MallLotZone} from './lots';
 import {decompose, overlaps, planSkeleton, type CellRect, type EndSpec, type MallSkeleton, type RunPlan, type Side4} from './skeleton';
 import {EXIT} from './exits';
+import {isPlanVariant} from './frame'; // task studio-mall-layout-variety-20261117-005520-01: the version-2 plan families
+import {planFamilySkeleton} from './plans';
+import {windowReserveRect} from './windows';
 
 export {decompose, type CellRect} from './skeleton';
 
@@ -116,6 +119,8 @@ export interface MallCarve {
   /** The station's back-of-house areas (spurs, washrooms, station rooms). */
   stationBoh: number[];
   roof: {springY: number; apexY: number};
+  /** Task studio-mall-layout-variety-20261117-005520-01 (plan families): the bridge decks' walkway areas (absent: no bridges). */
+  bridges?: {id: string; level: number; rect: CellRect; areas: number[]}[];
 }
 
 /** Why the last attempts failed (QA / tests). */
@@ -140,7 +145,8 @@ export function carveMall(k: Kit, rng: Rng, f: MallFrame): MallCarve | null {
   for (const t of k.trenches) t.columns = false;
   for (const P of block.platforms) delete P.paid;
   P1.platformNo = 1; P2.platformNo = 2;
-  const sk = planSkeleton(rng.fork('skeleton'), f, block, W, H);
+  // (task studio-mall-layout-variety-20261117-005520-01: a version-2 plan variant plans its own skeleton; the atrium family's is untouched)
+  const sk = isPlanVariant(f.variant) ? planFamilySkeleton(rng.fork('skeleton'), f, block, W, H) : planSkeleton(rng.fork('skeleton'), f, block, W, H);
   if (!sk) return fail('skeleton');
   const C = sk.court;
   const b3 = sk.openBox[3];
@@ -167,6 +173,16 @@ export function carveMall(k: Kit, rng: Rng, f: MallFrame): MallCarve | null {
 
   // --- 2. Retail floors: public walkways ----------------------------------------------------------------------------------------
   const galleries = new Map<number, number[]>(), courts = new Map<number, number[]>(), corridors = new Map<number, number[]>();
+  // (plan families) bridge decks: per cell of a retail floor the deck it belongs to (-1 = none)
+  const bridgeRecs = sk.bridges?.map(b => ({id: b.id, level: b.level, rect: b.rect, areas: [] as number[]}));
+  const deckAt = (lv: number, x: number, y: number) => (bridgeRecs ? bridgeRecs.findIndex(b => b.level === lv && inR(b.rect, x, y)) : -1);
+  /** (plan families) the clear ceiling of a walkway cell: the band rises through every open floor above it to the next floored one
+   *  (a bridge deck's soffit) or, inside the top opening, to the roof apex (a top-floor deck is open to the vault). */
+  const familyCeil = (lv: number, x: number, y: number): number => {
+    if (lv === FLOORS) return deckAt(lv, x, y) >= 0 ? apexY : r2(bases[lv] + CLEAR.gallery);
+    for (let up = lv + 1; up <= FLOORS; up++) if (!openAt(up, x, y)) return r2(bases[up - 1] + CLEAR.gallery);
+    return apexY;
+  };
   /** Per floor: walkway area id per cell (-1 = none); public runs / void / shaft are not walkway. */
   const walkArea: Int32Array[] = [new Int32Array(W * H).fill(-1)];
   /** Per floor: inside the floor's public region (walk rects incl. void / runs / shaft) — lots never extrude into it. */
@@ -183,6 +199,25 @@ export function carveMall(k: Kit, rng: Rng, f: MallFrame): MallCarve | null {
       const r = piece.rect, pm = piece.mask;
       for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (!pm || pm[y * W + x]) ins[y * W + x] = 1;
       const walkable = (x: number, y: number) => (!pm || pm[y * W + x] === 1) && !claimed[y * W + x] && !openAt(lv, x, y) && !shaftAt(x, y) && !touching.some(p => inR(p.rect, x, y));
+      // (plan families) one area per (ceiling, bridge deck) class: decks and the cells under them / open to the roof each their own
+      if (sk.family) {
+        const keyOf = (x: number, y: number) => `${familyCeil(lv, x, y)}|${deckAt(lv, x, y)}`;
+        const keys: string[] = [];
+        for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (walkable(x, y)) { const kk = keyOf(x, y); if (!keys.includes(kk)) keys.push(kk); }
+        for (const kk of keys) {
+          const [ceil, deck] = kk.split('|').map(Number);
+          for (const q of decompose((x, y) => walkable(x, y) && keyOf(x, y) === kk, r)) {
+            const label = `${deck >= 0 ? 'Bridge' : piece.label} · ${mallStoreyLabel(lv)}`;
+            const a = k.addArea(q, 'concourse', 'retail-arcade', ceil, -1, {...opt, label, publicSpace: true, role: 'mall'});
+            for (let y = q.y; y < q.y + q.h; y++) for (let x = q.x; x < q.x + q.w; x++) { claimed[y * W + x] = 1; wa[y * W + x] = a.id; }
+            // a deck is a bridge (MallInfo.bridges: its own finish, never gallery floor), every other area a gallery of its zone
+            if (deck >= 0) { bridgeRecs![deck].areas.push(a.id); continue; }
+            gl.push(a.id);
+            (piece.zone === 'court' ? cl : rl).push(a.id);
+          }
+        }
+        continue;
+      }
       // jutting cells (open above: a larger opening on the next floor) carry their own areas with the roof-apex ceiling
       const jut = (x: number, y: number) => lv < FLOORS && openAt(lv + 1, x, y);
       for (const isJut of [false, true]) {
@@ -229,6 +264,19 @@ export function carveMall(k: Kit, rng: Rng, f: MallFrame): MallCarve | null {
     for (let lv = 1; lv <= FLOORS && clear; lv++) { const g = k.grid(lv); for (let y = r.y; y < r.y + r.h && clear; y++) for (let x = r.x; x < r.x + r.w; x++) if (g.cells[g.idx(x, y)] !== SOLID) { clear = false; break; } }
     if (!clear) { const {exit: _x, ...rest} = e; sk.ends[ei] = {...rest, pref: {...rest.pref, 1: 'end-unit'}}; return; }
     for (let lv = 1; lv <= FLOORS; lv++) { const g = k.grid(lv); for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) { g.cells[g.idx(x, y)] = VOID; reservedCells.push([lv, g.idx(x, y)]); } }
+  });
+
+  // --- 3c. Task studio-mall-layout-variety-20261117-005520-01 (plan families): the designed WINDOW ends — their outside (the glazing
+  // wall + the near parking-lot view, gen/mall/windows.ts windowReserveRect) stays free of every later room on every retail floor, the
+  // same VOID-then-rock reservation as the street exits; an end whose outside is already built over becomes an end unit.
+  sk.ends.forEach((e, ei) => {
+    if (!e.window) return;
+    // (clipped to the canvas: beyond it is outside the building)
+    const q = windowReserveRect(e), x0 = Math.max(1, q.x), y0 = Math.max(1, q.y), r = {x: x0, y: y0, w: Math.min(W - 1, q.x + q.w) - x0, h: Math.min(H - 1, q.y + q.h) - y0};
+    let clear = r.w > 0 && r.h > 0;
+    for (let lv = 1; lv <= FLOORS && clear; lv++) { const g = k.grid(lv); for (let y = r.y; y < r.y + r.h && clear; y++) for (let x = r.x; x < r.x + r.w; x++) if (g.cells[g.idx(x, y)] !== SOLID) { clear = false; break; } }
+    if (!clear) { const {window: _w, ...rest} = e; sk.ends[ei] = {...rest, pref: {1: 'end-unit', 2: 'end-unit', 3: 'end-unit'}}; return; }
+    for (let lv = 1; lv <= FLOORS; lv++) { const g = k.grid(lv); for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) { if (g.cells[g.idx(x, y)] !== SOLID) continue; g.cells[g.idx(x, y)] = VOID; reservedCells.push([lv, g.idx(x, y)]); } }
   });
 
   // --- 4. Two service-stair cores behind the court's north edge (beside their lobbies; on level 0 onto the Fountain court) -----
@@ -286,7 +334,7 @@ export function carveMall(k: Kit, rng: Rng, f: MallFrame): MallCarve | null {
   const used = (id: MallLotId) => familyCount.get(id) ?? 0;
   for (let lv = 1; lv <= FLOORS; lv++) {
     const lrng = rng.fork(`lots-${lv}`);
-    const target = FLOOR_UNITS[lv] + lrng.int(-1, 1); // seeded: ~24-30 frontages per run
+    const target = (sk.units?.[lv] ?? FLOOR_UNITS[lv]) + lrng.int(-1, 1); // seeded: ~24-30 frontages per run (plan families: their own target)
     const ctx: LotCtx = {k, lv, base: bases[lv], W, walkArea: walkArea[lv], inside: inside[lv], svc: svc[lv], rng: lrng, shops, recesses, count: familyCount};
     const floorShops = () => shops.filter(s => s.level === lv).length;
     // end units / anchors closing the corridor ends
@@ -302,8 +350,9 @@ export function carveMall(k: Kit, rng: Rng, f: MallFrame): MallCarve | null {
     const segs = segmentsOf(inside[lv], walkArea[lv], W, H, sk, lv);
     // the food court: food counters along the longest court edge of the food floor
     if (lv === sk.foodFloor) {
-      const fs = segs.filter(s => s.zone === 'atrium').sort((a, b) => (b.a1 - b.a0) - (a.a1 - a.a0))[0];
-      if (fs) fillSegment(ctx, {...fs, zone: 'food'}, ['food-counter'], 5);
+      const fss = segs.filter(s => s.zone === 'atrium').sort((a, b) => (b.a1 - b.a0) - (a.a1 - a.a0));
+      // (a plan family's longest court edge can be glazing or an end court with no room behind it: the next longest that seats one)
+      for (const fs of sk.family ? fss : fss.slice(0, 1)) if (fillSegment(ctx, {...fs, zone: 'food'}, ['food-counter'], 5) > 0) break;
     }
     // one washroom passage per floor (a corridor edge if one has room, else the court)
     const wcSegs = [...segs.filter(s => s.zone === 'corridor'), ...segs.filter(s => s.zone === 'atrium')].filter(s => s.a1 - s.a0 >= WC_SLOT + 4);
@@ -341,6 +390,7 @@ export function carveMall(k: Kit, rng: Rng, f: MallFrame): MallCarve | null {
   return {
     f, sk, bases, X0, Z0, X1, Z1, voidMask: sk.open[1], cw: W, vx0: vb.x0, vx1: vb.x1, vz0: vb.y0, vz1: vb.y1, block, court0,
     galleries, courts, corridors, service, recesses, shops, runs, cores, elevators, washrooms, stationBoh, roof: {springY, apexY},
+    ...(bridgeRecs ? {bridges: bridgeRecs} : {}),
   };
 }
 

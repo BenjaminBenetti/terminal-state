@@ -80,7 +80,7 @@ const SIGN: Record<Side4, number> = {N: -1, S: 1, W: -1, E: 1};
  * Places the street exits of a finished mall layout (mutates it: entrance-hall areas + their floor-1 cells, virtual daylight
  * sources, layout.mall.exits). Returns the records ([] when no suitable hall end exists).
  */
-export function placeStreetExits(layout: StationLayout, designed: readonly DesignedExitEnd[], levelSeed: number): MallStreetExit[] {
+export function placeStreetExits(layout: StationLayout, designed: readonly DesignedExitEnd[], levelSeed: number, keepOut: readonly {x: number; y: number; w: number; h: number}[] = [], viewClear = 0): MallStreetExit[] {
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   Object.assign(MALL_EXIT_STATS, {runs: 0, candidates: 0, designed: 0, placed: 0, ms: 0});
   const info = layout.mall;
@@ -118,6 +118,9 @@ export function placeStreetExits(layout: StationLayout, designed: readonly Desig
     const x0 = Math.floor(e.shaft.x0 / CELL) - 4, x1 = Math.ceil(e.shaft.x1 / CELL) + 4, y0 = Math.floor(e.shaft.z0 / CELL) - 4, y1 = Math.ceil(e.shaft.z1 / CELL) + 4;
     for (let y = Math.max(0, y0); y < Math.min(H, y1); y++) for (let x = Math.max(0, x0); x < Math.min(W, x1); x++) { const i = y * W + x; free[i] = 0; rock[i] = 0; }
   }
+  // (task studio-mall-layout-variety-20261117-005520-01: a plan family's designed window outsides — `keepOut`, cropped cells; [] for
+  // every atrium-family layout — are never an exit's hall, pocket or street)
+  for (const r of keepOut) for (let y = Math.max(0, r.y); y < Math.min(H, r.y + r.h); y++) for (let x = Math.max(0, r.x); x < Math.min(W, r.x + r.w); x++) { free[y * W + x] = 0; rock[y * W + x] = 0; }
   // summed-area tables of the "bad" cells (outside the grid: free for the view, never for a hall / pocket)
   const sat = (m: Uint8Array) => {
     const s = new Int32Array((W + 1) * (H + 1));
@@ -154,8 +157,10 @@ export function placeStreetExits(layout: StationLayout, designed: readonly Desig
   };
   const clearWalk = (x: number, y: number) => isWalk(x, y) && !g.blocked[y * W + x];
   /** The largest view (depth D, side margin s) beyond depth dv over along [t0, t1), or null below the minimums. */
+  // (task studio-mall-layout-variety-20261117-005520-01: `viewClear` cells of free rock round its sides / far end — the plan families'
+  // walkways can run right along a view's edge: its street there would stand on the mall's own wall face; 0 = every atrium layout)
   const viewOf = (dir: Side4, line: number, t0: number, t1: number, dv: number): {D: number; s: number} | null => {
-    const fits = (D: number, s: number) => ok(satFree, ...rectOf(dir, line, t0 - s, t1 + s, dv, dv + D), false);
+    const fits = (D: number, s: number) => ok(satFree, ...rectOf(dir, line, t0 - s - viewClear, t1 + s + viewClear, dv, dv + D + viewClear), false);
     let D = 0;
     for (let d: number = EXIT.viewDepth[1]; d >= EXIT.viewDepth[0]; d -= 2) if (fits(d, EXIT.viewSide[0])) { D = d; break; }
     if (!D) return null;

@@ -96,7 +96,7 @@ export interface StreetExitSpec {
 }
 
 /** The culler's view of an exit (world/levelCulling.ts ExitAperture): the glazed opening on its hall-side plane. */
-export interface StreetExitAperture { nx: number; nz: number; plane: number; s0: number; s1: number; y0: number; y1: number }
+export interface StreetExitAperture { nx: number; nz: number; plane: number; s0: number; s1: number; y0: number; y1: number; bands?: readonly {y0: number; y1: number}[] }
 
 const SIDE_N: Record<string, [number, number]> = {N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0]};
 const num = (v: unknown, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
@@ -170,7 +170,7 @@ export const apertureOf = (s: StreetExitSpec): StreetExitAperture => ({nx: s.nx,
  * exit's storey): an opening from the face bottom to the door head (min the face top), exactly like the lift doorways
  * (world/officeProps.ts cutOfficeShaftDoors). Collision is untouched (GEN's SOLID cells / collider).
  */
-export function cutExitOpenings<F extends {level: number; x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; nx: number; nz: number; slope?: unknown; openings: {s0: number; s1: number; top: number}[]}>(faces: F[], exits: readonly StreetExitSpec[]): F[] {
+export function cutExitOpenings<F extends {level: number; x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; nx: number; nz: number; slope?: unknown; openings: {s0: number; s1: number; top: number}[]}>(faces: F[], exits: readonly Pick<StreetExitSpec, 'level' | 'nx' | 'nz' | 'plane' | 's0' | 's1' | 'y0' | 'y1'>[]): F[] {
   if (!exits.length) return faces;
   return faces.map(f => {
     if (f.slope) return f;
@@ -195,7 +195,7 @@ export function cutExitOpenings<F extends {level: number; x0: number; z0: number
 // proper rotation (no winding flip).
 
 export interface ExitFrame { origin: THREE.Vector3; along: THREE.Vector3; out: THREE.Vector3; m: THREE.Matrix4; inv: THREE.Matrix4 }
-export function exitFrame(s: StreetExitSpec): ExitFrame {
+export function exitFrame(s: Pick<StreetExitSpec, 'nx' | 'nz' | 's0' | 's1' | 'plane' | 'streetY'>): ExitFrame {
   const alongX = s.nz !== 0, c = (s.s0 + s.s1) / 2;
   const origin = new THREE.Vector3(alongX ? c : s.plane, s.streetY, alongX ? s.plane : c);
   const along = new THREE.Vector3(s.nz, 0, -s.nx), out = new THREE.Vector3(s.nx, 0, s.nz);
@@ -203,8 +203,8 @@ export function exitFrame(s: StreetExitSpec): ExitFrame {
   return {origin, along, out, m, inv: m.clone().invert()};
 }
 
-/** A world box in the exit frame: [u0, u1], [y0, y1] (relative to the street), [w0, w1]. */
-function localBox(f: ExitFrame, b: {x0: number; z0: number; x1: number; z1: number; y0: number; y1: number}, streetY: number) {
+/** A world box in the exit frame: [u0, u1], [y0, y1] (relative to the street), [w0, w1]. (Exported: world/mallWindows.ts.) */
+export function localBox(f: ExitFrame, b: {x0: number; z0: number; x1: number; z1: number; y0: number; y1: number}, streetY: number) {
   const v = new THREE.Vector3();
   let u0 = Infinity, u1 = -Infinity, w0 = Infinity, w1 = -Infinity;
   for (const [x, z] of [[b.x0, b.z0], [b.x1, b.z0], [b.x0, b.z1], [b.x1, b.z1]]) {
@@ -551,7 +551,8 @@ export function streetExitMaterials(): THREE.Material[] {
 // ---------------------------------------------------------------------------------------------------------------------------
 // Geometry accumulation (local exit frame; transformed to world once)
 
-class Acc {
+/** (Exported: the parking-lot window walls, world/mallWindows.ts, accumulate the same way.) */
+export class Acc {
   readonly a: Record<string, number[]> = {};
   readonly idx: number[] = [];
   /** `defaults`: per-mesh constant attributes (used when a vertex's extras omit them). */
@@ -615,7 +616,7 @@ class Acc {
 }
 
 /** Axis-aligned local box [u0, u1] x [y0, y1] x [w0, w1]: six quads; `face(n, corners)` returns uv + extras per face. */
-function box(acc: Acc, u0: number, u1: number, y0: number, y1: number, w0: number, w1: number,
+export function box(acc: Acc, u0: number, u1: number, y0: number, y1: number, w0: number, w1: number,
   face: (n: V3, c: V3[]) => {uv: [number, number][]; extra: Record<string, readonly number[]>} | null): void {
   if (u1 - u0 < 1e-5 || y1 - y0 < 1e-5 || w1 - w0 < 1e-5) return;
   const F: [V3, V3[]][] = [
@@ -911,7 +912,9 @@ export function buildStreetExit(s: StreetExitSpec): StreetExitView {
     pocket('paint', [[-hs, 0, 0], [-hs, 0, B], [-hs, H, B], [-hs, H, 0]], [1, 0, 0], [0.9, 0.88, 0.84]);
     pocket('paint', [[hs, 0, B], [hs, 0, 0], [hs, H, 0], [hs, H, B]], [-1, 0, 0], [0.9, 0.88, 0.84]);
     pocket('soffit', [[-hs, H, 0], [hs, H, 0], [hs, H, B], [-hs, H, B]], [0, -1, 0], [0.85, 0.84, 0.8]);
-    pocket(B > 1.2 ? 'tile' : 'white', [[-hs, 0.004, 0], [-hs, 0.004, B], [hs, 0.004, B], [hs, 0.004, 0]], [0, 1, 0], B > 1.2 ? [1, 1, 1] : tint(ALU[0], 0.7));
+    // (task studio-mall-layout-variety-20261117-005520-01: the floor laps 4 cm over the hall floor's edge — from 0 it left a hairline slit
+    // at the threshold, seen at a grazing angle down to the storey below in the oracle)
+    pocket(B > 1.2 ? 'tile' : 'white', [[-hs, 0.004, -0.04], [-hs, 0.004, B], [hs, 0.004, B], [hs, 0.004, -0.04]], [0, 1, 0], B > 1.2 ? [1, 1, 1] : tint(ALU[0], 0.7));
     if (B > 1.2) {
       const mu = Math.min(hs, 1.1);
       frame.quad([[-mu, 0.012 + oy, wc + 0.15], [-mu, 0.012 + oy, wO - 0.15], [mu, 0.012 + oy, wO - 0.15], [mu, 0.012 + oy, wc + 0.15]], [0, 1, 0], atlasUv('mat', [[0, 0], [0, 1], [1, 1], [1, 0]]), {color: [1, 1, 1], aGlow: [0]});

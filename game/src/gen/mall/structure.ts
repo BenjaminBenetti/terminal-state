@@ -9,7 +9,7 @@ import type {LevelLink, RailRun} from '../levels';
 import type {StairFlight} from '../traversal';
 import type {StationLayout} from '../stationTypes';
 import type {
-  MallElevator, MallInfo, MallOpening, MallPatrolNode, MallProgram, MallRect, MallShop, MallStorey, MallVerticalLink, MallWayfinding,
+  MallBridge, MallElevator, MallInfo, MallOpening, MallPatrolNode, MallProgram, MallRect, MallShop, MallStorey, MallVerticalLink, MallWayfinding,
   SubwayRootAnchor,
 } from './mallTypes';
 import {CLEAR, FLOORS, ROOF, mallStoreyLabel} from './frame';
@@ -239,6 +239,8 @@ export function patrolGraph(layout: StationLayout, mc: MallCarve, c: Crop, fligh
     const r = mc.sk.court0;
     lineOf(0, wxOf(c, r.x) + 1.5, wzOf(c, r.y) + 2.0, wxOf(c, r.x + r.w) - 1.5, wzOf(c, r.y) + 2.0);
   }
+  // (task studio-mall-layout-variety-20261117-005520-01: a plan family's own patrol lines — balconies, bridges, end courts)
+  for (const pl of mc.sk.patrol ?? []) for (const lv of pl.floors) lineOf(lv, wxOf(c, pl.a[0]) + CELL / 2, wzOf(c, pl.a[1]) + CELL / 2, wxOf(c, pl.b[0]) + CELL / 2, wzOf(c, pl.b[1]) + CELL / 2);
   for (const L of lines) {
     const g = layout.levels[L.lv].grid, y = mc.bases[L.lv];
     let prev: N | null = null;
@@ -347,7 +349,17 @@ export function mallInfo(layout: StationLayout, mc: MallCarve, c: Crop, _flights
     const b = mc.sk.openBox[lv];
     let cells = 0;
     for (let y = b.y0; y < b.y1; y++) for (let x = b.x0; x < b.x1; x++) if (mc.sk.open[lv][y * mc.cw + x]) cells++;
-    openings.push({level: lv, outline: maskOutline(mc.sk.open[lv], b, c, mc.cw), bounds: {x0: wxOf(c, b.x0), z0: wzOf(c, b.y0), x1: wxOf(c, b.x1), z1: wzOf(c, b.y1)}, area: cells * CELL * CELL});
+    // (plan families: the outline is the opening's envelope — the void with its bridge decks — the area the true open cells)
+    openings.push({level: lv, outline: maskOutline(mc.sk.openOutline?.[lv] ?? mc.sk.open[lv], b, c, mc.cw), bounds: {x0: wxOf(c, b.x0), z0: wzOf(c, b.y0), x1: wxOf(c, b.x1), z1: wzOf(c, b.y1)}, area: cells * CELL * CELL});
+  }
+  // (plan families) the bridge decks: one record per deck area, its centre line across the void
+  const bridges: MallBridge[] = [];
+  for (const b of mc.bridges ?? []) for (const id of b.areas) {
+    const a = layout.areas[id], r = {x0: r3(a.x * CELL), z0: r3(a.y * CELL), x1: r3((a.x + a.w) * CELL), z1: r3((a.y + a.h) * CELL)}; // (layout areas: cropped cells)
+    const alongZ = b.rect.h >= b.rect.w;
+    bridges.push(alongZ
+      ? {level: b.level, area: id, from: {x: r3((r.x0 + r.x1) / 2), z: r.z0}, to: {x: r3((r.x0 + r.x1) / 2), z: r.z1}, width: r3(r.x1 - r.x0)}
+      : {level: b.level, area: id, from: {x: r.x0, z: r3((r.z0 + r.z1) / 2)}, to: {x: r.x1, z: r3((r.z0 + r.z1) / 2)}, width: r3(r.z1 - r.z0)});
   }
   const top = openings[openings.length - 1];
   const per = (m: Map<number, number[]>) => [...m].map(([level, areas]) => ({level, areas: [...areas]}));
@@ -358,7 +370,7 @@ export function mallInfo(layout: StationLayout, mc: MallCarve, c: Crop, _flights
     },
     galleries: per(mc.galleries), courts: per(mc.courts), corridors: per(mc.corridors),
     service: [{level: 0, areas: mc.stationBoh.filter(id => layout.areas[id]?.type === 'service-corridor')}, ...per(mc.service)],
-    shops, bridges: [], verticals, elevators,
+    shops, bridges, verticals, elevators,
     roof: {outline: {...top.bounds}, polygon: top.outline, springY: mc.roof.springY, apexY: mc.roof.apexY, archSpacing: ROOF.archSpacing},
     patrol: [],
     subwayRoot: subwayRoot(layout, mc, c),
