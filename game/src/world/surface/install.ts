@@ -9,6 +9,7 @@
 
 import type {Game} from '../../game';
 import {installSurfaceAccess} from './accessRuntime';
+import {installSurfaceLift} from './liftRuntime';
 import {installSurfaceLook} from './look';
 import {installSurfaceAir} from './air';
 import {installSurfaceLife} from './life';
@@ -17,6 +18,7 @@ import {installSurfaceFog} from './fogRuntime';
 
 export function installSurfaceRun(game: Game): void {
   installSurfaceAccess(game);
+  installSurfaceLift(game); // (lane ACCESS follow-up, version 2: the cargo lift ends + the ride that is the crossing)
   installSurfaceLook(game);
   installSurfaceAir(game);
   installSurfaceFog(game); // (task studio-surface-run-field-followup-20261116-211729-01, lane FOG) a v2 district's pressure sound + QA (inert elsewhere)

@@ -15,15 +15,19 @@
 // tests/surface-access.test.ts sweeps the seeds) simply has none — the crossing is never offered, nothing is half-carved.
 
 import type {StationLayout} from '../stationTypes';
-import {surfacePresent, type SurfaceHost} from './surfaceRun';
+import {surfaceFeatures, surfacePresent, type SurfaceHost} from './surfaceRun';
 import {carveSubwayAccess} from './accessStair';
+import {carveSubwayLift} from './accessLift';
 import {carveMallAccess, carveOfficeAccess} from './accessDoor';
 
 /** Adds the station's surface access when present for its version / roll; returns whether it did. */
 export function applySurfaceAccess(layout: StationLayout, host: SurfaceHost, levelSeed: number, version: number): boolean {
   if (!surfacePresent(host, levelSeed, version)) return false;
   if (layout.surfaceAccess) return true; // (idempotent: never carved twice)
-  const info = host === 'subway' ? carveSubwayAccess(layout, levelSeed) : host === 'office' ? carveOfficeAccess(layout) : carveMallAccess(layout, levelSeed);
+  // (version 2, lane ACCESS follow-up: the Subway's way up is a cargo lift at a normal closed street exit — gen/surface/accessLift.ts;
+  // a station whose closed halls cannot take it keeps the version-1 stairwell, its record saying so: v 1)
+  const v2 = surfaceFeatures(version).closedExitAccess;
+  const info = host === 'subway' ? (v2 ? carveSubwayLift(layout, levelSeed) : null) ?? carveSubwayAccess(layout, levelSeed) : host === 'office' ? carveOfficeAccess(layout) : carveMallAccess(layout, levelSeed);
   if (!info) return false;
   layout.surfaceAccess = info;
   return true;

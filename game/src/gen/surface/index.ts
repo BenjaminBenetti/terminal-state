@@ -34,7 +34,7 @@ import {BLOCKS, CORE_FROM, CORE_TO, FRAME_CELLS, planFrame, type CR, type CityFr
 import {districtName} from './cityNames';
 import {KERB, SLAB, SURFACE_LEVELS, deepStoreyPlans, guaranteeCounts, planBlocks, repairGuarantees, type BlockPlans, type BuildingPlan} from './cityBlocks';
 import {SKY_CEIL, carveGround, type GroundMap} from './cityCarve';
-import {PORTAL, carvePortal, dressCheckpoint, reserveCheckpoint} from './checkpoint';
+import {carvePortal, dressCheckpoint, reserveCheckpoint} from './checkpoint';
 import {exposedSides, floorsOf, heightOf, planInteriors, roofOf, type DepotDoors} from './cityInteriors';
 import {OutdoorProps, type PlannedProp} from './outdoorKinds';
 import {dressOutdoors, reserveFronts} from './outdoorDress';
@@ -176,7 +176,7 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
   const outdoor = new Set(gm.outdoor);
   const compoundLot = plans.lots.find(l => l.use === 'compound')!;
   const compoundArea = [...gm.lotOfArea].find(([, l]) => l === compoundLot)![0];
-  const pc = carvePortal(kit, f, plans, gm, host, rng.fork('portal'), dn.root);
+  const pc = carvePortal(kit, f, plans, gm, host, rng.fork('portal'), dn.root, {lift: surfaceFeatures(version).tentArrival}); // (v2: the cargo lift in the tent)
   const portalDoor: number[] = [];
   for (const d of pc.doors) { d.id = kit.doors.length; portalDoor.push(d.id); kit.doors.push(d); }
   if (pc.head) for (const fl of pc.head.flights) { fl.id = kit.flights.length; kit.flights.push(fl); }
@@ -195,8 +195,8 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
   const tentRec = rec[pc.tent.plan.id];
   const tentDoor = kit.doors[portalDoor[portalDoor.length - 1]];
   tentRec.areas = [pc.tent.area]; tentRec.levels = [0]; tentRec.enterable = true;
-  tentRec.entrances = [{id: `b${tentRec.id}-e0`, building: tentRec.id, level: 0, x: pc.tent.door.x, z: pc.tent.door.z, side: pc.tent.door.side, width: PORTAL.tent.door * CELL,
-    height: PORTAL.tent.doorH, inner: pc.tent.area, outer: compoundArea, door: 'open', cells: pc.tent.doorCells, doorIndex: tentDoor.id}];
+  tentRec.entrances = [{id: `b${tentRec.id}-e0`, building: tentRec.id, level: 0, x: pc.tent.door.x, z: pc.tent.door.z, side: pc.tent.door.side, width: pc.tent.dims.door * CELL,
+    height: pc.tent.dims.doorH, inner: pc.tent.area, outer: compoundArea, door: 'open', cells: pc.tent.doorCells, doorIndex: tentDoor.id}];
   if (pc.head) {
     const hr = rec[pc.head.plan.id], md = kit.doors[portalDoor[0]];
     const cells: number[] = [];

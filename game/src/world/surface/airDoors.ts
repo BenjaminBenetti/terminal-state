@@ -172,6 +172,10 @@ export function planSurfaceDoors(info: SurfaceInfo, g: DoorGrid, levels?: readon
   };
   for (const b of info.buildings) for (const e of b.entrances) {
     if (e.door === 'boarded') continue;
+    // (lane ACCESS, field follow-up) the command tent's own entrance record IS the flap's doorway (GEN records it 'open' so the tent is
+    // enterable): its door is the flap planned below — never a second, generated-open leafed door there (its gas source ran into the
+    // tent whatever the flap did, and its open leaves stood in the doorway)
+    if (b.host === 'tent') continue;
     // the leaf sits in the building's own facade wall (its outer face), whatever point along the doorway's depth the record names
     const alongX = sideNormal(e.side)[0] === 0;
     mk(e, e.door, false, b.footprint ? facadeLine(b.footprint, e.side) : alongX ? e.z : e.x);

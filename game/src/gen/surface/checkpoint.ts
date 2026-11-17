@@ -17,7 +17,8 @@ import type {Kit} from '../stationKit';
 import type {Door, LightPlacement, PickupPlacement, Side} from '../stationTypes';
 import type {PropPlacement} from '../props';
 import {layStairRun, type StairFlight} from '../traversal';
-import type {SBox, SPose, SRect, SurfaceCheckpoint, SurfacePortal} from './surfaceTypes';
+import type {SBox, SPose, SRect, SurfaceCheckpoint, SurfaceLift, SurfacePortal} from './surfaceTypes';
+import {LIFT_FOOT, carveLiftRoom, liftInsidePose, liftRecord, liftTrigger} from './accessLift';
 import type {SurfaceHost} from './surfaceRun';
 import {crH, crW, type CR, type CityFrame} from './cityFrame';
 import {KERB, addBuildingPlan, type BlockPlans, type BuildingPlan} from './cityBlocks';
@@ -32,6 +33,11 @@ import type {Rng} from '../../core/rng';
 export const PORTAL = {
   head: {len: 23, wid: 10, landing: 3, bottom: -3.0, canopy: 3.2},
   tent: {len: 14, wid: 10, door: 3, clear: 2.6, doorH: 2.1, ridge: 3.1},
+  /**
+   * (version 2, lane ACCESS follow-up) the command tent that houses the cargo lift (gen/surface/accessLift.ts): longer and wider (the car
+   * stands at its back, the tables along its side walls), taller (the car clears the pitched roof).
+   */
+  tentLift: {len: 20, wid: 14, door: 3, clear: 3.2, doorH: 2.1, ridge: 4.4},
   /** The vehicle gate (m) and the truck's parked box (m, centre-line lengths). */
   gate: 8,
   truck: {len: 7.2, wid: 2.6, margin: 1.0},
@@ -71,13 +77,18 @@ export interface PortalCarve {
   portal: SurfacePortal;
   plaza: PlazaFrame;
   /** The command tent: its building plan, outer rect, area, door. */
-  tent: {plan: BuildingPlan; rect: CR; area: number; door: {x: number; z: number; side: Side}; doorCells: number[]};
+  tent: {plan: BuildingPlan; rect: CR; area: number; door: {x: number; z: number; side: Side}; doorCells: number[];
+    /** (lane ACCESS follow-up) its tunables (PORTAL.tent; version 2: PORTAL.tentLift) and the cargo lift at its back (version 2), else null. */
+    dims: TentDims; lift: SurfaceLift | null};
   /** The subway headhouse (subway host only): its plan, stair area, flights. */
   head: {plan: BuildingPlan; area: number; flights: StairFlight[]} | null;
   /** The portal building (headhouse / host tower / host mall). */
   portalBuilding: number;
   doors: Door[];
 }
+
+/** The command tent's tunables (cells unless noted). */
+export type TentDims = {len: number; wid: number; door: number; clear: number; doorH: number; ridge: number};
 
 function solidRing(kit: Kit, r: CR): void {
   const g = kit.g;
@@ -88,7 +99,7 @@ function solidRing(kit: Kit, r: CR): void {
 }
 
 /** Carves the portal (headhouse stair / the host building's doors) and the command tent into the plaza (before the interiors). */
-export function carvePortal(kit: Kit, f: CityFrame, plans: BlockPlans, ground: GroundMap, host: SurfaceHost, rng: Rng, districtRoot: string): PortalCarve {
+export function carvePortal(kit: Kit, f: CityFrame, plans: BlockPlans, ground: GroundMap, host: SurfaceHost, rng: Rng, districtRoot: string, opts: {lift?: boolean} = {}): PortalCarve {
   const g = kit.g;
   const p = plazaFrame(plans);
   const compoundArea = g.area[g.idx(p.r.x0 + 2, p.r.y0 + 2)];
@@ -140,7 +151,7 @@ export function carvePortal(kit: Kit, f: CityFrame, plans: BlockPlans, ground: G
   }
 
   // --- the command tent (canvas walls = SOLID ring, a flap door on its +u end) --------------------------------------------------
-  const T = PORTAL.tent;
+  const T: TentDims = opts.lift ? PORTAL.tentLift : PORTAL.tent;
   const tv0 = host === 'subway' ? 16 : 8;
   const tr = pcr(p, 2, 2 + T.len, tv0, tv0 + T.wid);
   const tplan = addBuildingPlan(ctx, block, tr, 'civic', 'tent', false, U, {host: 'tent', condition: 'intact', storeys: [T.ridge], walk: 1, parapet: 0, facade: 'tent-canvas', name: 'Command tent'});
@@ -160,7 +171,18 @@ export function carvePortal(kit: Kit, f: CityFrame, plans: BlockPlans, ground: G
   doors.push({x: dr.x0, y: dr.y0, w: crW(dr), h: crH(dr), id: -1, a: compoundArea, b: tarea.id, height: T.doorH, arch: false, noFrame: true});
   const dc = pw(p, (2 + T.len - 0.5) * CELL, (dv0 + T.door / 2) * CELL);
   void ground;
-  return {portal, plaza: p, tent: {plan: tplan, rect: tr, area: tarea.id, door: {x: dc.x, z: dc.z, side: U}, doorCells}, head, portalBuilding, doors};
+  // (version 2, lane ACCESS follow-up) the cargo lift at the tent's back, its gate toward the flap: the car is part of the tent's own
+  // area (its air is the tent's), the ring its canvas (SOLID in the tent's rect); the crossing's portal is the car
+  let lift: SurfaceLift | null = null;
+  if (opts.lift) {
+    const cellX = (u: number) => (p.we === 'E' ? p.r.x0 + u : p.r.x1 - u - 1), cellY = (v: number) => (p.ns === 'S' ? p.r.y0 + v : p.r.y1 - v - 1);
+    const lv0 = tv0 + Math.floor((T.wid - LIFT_FOOT.v) / 2), gateU = 3 + LIFT_FOOT.u - 1;
+    const lf = {ox: cellX(gateU), oy: cellY(lv0), dx: p.we === 'E' ? -1 : 1, dy: 0, ax: 0, ay: p.ns === 'S' ? 1 : -1};
+    const room = carveLiftRoom(g, lf, KERB, tarea.id, tarea.id);
+    lift = liftRecord(room.cab, room.doorSide, room.along, KERB, 0, tarea.id, 'upper');
+    portal = {kind: 'lift', pose: liftInsidePose(lift), trigger: liftTrigger(lift), building: tplan.id, label: 'Ride down to the station', lift};
+  }
+  return {portal, plaza: p, tent: {plan: tplan, rect: tr, area: tarea.id, door: {x: dc.x, z: dc.z, side: U}, doorCells, dims: T, lift}, head, portalBuilding, doors};
 }
 
 export interface CheckpointDress {
@@ -204,8 +226,8 @@ export function reserveCheckpoint(op: OutdoorProps, pc: PortalCarve, host: Surfa
   if (host === 'subway') box(PORTAL.head.len * CELL, PORTAL.head.len * CELL + 4.5, 0, PORTAL.head.wid * CELL + 0.5);
   else { const uc = Math.min(U - 6, Math.max(9 + 1.6, U * 0.5)); box(uc - 3.5, uc + 3.5, 0, 4.5); }
   // the tent door's approach
-  const tv0 = host === 'subway' ? 16 : 8;
-  box((2 + PORTAL.tent.len) * CELL, (2 + PORTAL.tent.len) * CELL + 2.2, tv0 * CELL + 1, (tv0 + PORTAL.tent.wid) * CELL - 1);
+  const tv0 = host === 'subway' ? 16 : 8, TD = pc.tent.dims;
+  box((2 + TD.len) * CELL, (2 + TD.len) * CELL + 2.2, tv0 * CELL + 1, (tv0 + TD.wid) * CELL - 1);
 }
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -266,17 +288,27 @@ export function dressCheckpoint(op: OutdoorProps, kit: Kit, pc: PortalCarve, hos
 
   // --- inside the tent (TENT_PLAN): the planning-map table with the field radio on its end strip, the supply table against the back
   // wall with the guaranteed gas mask and a spare filter, a crate against the far side wall ------------------------------------------
-  const T = PORTAL.tent, tv0 = host === 'subway' ? 16 : 8;
+  const T = pc.tent.dims, tv0 = host === 'subway' ? 16 : 8;
   const tu0 = 3 * CELL, tu1 = (2 + T.len - 1) * CELL, tvA = (tv0 + 1) * CELL, tvB = (tv0 + T.wid - 1) * CELL;
-  const TP = TENT_PLAN, tableU = tu0 + TP.mapU, tableV = (tvA + tvB) / 2, supplyU = tu0 + TP.supplyU;
-  // (both tables: long side along v, FRONT — where lane KIT's table expects the reader — toward +u, the flap end)
-  const table = put('srMapTable', tableU, tableV, FACE_ROT[su], 'checkpoint-map', pc.tent.area);
-  const supply = put('srMapTable', supplyU, tableV, FACE_ROT[su], 'checkpoint-supply', pc.tent.area);
-  onTable(op, table, 'srFieldRadio', TP.radioX, 0, FACE_ROT[su] - Math.PI / 2); // (its front toward the sheet)
-  const sv2: Side = sv === 'N' ? 'S' : sv === 'S' ? 'N' : sv === 'W' ? 'E' : 'W';
+  const TP = TENT_PLAN, sv2: Side = sv === 'N' ? 'S' : sv === 'S' ? 'N' : sv === 'W' ? 'E' : 'W';
+  let tableU = tu0 + TP.mapU, tableV = (tvA + tvB) / 2, supplyU = tu0 + TP.supplyU, supplyV = tableV, tableRot = FACE_ROT[su], supplyRot = FACE_ROT[su];
+  let readU = tableU + 0.6 + TP.reader, readV = tableV;
+  if (pc.tent.lift) {
+    // (version 2, lane ACCESS follow-up) the lift stands at the back: both tables along the side walls in front of it (long side along u,
+    // FRONT toward the aisle from the car's gate to the flap), the map table's reader in the aisle
+    const fu0 = (3 + LIFT_FOOT.u) * CELL, uc = (fu0 + tu1) / 2 - 0.3, half = (kindDims('srMapTable')?.d ?? 0.95) / 2 + 0.12;
+    tableU = supplyU = uc;
+    tableV = tvA + half; supplyV = tvB - half;
+    tableRot = FACE_ROT[sv]; supplyRot = FACE_ROT[sv2];
+    readU = uc; readV = tableV + half + TP.reader;
+  }
+  // (v1: both tables long side along v, FRONT — where lane KIT's table expects the reader — toward +u, the flap end)
+  const table = put('srMapTable', tableU, tableV, tableRot, 'checkpoint-map', pc.tent.area);
+  const supply = put('srMapTable', supplyU, supplyV, supplyRot, 'checkpoint-supply', pc.tent.area);
+  onTable(op, table, 'srFieldRadio', TP.radioX, 0, tableRot - Math.PI / 2); // (its front toward the sheet)
   const crate = kindDims('srMilitaryCrate')!;
   put('srMilitaryCrate', tu1 - TP.crateEnd - crate.w / 2, tvB - TP.crateSide - crate.d / 2, FACE_ROT[sv2], 'checkpoint-crate', pc.tent.area);
-  const readW = at(tableU + 0.6 + TP.reader, tableV);
+  const readW = at(readU, readV);
   const tw = at(tableU, tableV);
   const read: SPose = {x: readW.x, z: readW.z, yaw: yawTo(readW.x, readW.z, tw.x, tw.z), level: 0, y: KERB};
   // the guaranteed mask (its fitted filter charge seeded like any found mask: gen/maskLoot.ts MASK_LOOT.foundFilter) and one spare filter
@@ -328,7 +360,7 @@ export function dressCheckpoint(op: OutdoorProps, kit: Kit, pc: PortalCarve, hos
   lamp([[3.0, V - 3.0], [5.5, V - 3.0], [3.0, V - 5.5], [8.0, V - 3.0]]);
   // a hanging work lamp under the tent's ridge, over the map table
   const tl = at(tableU, tableV);
-  lights.push({x: tl.x, y: KERB + PORTAL.tent.clear - 0.25, z: tl.z, rot: 0, area: pc.tent.area, broken: false, flicker: false, warm: true, power: 0.8, dying: false, level: 0, virtual: true,
+  lights.push({x: tl.x, y: KERB + T.clear - 0.25, z: tl.z, rot: 0, area: pc.tent.area, broken: false, flicker: false, warm: true, power: 0.8, dying: false, level: 0, virtual: true,
     tint: [1.0, 0.84, 0.62]});
   // the truck: in its box behind the gate, facing out through it
   const tc = at(gu, V - 0.9 - 1.6 - PORTAL.truck.len / 2);
