@@ -282,4 +282,38 @@ export interface MallInfo {
   start: {x: number; z: number; yaw: number; level: number};
   /** Task mall-round2-20261031 (lane GEN, M09): the locked street exits (0..2, floor 1 only); absent in older fixtures. */
   exits?: MallStreetExit[];
+  /** Task studio-mall-layout-variety-20261117-005520-01: the parking-lot WINDOW WALLS (layout version >= 2 only; absent = none). */
+  windows?: MallWindowWall[];
+}
+
+/**
+ * Task studio-mall-layout-variety-20261117-005520-01: a fixed floor-to-ceiling WINDOW WALL on one or more retail floors, looking out over
+ * the mall's parking lot (gen/mall/windows.ts; drawn by world/mallWindows.ts). View only, like the street exits: the cells behind the
+ * glazing plane stay SOLID (collision for players / enemies / bullets / sight / physics), never walkable, never the breakable
+ * shopGlazing, no door / Travel / gas rule; the exterior VIEW volume has no carved cell of any retail storey (nothing below reaching
+ * street level) inside the grid.
+ */
+export interface MallWindowWall {
+  /** 'window-1' / 'window-2' (stable for a seed). */
+  id: string;
+  /** A plan family's designed glazed end court | a blank outer walkway wall found by the scan. */
+  kind: 'designed' | 'gallery';
+  /** OUTWARD side (toward the parking lot). */
+  side: 'N' | 'S' | 'E' | 'W';
+  /** The lot's ground (absolute y) = the street storey's floor (MALL_STREET_LEVEL). */
+  streetY: number;
+  /** The glazing plane (x for E / W, z for N / S): the boundary between the walkway's last floor row and the first rock row; s0..s1 = the
+   *  glazed span along it (piers stay wall). */
+  plane: number;
+  s0: number;
+  s1: number;
+  /** Per glazed storey (bottom-up): its floor y, the glazing head y and the walkway area in front. */
+  bands: readonly {level: number; y0: number; y1: number; area: number}[];
+  /** Cross-axis coordinate of the outer face of the curtain wall (plane + outward * depth). */
+  facade: number;
+  /** The SOLID cells behind the plane across the span + piers, from the lowest glazed floor to the highest head (world box). */
+  collider: MallRect & {y0: number; y1: number};
+  /** The exterior VIEW volume beyond the facade (world AABB). */
+  view: MallRect & {y0: number; y1: number};
+  seed: number;
 }

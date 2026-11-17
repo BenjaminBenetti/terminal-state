@@ -12,13 +12,16 @@
 //  - 'elevator': on the glass elevator's landing (station storey), facing the doors;
 //  - 'washrooms' (floor, default 1): at the walkway mouth of the floor's washroom passage;
 //  - 'street-exit' (exit index, default 0; task mall-round2-20261031 lane GEN, M09): ~6 m inside the hall in front of a locked street
-//    exit, facing its doors (null when the mall has none; NOT in MALL_POSE_NAMES: some seeds may have no exit).
+//    exit, facing its doors (null when the mall has none; NOT in MALL_POSE_NAMES: some seeds may have no exit);
+//  - 'window-wall' (window index, default 0; task studio-mall-layout-variety-20261117-005520-01): on the TOP glazed storey of a
+//    parking-lot window wall, ~2.5 m in from the glass at its middle, looking out and down over the lot (null without one;
+//    NOT in MALL_POSE_NAMES: version-1 malls and most atrium-family ones have none).
 // Yaw convention: forward = (-sin yaw, -cos yaw).
 
 import {CELL, FLOOR} from '../grid';
 import type {StationLayout} from '../stationTypes';
 
-export type MallPoseName = 'platform-lookup' | 'court' | 'ring-edge' | 'shopfront' | 'escalator' | 'corridor' | 'wing-end' | 'bridge' | 'elevator' | 'washrooms' | 'street-exit';
+export type MallPoseName = 'platform-lookup' | 'court' | 'ring-edge' | 'shopfront' | 'escalator' | 'corridor' | 'wing-end' | 'bridge' | 'elevator' | 'washrooms' | 'street-exit' | 'window-wall';
 export const MALL_POSE_NAMES: readonly MallPoseName[] = ['platform-lookup', 'court', 'ring-edge', 'shopfront', 'escalator', 'corridor', 'wing-end', 'elevator', 'washrooms'];
 export interface MallPose { x: number; y: number; z: number; yaw: number; pitch: number; level: number; name: MallPoseName }
 
@@ -148,6 +151,14 @@ export function mallQaPose(layout: StationLayout, name: MallPoseName, ring?: num
       const tx = alongX ? c : e.door.plane, tz = alongX ? e.door.plane : c;
       const p = stand(layout, e.level, alongX ? c : e.door.plane - out * back, alongX ? e.door.plane - out * back : c);
       return p ? pose(e.level, p[0], p[1], yawTo(p[0], p[1], tx, tz), 0.05) : null;
+    }
+    case 'window-wall': {
+      const w = m.windows?.[Math.max(0, ring ?? 0)];
+      if (!w) return null;
+      const b = w.bands[w.bands.length - 1], alongX = w.side === 'N' || w.side === 'S', out = w.side === 'N' || w.side === 'W' ? -1 : 1;
+      const c = (w.s0 + w.s1) / 2, tx = alongX ? c : w.plane + out * 20, tz = alongX ? w.plane + out * 20 : c;
+      const p = stand(layout, b.level, alongX ? c : w.plane - out * 2.5, alongX ? w.plane - out * 2.5 : c);
+      return p ? pose(b.level, p[0], p[1], yawTo(p[0], p[1], tx, tz), -0.3) : null;
     }
   }
   return null;

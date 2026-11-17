@@ -169,8 +169,12 @@ const SLAB_DROP = 0.2;
  * along the span at four heights) — or the eye right beside it, or inside a glazed lift shaft (rays cannot start in its solid
  * cells: conservative). Every view of the exterior passes through the opening, so this never hides a visible pixel; from rooms
  * beside / behind the exit (walls between) the street is not submitted at all. Untagged meshes (Subway / Office) never reach it.
+ * (task studio-mall-layout-variety-20261117-005520-01) A parking-lot window wall glazes several storeys in one aperture (`bands`: each
+ * storey's glazing, floor .. head): it skips the sight rays — conservative, never hides a visible pixel. Its spans are long (15-90 m
+ * x 3 storeys: rays every 0.25 m at the bands' heights cost 0.2-6 ms per eye move in a probe) and it is cheap to draw (4 draws, 3-8 k
+ * triangles); hall side, fog distance, beside, the frustum, the storey rules and the slab occlusion still decide.
  */
-export interface ExitAperture { nx: number; nz: number; plane: number; s0: number; s1: number; y0: number; y1: number }
+export interface ExitAperture { nx: number; nz: number; plane: number; s0: number; s1: number; y0: number; y1: number; bands?: readonly {y0: number; y1: number}[] }
 /**
  * A see-through rect of the occlusion rules (world m; slabs.see). Task studio-skywalk-variety (lane PERF): an optional height range
  * [y0, y1] (default -Infinity .. Infinity: open on every storey and across every slab plane, as before).
@@ -1253,6 +1257,9 @@ export class LevelCuller {
       }
       // Task office-seamless-20261029: a mesh tagged with several levels (stair flights) renders with any of them.
       const tag = Array.isArray(m.userData.levels) ? (m.userData.levels as unknown[]).filter((l): l is number => typeof l === 'number' && this.levelIds.includes(l)) : [];
+      // (task studio-mall-layout-variety-20261117-005520-01: a mall window wall's meshes carry their storeys AND their glazed aperture)
+      const ap0 = m.userData.aperture as ExitAperture | undefined;
+      if (tag.length && ap0 && [ap0.plane, ap0.s0, ap0.s1, ap0.y0, ap0.y1, ap0.nx, ap0.nz].every(Number.isFinite)) entry.aperture = ap0;
       if (tag.length) { entry.levels = tag; this.stats.multi++; if (this.occl.length) entry.occ = this.occlusionLevel(entry); this.entries.push(entry); return; }
       let level = typeof m.userData.level === 'number' ? m.userData.level : NaN;
       // Task mall-playtest-revision-20261031 (lane ARCH, mall only: the culler has atrium tiles): an untagged mesh whose box sits in
@@ -1509,6 +1516,7 @@ export class LevelCuller {
     if (alongX) { this.box.min.set(a.s0, a.y0, Math.min(p0, p1)); this.box.max.set(a.s1, a.y1, Math.max(p0, p1)); }
     else { this.box.min.set(Math.min(p0, p1), a.y0, a.s0); this.box.max.set(Math.max(p0, p1), a.y1, a.s1); }
     if (!this.fr.intersectsBox(this.box)) return false;
+    if (a.bands) return true; // (a multi-storey window wall: no sight rays — see ExitAperture)
     if (inCab || this.glassShafts.some(r => e.x >= r.x0 && e.x <= r.x1 && e.z >= r.z0 && e.z <= r.z1)) return true;
     // (lane RENDER-CPU) the rays depend on the eye position only: kept per eye position
     let m = this.apertureRays.get(a);

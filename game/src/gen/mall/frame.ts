@@ -35,11 +35,35 @@ import {mallNameOf} from './names';
  *    floors 1-2), continuing on floor 1 to the street; a west wing on every floor.
  * The three original variants keep their exact output for a given (seed, variant) (their branches / draws are untouched).
  */
-export type MallVariant = 'terrace-cross' | 'arcade-loop' | 'elbow-branch' | 'tee-junction' | 'twin-court' | 'offset-arcade';
-export const MALL_VARIANTS: readonly MallVariant[] = ['terrace-cross', 'arcade-loop', 'elbow-branch', 'tee-junction', 'twin-court', 'offset-arcade'];
+export type MallAtriumVariant = 'terrace-cross' | 'arcade-loop' | 'elbow-branch' | 'tee-junction' | 'twin-court' | 'offset-arcade';
+/**
+ * Task studio-mall-layout-variety-20261117-005520-01: the PLAN FAMILIES of layout version 2 (gen/mall/plans.ts; real-mall research:
+ * reference/tasks/mall-layout-variety-20261117-005520/research/RESEARCH.md) — each a different overall organisation, not a reskin of
+ * the one atrium pit:
+ *  - 'galleria': a long, narrow, skylit galleria (one barrel-vaulted nave running far past the station both ways), balconies with
+ *    bridges across it on the upper floors, an anchor closing each end (the dumbbell plan) and a glazed end wall over a parking lot;
+ *  - 'crossroads': a small domed crossing over the station and three skylit ARMS off it (the cruciform / T galleria), each arm its own
+ *    gallery street ending at an anchor or the street;
+ *  - 'promenade': an outward-facing plan — a small light well over the station, then a long single-loaded promenade along the outer
+ *    wall, its whole length glazed toward the parking lot, shops on the inner side, anchors at both ends, a food-court terrace above.
+ */
+export type MallPlanVariant = 'galleria' | 'crossroads' | 'promenade';
+export type MallVariant = MallAtriumVariant | MallPlanVariant;
+/** The atrium family's six variants (every Mall of layout version 1; still eligible in version 2). */
+export const MALL_VARIANTS: readonly MallAtriumVariant[] = ['terrace-cross', 'arcade-loop', 'elbow-branch', 'tee-junction', 'twin-court', 'offset-arcade'];
+/** The plan families added by layout version 2 (gen/mall/layoutVersion.ts). */
+export const MALL_PLAN_VARIANTS: readonly MallPlanVariant[] = ['galleria', 'crossroads', 'promenade'];
+/** Every variant a Mall can have (the atrium family first). */
+export const MALL_ALL_VARIANTS: readonly MallVariant[] = [...MALL_VARIANTS, ...MALL_PLAN_VARIANTS];
+export const isPlanVariant = (v: string): v is MallPlanVariant => (MALL_PLAN_VARIANTS as readonly string[]).includes(v);
+/** The plan family of a variant ('atrium' for the six original variants). */
+export type MallPlanFamily = 'atrium' | MallPlanVariant;
+export const mallPlanFamilyOf = (v: MallVariant): MallPlanFamily => (isPlanVariant(v) ? v : 'atrium');
+/** Version-2 share of the atrium family (the rest is split evenly over MALL_PLAN_VARIANTS). */
+export const MALL_ATRIUM_SHARE = 0.4;
 /** The original three (playtest revision) and the round-2 additions. */
-export const MALL_VARIANTS_V2: readonly MallVariant[] = MALL_VARIANTS.slice(0, 3);
-export const MALL_VARIANTS_ADDED: readonly MallVariant[] = MALL_VARIANTS.slice(3);
+export const MALL_VARIANTS_V2: readonly MallAtriumVariant[] = MALL_VARIANTS.slice(0, 3);
+export const MALL_VARIANTS_ADDED: readonly MallAtriumVariant[] = MALL_VARIANTS.slice(3);
 
 /** Retail floors above the station (the user: "about half the height"; old: six rings). */
 export const FLOORS = 3;
@@ -102,12 +126,34 @@ export interface MallFrame {
   /** Escalator / elevator positions along the court's north strip (0..1). */
   escAt: number;
   liftAt: number;
+  /** Task studio-mall-layout-variety-20261117-005520-01: the plan family's own parameters (layout version 2 plan variants only). */
+  plan?: MallPlanFrame;
+}
+
+/** Free parameters of a version-2 plan family (cells unless noted; read by gen/mall/plans.ts). */
+export interface MallPlanFrame {
+  /** Galleria / arm slot width (the void between the balconies) and the balcony width beside it (north / south or each side). */
+  slot: number;
+  balcony: number;
+  /** Galleria: the nave's reach west / east of the station opening; crossroads: the west / east / south arm lengths. */
+  reachW: number;
+  reachE: number;
+  reachS: number;
+  /** Bridges per upper floor (galleria / crossroads arms) and their deck width. */
+  bridges: number;
+  bridgeW: number;
+  /** Promenade: the light well's size beyond the station opening and the promenade's width; which facade carries it. */
+  promW: number;
+  /** Which end (galleria) / arm (crossroads) is glazed toward the parking lot instead of closed by a unit: 'W' | 'E' | 'S'. */
+  glazed: 'W' | 'E' | 'S';
+  /** Which side the floor-1 street exit arcade leaves the plan on. */
+  street: 'W' | 'E' | 'S';
 }
 
 /** Session-only QA override of the variant (main.ts `?mallVariant=`); undefined = the seed's. */
 let variantOverride: MallVariant | undefined;
 export function setMallVariantOverride(v: string | null | undefined): MallVariant | undefined {
-  variantOverride = (MALL_VARIANTS as readonly string[]).includes(v ?? '') ? v as MallVariant : undefined;
+  variantOverride = (MALL_ALL_VARIANTS as readonly string[]).includes(v ?? '') ? v as MallVariant : undefined;
   return variantOverride;
 }
 
@@ -118,6 +164,11 @@ export function setMallVariantOverride(v: string | null | undefined): MallVarian
  */
 export function mallVariantOf(levelSeed: number): MallVariant {
   if (variantOverride) return variantOverride;
+  return mallAtriumVariantOf(levelSeed);
+}
+
+/** The atrium family's variant of a level seed (the version-1 draw; no override). */
+export function mallAtriumVariantOf(levelSeed: number): MallAtriumVariant {
   const s = levelSeed >>> 0;
   // drawn through the mulberry32 mixer (a raw FNV hash of a sibling salt would correlate with the v2 draw mod 3)
   const r = new Rng(hashString('mall-variant-v3', s));
@@ -126,8 +177,22 @@ export function mallVariantOf(levelSeed: number): MallVariant {
 }
 
 /** The variant a level seed drew before round 2 (one of the original three) — for samples tuned on those layouts. */
-export function mallVariantV2Of(levelSeed: number): MallVariant {
+export function mallVariantV2Of(levelSeed: number): MallAtriumVariant {
   return MALL_VARIANTS_V2[hashString('mall-variant-v2', levelSeed >>> 0) % MALL_VARIANTS_V2.length];
+}
+
+/**
+ * Task studio-mall-layout-variety-20261117-005520-01: the variant of a level seed AT A LAYOUT VERSION (gen/mall/layoutVersion.ts).
+ * Version 1: the atrium draw (mallVariantOf). Version 2: one plan-family roll on its own salt (no generation stream, no other roll) —
+ * the atrium family with MALL_ATRIUM_SHARE, keeping EXACTLY the version-1 variant of the seed (its core is the version-1 core), else
+ * one of MALL_PLAN_VARIANTS evenly. The QA override (setMallVariantOverride) wins at every version.
+ */
+export function mallVariantAt(levelSeed: number, version: number): MallVariant {
+  if (variantOverride) return variantOverride;
+  if (version < 2) return mallAtriumVariantOf(levelSeed);
+  const r = new Rng(hashString('mall-plan-family-v2', levelSeed >>> 0));
+  if (r.next() < MALL_ATRIUM_SHARE) return mallAtriumVariantOf(levelSeed);
+  return MALL_PLAN_VARIANTS[Math.min(MALL_PLAN_VARIANTS.length - 1, Math.floor(r.next() * MALL_PLAN_VARIANTS.length))];
 }
 
 /**
@@ -135,6 +200,7 @@ export function mallVariantV2Of(levelSeed: number): MallVariant {
  * positions) of the SAME variant: generateMallLevel moves to the next salt when a frame's program does not fit.
  */
 export function mallFrame(levelSeed: number, variant: MallVariant = mallVariantOf(levelSeed), salt = 0): MallFrame {
+  if (isPlanVariant(variant)) return planMallFrame(levelSeed, variant, salt);
   const rng = new Rng(hashString(`mall-frame-v2:${variant}${salt ? `:${salt}` : ''}`, levelSeed >>> 0));
   const pick4 = (a: number, b: number): [number, number, number, number] => [rng.int(a, b), rng.int(a, b), rng.int(a, b), rng.int(a, b)];
   // Atrium cone per variant: 'terrace-cross' widens on every side (stepped terraces), 'arcade-loop' steps one way (an offset court
@@ -163,6 +229,44 @@ export function mallFrame(levelSeed: number, variant: MallVariant = mallVariantO
     band: rng.int(24, 28),
     foodFloor: rng.int(1, FLOORS),
     escAt: rng.range(0.1, 0.3), liftAt: rng.range(0.62, 0.8),
+  };
+}
+
+/**
+ * Task studio-mall-layout-variety-20261117-005520-01: the frame of a version-2 plan family (its own salt: the atrium frames' draws are
+ * untouched). The station block, the arrival court and the shared sizes keep the atrium family's ranges; `plan` carries the family's own.
+ */
+function planMallFrame(levelSeed: number, variant: MallPlanVariant, salt: number): MallFrame {
+  const rng = new Rng(hashString(`mall-plan-frame-v1:${variant}${salt ? `:${salt}` : ''}`, levelSeed >>> 0));
+  const galleria = variant === 'galleria', cross = variant === 'crossroads', prom = variant === 'promenade';
+  const plan: MallPlanFrame = {
+    slot: galleria ? rng.int(14, 18) : cross ? rng.int(12, 16) : rng.int(8, 10),
+    balcony: galleria ? rng.int(9, 11) : cross ? rng.int(8, 10) : rng.int(9, 11),
+    reachW: galleria ? rng.int(40, 54) : cross ? rng.int(30, 44) : rng.int(36, 48),
+    reachE: galleria ? rng.int(40, 54) : cross ? rng.int(30, 44) : rng.int(36, 48),
+    reachS: cross ? rng.int(28, 38) : prom ? rng.int(24, 34) : 0,
+    bridges: galleria ? rng.int(2, 3) : cross ? 1 : 0,
+    bridgeW: rng.int(7, 9),
+    promW: prom ? rng.int(16, 20) : 0,
+    glazed: galleria ? (rng.chance(0.5) ? 'W' : 'E') : cross ? (rng.chance(0.5) ? 'W' : 'E') : 'S',
+    street: galleria ? 'S' : cross ? 'S' : (rng.chance(0.5) ? 'W' : 'E'),
+  };
+  return {
+    levelSeed: levelSeed >>> 0, variant, name: mallNameOf(levelSeed),
+    Lp: rng.int(104, 124),
+    // the station opening: a modest look-up column (the galleria's is its nave's middle bay; the crossroads' its crossing)
+    VW: galleria ? rng.int(28, 36) : cross ? rng.int(22, 28) : rng.int(18, 24), atX: rng.range(0.4, 0.6),
+    nOff: rng.int(2, 3), bedOver: galleria ? rng.int(1, 3) : cross ? rng.int(4, 8) : rng.int(3, 6),
+    step2: cross ? [rng.int(3, 5), rng.int(3, 5), 0, rng.int(3, 5)] : [0, 0, 0, 0],
+    step3: cross ? [rng.int(2, 3), rng.int(2, 3), 0, rng.int(2, 3)] : [0, 0, 0, 0],
+    notch: null, bay: null,
+    gW: rng.int(8, 10), gE: rng.int(8, 10), gS: rng.int(8, 10),
+    WW: rng.int(12, 14),
+    wingA: rng.int(30, 36), wingB: rng.int(30, 36), wingOff: 0, branchLen: rng.int(14, 20),
+    band: rng.int(24, 28),
+    foodFloor: rng.int(1, FLOORS),
+    escAt: rng.range(0.1, 0.3), liftAt: rng.range(0.62, 0.8),
+    plan,
   };
 }
 
