@@ -9,8 +9,10 @@
 //  - in a hall with a ceiling form (gen/subwayCeilings.ts) pilasters with base + capital on the long walls at every bay line
 //    (gen/subwayBays.ts), carrying the transverse beams; coffer grids between them; shallow jack arches between them; a barrel vault with
 //    transverse ribs over an interchange hall; a rock vault over a cavern space;
+//  - a hall's clerestory (a long upper wall over a lower ceiling: a version-3 nave over its aisles) gets an arcade beam, a string course,
+//    piers on the bay lines and framed blind panels between them;
 //  - the styled fixtures of the hall lighting (LightPlacement.style): a square lantern under its stem ('drum'), a recessed trim ('downlight')
-//    and a ledge under each concealed strip ('cove'); their glowing parts are the builder's flickering tube instances (styledTubeMatrix).
+//    and a lipped trough around each concealed strip ('cove'); their glowing parts are the builder's flickering tube instances.
 // Everything goes through the builder's trim sink (merged per material / level / trim chunk: a handful of draw calls per station). Beams keep
 // clear of existing unstyled fixtures (shifted along the hall, else dropped), so a reloaded saved station never has a beam through a lamp.
 // Deterministic from the layout alone (no RNG): the same saved station draws the same kit on every reload.
@@ -30,13 +32,15 @@ export interface KitSink {
   geo(mat: string, geo: THREE.BufferGeometry, cx: number, cy: number, cz: number): void;
 }
 
-export interface KitStats { boxes: number; strips: number; pilasters: number; beams: number; shifted: number; dropped: number; lanterns: number; coves: number }
+export interface KitStats { boxes: number; strips: number; pilasters: number; beams: number; shifted: number; dropped: number; lanterns: number; coves: number; panels: number }
 
 /** Lantern ('drum') body: outer size (m) and height above its underside. */
 export const LANTERN = {w: 1.0, h: 0.46, glass: 0.9, glassH: 0.4} as const;
 const PILASTER = {w: 0.6, proud: 0.14} as const;
 const CAP = {h: 0.05, proud: 0.035} as const;
 const BASE_PROUD = 0.025;
+/** A clerestory's (an upper wall over a lower ceiling) arcade beam (under it, from beamFrom m above the floor), string course, panels. */
+export const CLERESTORY = {beamH: 0.36, beamD: 0.5, beamFrom: 3.8, course: 0.24, inset: 0.45, frame: 0.07} as const;
 /** Unstyled fixtures keep this far (m, along the hall) from a beam's side (half a 1.2 m tube fixture + margin, whichever way it turns). */
 const BEAM_CLEAR = 0.75;
 
@@ -181,7 +185,7 @@ interface HallKit { a: Area; form: CeilingForm; g: Grid; lines: number[] }
 
 export function buildSubwayKit(sink: KitSink, inp: KitInput): KitStats {
   const {layout, sub} = inp;
-  const st: KitStats = {boxes: 0, strips: 0, pilasters: 0, beams: 0, shifted: 0, dropped: 0, lanterns: 0, coves: 0};
+  const st: KitStats = {boxes: 0, strips: 0, pilasters: 0, beams: 0, shifted: 0, dropped: 0, lanterns: 0, coves: 0, panels: 0};
   const box = (mat: string, cx: number, cy: number, cz: number, sx: number, sy: number, sz: number) => {
     if (sx <= 1e-3 || sy <= 1e-3 || sz <= 1e-3) return;
     sink.box(mat, cx, cy, cz, sx, sy, sz); st.boxes++;
@@ -389,6 +393,42 @@ export function buildSubwayKit(sink: KitSink, inp: KitInput): KitStats {
           run(trim, a0 - 0.05, a1 + 0.05, pTop - 0.16, pTop, PILASTER.proud + 0.05);
           st.pilasters++;
         }
+      }
+    }
+    // clerestory: a long upper wall standing on a lower ceiling (a version-3 nave over its aisles; a tall lintel wall) gets an arcade
+    // beam under it, a string course, piers on the bay lines up to the beams and framed blind panels between them
+    if (h && longWall && f.y0 - floor >= 2.4 && f.y1 - f.y0 >= 1.5) {
+      const y0 = f.y0, sc = CLERESTORY.course;
+      for (const [sa, sb] of freeSpans(len, openAt(y0 - 0.4, 0.05), 0.3)) {
+        if (y0 - floor >= CLERESTORY.beamFrom) {
+          // (only over a real arcade: a lower lintel wall keeps its opening's full height)
+          const w0 = s0w + dir * sa, w1 = s0w + dir * sb, mid = (w0 + w1) / 2, L = Math.abs(w1 - w0), D = CLERESTORY.beamD, Y = y0 - CLERESTORY.beamH / 2;
+          if (alongX) box(sub.structKey(h.a), mid, Y, plane, L, CLERESTORY.beamH, D); else box(sub.structKey(h.a), plane, Y, mid, D, CLERESTORY.beamH, L);
+        }
+        run(trim, sa, sb, y0, y0 + sc, 0.12);
+      }
+      const pTop = Math.min(f.y1, h.form.kind === 'vault' ? h.form.spring - VAULT_GAP - 0.24 : h.form.ceil - h.form.beam);
+      const piers: [number, number][] = [];
+      if (pTop - y0 > 1.2) for (const l of h.lines) {
+        const s = (l - s0w) * dir, a0 = s - PILASTER.w / 2, a1 = s + PILASTER.w / 2;
+        if (a0 < 0.15 || a1 > len - 0.15) continue;
+        run(sub.structKey(h.a), a0, a1, y0 + sc, pTop - 0.16, PILASTER.proud);
+        run(trim, a0 - 0.05, a1 + 0.05, pTop - 0.16, pTop, PILASTER.proud + 0.05);
+        piers.push([a0, a1]);
+        st.pilasters++;
+      }
+      piers.sort((p, q) => p[0] - q[0]);
+      const top = (pTop - y0 > 1.2 ? pTop - 0.16 : f.y1) - CLERESTORY.inset, bot = y0 + sc + CLERESTORY.inset, t = CLERESTORY.frame;
+      let p0 = 0;
+      for (const [a0, a1] of [...piers, [len, len] as [number, number]]) {
+        const s0 = p0 + CLERESTORY.inset, s1 = a0 - CLERESTORY.inset;
+        p0 = a1;
+        if (s1 - s0 < 1.2 || top - bot < 1.2) continue;
+        run(trim, s0, s1, bot, bot + t, 0.03);
+        run(trim, s0, s1, top - t, top, 0.03);
+        run(trim, s0, s0 + t, bot + t, top - t, 0.03);
+        run(trim, s1 - t, s1, bot + t, top - t, 0.03);
+        st.panels++;
       }
     }
   }

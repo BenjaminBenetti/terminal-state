@@ -120,10 +120,12 @@ describe('the kit', () => {
     expect(meshes(v1).some(m => /^(arch|trim)-subway-(tile|stone|concrete|plaster|metal|terrazzo|rock)-/.test(m.name))).toBe(false);
   }, 600_000);
 
-  it('kit geometry stays inside the station: above its floors, under its ceilings, out of doorways', () => {
-    const L = gen(SEEDS.civicHall);
+  it.each([2, 3])('kit geometry stays inside the station: above its floors, under its ceilings, out of doorways (layout version %i)', v => {
+    const L = gen(SEEDS.civicHall, v);
     const w = buildWorld(L, mats(), {});
     const g = L.grid;
+    // a version-3 great hall's clerestory (its nave wall over the aisles) is articulated: string course, piers, blind panels
+    if (v === 3) expect(w.subwayArch!.kit!.panels).toBeGreaterThanOrEqual(4);
     const kit = meshes(w).filter(m => /^trim-subway-/.test(m.name));
     expect(kit.length).toBeGreaterThan(0);
     let checked = 0;
