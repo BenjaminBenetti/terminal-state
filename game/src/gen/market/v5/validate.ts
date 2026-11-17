@@ -20,7 +20,7 @@
 // envelope.ts) adds: the envelope record; every overhead within its band and >= 3.5 m over every top-storey public floor; the end clefts
 // out of reach (their floors well over the top terrace: their lips take no railing); the chasm's bed below a railing's drop everywhere.
 
-import {CELL, FLOOR, VOID} from '../../grid';
+import {CELL, FLOOR, SOLID, VOID} from '../../grid';
 import {levelDistance, levelIssues, type LevelRules} from '../../levelGen';
 import {levelsOf} from '../../levels';
 import {traversalIssues} from '../../traversal';
@@ -39,6 +39,7 @@ import {BAR_SPOTS} from '../v3/barRecord';
 import {DEN_RULES, denIssues} from '../v4/denValidate';
 import {CREVICE} from './frame';
 import {ENVELOPE, creviceEnvelopeDrop} from '../v6/envelope';
+import {SETTLEMENT} from '../v7/settlement';
 
 export const CREVICE_LEVEL_RULES: LevelRules = {minLevels: 4, overlapRoles: [], maxRiser: 0.19, minFlightWidth: 1.5};
 
@@ -55,9 +56,10 @@ export function creviceIssues(layout: StationLayout): string[] {
   if (levels.length !== CREVICE.canvas.levels) return [`${levels.length} levels`];
   for (const L of levels) if (L.grid.w !== g0.w || L.grid.h !== g0.h) issues.push(`level ${L.id} grid size differs`);
   for (const L of levels) if (Math.abs(L.baseY - CREVICE.bases[L.id]) > 1e-6) issues.push(`storey ${L.id} height`);
-  if (m.v !== 5 && m.v !== 6) issues.push('market record version');
+  if (m.v !== 5 && m.v !== 6 && m.v !== 7) issues.push('market record version');
   if (!m.crevice) issues.push('no crevice record');
-  if (m.crevice && !!m.crevice.envelope !== (m.v === 6)) issues.push('envelope record');
+  if (m.crevice && !!m.crevice.envelope !== (m.v >= 6)) issues.push('envelope record');
+  if (m.crevice && !!m.crevice.settlement !== (m.v === 7)) issues.push('settlement record');
 
   // --- The calm rules --------------------------------------------------------------------------------------------------------
   if (layout.zombies.length) issues.push(`${layout.zombies.length} enemies`);
@@ -154,10 +156,11 @@ export function creviceIssues(layout: StationLayout): string[] {
   }
 
   // --- (version 6) The envelope -------------------------------------------------------------------------------------------------
-  if (m.v === 6 && m.crevice) issues.push(...envelopeIssues(layout));
+  if (m.v >= 6 && m.crevice) issues.push(...envelopeIssues(layout));
+  if (m.v === 7 && m.crevice) issues.push(...settlementIssues(layout));
 
   // --- Railings, shared rules -----------------------------------------------------------------------------------------------
-  const drops = levelsOf(layout).unrailedDrops().filter(d => !dropInLadderOpening(layout, d) && !(m.v === 6 && creviceEnvelopeDrop(layout, d)));
+  const drops = levelsOf(layout).unrailedDrops().filter(d => !dropInLadderOpening(layout, d) && !(m.v >= 6 && creviceEnvelopeDrop(layout, d)));
   if (drops.length) issues.push(`${drops.length} unrailed drops (first at ${drops[0].x0.toFixed(1)},${drops[0].z0.toFixed(1)} level ${drops[0].level})`);
   issues.push(...excuseDesignedRailGaps(layout, levelIssues(layout, dist, CREVICE_LEVEL_RULES)));
   issues.push(...traversalIssues(layout));
@@ -194,6 +197,55 @@ function envelopeIssues(layout: StationLayout): string[] {
   return issues;
 }
 const inBox = (b: {x0: number; z0: number; x1: number; z1: number}, x: number, z: number) => x >= b.x0 && x < b.x1 && z >= b.z0 && z < b.z1;
+
+/**
+ * Version 7's settlement rules (task studio-market-irregular-settlement-20261117-003819-01): the pit at least SETTLEMENT.pitMin cells wide
+ * on every row; on every crevice row, each side's low walk and each terrace (its walk with any stair run in it) at least
+ * SETTLEMENT.walk[0] cells wide — however its sections step; over a stair run's rock-side wall, one storey up, no wider terrace walk
+ * than version 5's (the band's own back wall column: residents' routes smoothed across a wider one hug the run's wall and stall).
+ */
+function settlementIssues(layout: StationLayout): string[] {
+  const issues: string[] = [];
+  const cr = layout.market!.crevice!, st = cr.settlement!;
+  let pit = 0, low = 0, walk = 0;
+  for (const p of st.pit) if (Math.round((p.x1 - p.x0) / CELL) < SETTLEMENT.pitMin) pit++;
+  const mid = (cr.chasm.x0 + cr.chasm.x1) / 2 / CELL, z0 = Math.round(cr.chasm.z0 / CELL), z1 = Math.round(cr.chasm.z1 / CELL);
+  for (const L of layout.levels) {
+    const g = L.grid;
+    // (the terraces over the whole crevice: from the square's north wall to the weir's south one)
+    const y0 = L.id ? Math.round(Math.min(...layout.areas.filter(a => a.role === 'catwalk').map(a => a.y))) : z0;
+    const y1 = L.id ? Math.round(Math.max(...layout.areas.filter(a => a.role === 'catwalk').map(a => a.y + a.h))) : z1;
+    for (let y = y0; y < y1; y++) {
+      let w = 0, e = 0;
+      for (let x = 0; x < g.w; x++) {
+        const i = g.idx(x, y), a = layout.areas[g.area[i]];
+        if (g.cells[i] !== FLOOR || !a) continue;
+        // (a stair run's cells count on both its storeys: its area is its lower storey's)
+        const ok = L.id ? (a.role === 'catwalk' && (a.level ?? 0) === L.id) || a.role === 'stair' : a.label === 'Low walk';
+        if (ok) { if (x < mid) w++; else e++; }
+      }
+      if (Math.min(w, e) < SETTLEMENT.walk[0]) { if (L.id) walk++; else low++; }
+    }
+  }
+  let wide = 0;
+  for (let k = 0; k + 1 < layout.levels.length; k++) {
+    const g = layout.levels[k].grid, up = layout.levels[k + 1].grid;
+    for (let i = 0; i < g.cells.length; i++) {
+      if (g.rampIdx[i] < 0 || up.rampIdx[i] < 0) continue;
+      const x = i % g.w;
+      for (const d of [-1, 1]) {
+        const j = i + d, j2 = i + 2 * d;
+        if (x + 2 * d < 0 || x + 2 * d >= g.w || g.cells[j] !== SOLID || g.cells[j2] !== SOLID) continue;
+        if (up.cells[j] === FLOOR && up.cells[j2] === FLOOR && up.rampIdx[j2] < 0 && up.floorOf(j2) > up.floorOf(i) + 0.6 && layout.areas[up.area[j2]]?.role === 'catwalk') wide++;
+      }
+    }
+  }
+  if (pit) issues.push(`${pit} pit runs narrower than ${SETTLEMENT.pitMin} cells`);
+  if (wide) issues.push(`${wide} stair-run rows under a wide upper walk`);
+  if (low) issues.push(`${low} low-walk rows under ${SETTLEMENT.walk[0]} cells`);
+  if (walk) issues.push(`${walk} terrace rows under ${SETTLEMENT.walk[0]} cells`);
+  return issues;
+}
 
 /** Which side of a counter a point lies on, across its depth (a counter runs along its longer side): -1 / 1, 0 = over it. */
 export function counterSide(c: MarketStall['counter'], x: number, z: number): -1 | 0 | 1 {

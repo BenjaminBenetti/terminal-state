@@ -91,6 +91,9 @@ export interface CreviceFrame {
   /** The settlement's painted name. */
   name: string;
   salt: number;
+  /** (layout version 7, task studio-market-irregular-settlement-20261117-003819-01) Every column moved this far east on its wider canvas
+   *  (gen/market/v7/settlement.ts SETTLEMENT.shift); absent on versions 5 / 6. */
+  shift?: number;
 }
 
 /** The station's version-5 frame (salt > 0: a re-roll after a program that did not fit). */
@@ -145,7 +148,7 @@ export function creviceRows(f: CreviceFrame) {
   const z0 = pw + 1, z1 = z0 + f.Lc; // the crevice's rows [z0, z1); its south wall row z1
   const chasm0 = z0 + f.square, chasm1 = z1 - f.weir;
   // columns: centred on the platform (the bed's first platform column is bedX + TUN = 12)
-  const pc0 = S.bedX + 12, pcx = pc0 + f.Lp / 2;
+  const pc0 = S.bedX + (f.shift ?? 0) + 12, pcx = pc0 + f.Lp / 2;
   const half = S.bands * S.pitch + 1 + S.lowWalk; // per side: the bands (+ B0's front wall) and the low walk
   const x0 = Math.round(pcx - f.chasmW / 2) - half; // B3's back wall (west side)
   const xc0 = x0 + half, xc1 = xc0 + f.chasmW; // the chasm's columns [xc0, xc1)

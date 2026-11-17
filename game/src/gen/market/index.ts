@@ -64,10 +64,10 @@ export function marketStoreyLabel(level: number, version = 1): string {
   return level === 1 ? 'Housing deck' : 'Market floor';
 }
 
-/** Any market layout's validation issues (version 1, 2, 3, 4, 5 or 6). */
+/** Any market layout's validation issues (version 1, 2, 3, 4, 5, 6 or 7). */
 export function marketLayoutIssues(layout: StationLayout): string[] {
   const v = layout.market?.v;
-  return v === 5 || v === 6 ? creviceIssues(layout) : v === 4 ? denSettleIssues(layout) : v === 3 ? barSettleIssues(layout) : v === 2 ? settleIssues(layout) : marketIssues(layout);
+  return v === 5 || v === 6 || v === 7 ? creviceIssues(layout) : v === 4 ? denSettleIssues(layout) : v === 3 ? barSettleIssues(layout) : v === 2 ? settleIssues(layout) : marketIssues(layout);
 }
 
 /**
@@ -81,7 +81,7 @@ export function marketLayoutIssues(layout: StationLayout): string[] {
  */
 export function generateMarketLevel(ctx: SectionGenContext): StationLayout {
   const version = ctx.layoutVersion ?? MARKET_LAYOUT_VERSION;
-  if (version >= 5) return generateCrevice(ctx, version >= 6 ? 6 : 5);
+  if (version >= 5) return generateCrevice(ctx, version >= 7 ? 7 : version >= 6 ? 6 : 5); // (+ version 7: task studio-market-irregular-settlement-20261117-003819-01)
   if (version >= 2) return generateSettlement(ctx, {bar: version >= 3, den: version >= 4});
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const seed = marketSeed(ctx.levelSeed);

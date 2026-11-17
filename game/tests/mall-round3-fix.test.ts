@@ -231,9 +231,12 @@ describe('R1 escalators meet the sloped walls under them without coplanar surfac
     }
   });
 
-  it('level geometry: the open wells\' overlapping bands are subtracted in the mall, never in the Subway / Office', async () => {
+  it('level geometry: no overlapping bands left to subtract — the mall\'s capped open wells, the Subway / Office', async () => {
+    // (task mall-roof-stairwell-fix-20261117) the mall's open wells are capped at their upper storey's gallery ceiling (Ramp.capCeil):
+    // a scissor stack's lower flight band no longer runs on up through the flight and storeys over it, so nothing overlaps there any
+    // more (it was > 0 while the wells rose 40 m). The subtraction stays as the guard; the face checks below still hold.
     const {subtracted} = await getMall();
-    expect(subtracted).toBeGreaterThan(0);
+    expect(subtracted).toBe(0);
     for (const layout of [generateStation(24839), generateOfficeLevel({levelSeed: 777, startWeapon: 'pistol'} as never) as StationLayout]) {
       OVERLAP_STATS.subtracted = 0;
       const w = buildWorld(layout, mats(), {});
