@@ -202,9 +202,9 @@ export function hallSpots(a: Area, form: CeilingForm, g: Grid, signs: readonly S
       // (the row's ledge — strips as long as the spacing, centred on each source — keeps COVE_INSET inside the nave span)
       const band = nave ?? [b.c0, b.c1];
       const span: [number, number] = band[1] - band[0] > 4 * COVE_INSET ? [band[0] + COVE_INSET, band[1] - COVE_INSET] : band;
-      // (a wide nave — the version-3 gate-aisle hall's — thins its ledges so the hall keeps <= MAX_HALL_SOURCES; the fronts' own fixtures
-      // less the generic downlights they replace count too)
-      const others = spots.length + (vaulted ? 0 : (low ? 2 : sides.length) * bays.length) + (fp ? fp.spots.length - fp.replaced.size : 0);
+      // (a wide nave — the version-3 gate-aisle hall's — thins its ledges so the hall keeps <= MAX_HALL_SOURCES; each front's FIRST own
+      // fixture less the generic downlights the fronts replace counts too: a front's extras are trimmed at the end, never a ledge for them)
+      const others = spots.length + (vaulted ? 0 : (low ? 2 : sides.length) * bays.length) + (fp ? Math.max(0, fp.spots.filter(f => f.rank === 0).length - fp.replaced.size) : 0);
       const n = Math.max(2, Math.min(Math.round((span[1] - span[0]) / COVE_STEP), Math.floor((MAX_HALL_SOURCES - others) / Math.max(1, b.lines.length))));
       const y = form.kind === 'flat' ? form.ceil - FLAT_COVE_DROP : coveY(form);
       b.lines.forEach((line, li) => {
