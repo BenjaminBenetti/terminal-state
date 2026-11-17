@@ -104,6 +104,11 @@ export function greyTint(tex: ArchTex, value: number): [number, number, number] 
   return [0, 1, 2].map(i => Math.round((value / m[i]) * 1000) / 1000) as [number, number, number];
 }
 
+/**
+ * A dark glazed set (oxblood / navy / bottle) on a pier: lifted in value only (its hue kept), so a 0.6 m faience pilaster under the dim hall
+ * light reads as its colour rather than a black slot (the dado / band keep the set's own depth).
+ */
+const GLAZE_LIFT: readonly [number, number, number] = [1.4, 1.4, 1.4];
 const PLASTER_WARM = z('ceilingPlaster', warm());
 /** A civic hall's neutral white plaster (coffers, beams): the warm plaster set without its cast. */
 const PLASTER_NEUTRAL = z('ceilingPlaster', greyTint('ceilingPlaster', 0.5));
@@ -126,18 +131,18 @@ const SCHEMES: Readonly<Record<string, FinishScheme>> = {
   // cream running-bond tile over an oxblood dado and band; plaster jack arches; terrazzo
   heritage: {plinth: z('plinthGranite'), dado: z('bandOxblood'), field: z('tileCream'), band: z('bandOxblood'), upper: z('tileCream'),
     ceil: PLASTER_WARM, floor: z('floorTerrazzo'), trim: z('stoneLimestone'), struct: PLASTER_WARM,
-    pier: z('bandOxblood'), accent: z('bandOxblood'), columnPaint: [0.2, 0.075, 0.065],
-    hall: {field: z('stoneLimestone'), upper: z('tileCream'), ceil: PLASTER_WARM, floor: z('floorTerrazzo'), struct: PLASTER_WARM, pier: z('bandOxblood')}},
+    pier: z('bandOxblood', GLAZE_LIFT), accent: z('bandOxblood'), columnPaint: [0.2, 0.075, 0.065],
+    hall: {field: z('stoneLimestone'), upper: z('tileCream'), ceil: PLASTER_WARM, floor: z('floorTerrazzo'), struct: PLASTER_WARM, pier: z('bandOxblood', GLAZE_LIFT)}},
   // pale blue square tile, navy dado and band, white large-format upper wall; granite floors
   civic: {plinth: z('plinthGranite'), dado: z('bandNavy'), field: z('tileBlueSquare'), band: z('bandNavy'), upper: z('tileWhiteLarge'),
     ceil: PLASTER_NEUTRAL, floor: z('floorGranite'), trim: z('stoneLimestone', [0.96, 0.97, 1]), struct: PLASTER_NEUTRAL,
-    pier: z('bandNavy'), accent: z('bandNavy'), columnPaint: [0.06, 0.085, 0.19],
-    hall: {field: z('tileBlueSquare'), upper: z('tileWhiteLarge'), ceil: PLASTER_NEUTRAL, floor: z('floorGranite'), struct: PLASTER_NEUTRAL, pier: z('bandNavy')}},
+    pier: z('bandNavy', GLAZE_LIFT), accent: z('bandNavy'), columnPaint: [0.06, 0.085, 0.19],
+    hall: {field: z('tileBlueSquare'), upper: z('tileWhiteLarge'), ceil: PLASTER_NEUTRAL, floor: z('floorGranite'), struct: PLASTER_NEUTRAL, pier: z('bandNavy', GLAZE_LIFT)}},
   // sage glazed brick over a bottle-green dado
   municipal: {plinth: z('plinthGranite'), dado: z('bandBottle'), field: z('tileGreenBrick'), band: z('bandBottle'), upper: z('tileCream', [0.96, 1, 0.94]),
     ceil: PLASTER_WARM, floor: z('floorTerrazzo'), trim: z('stoneLimestone'), struct: PLASTER_WARM,
-    pier: z('bandBottle'), accent: z('bandBottle'), columnPaint: [0.06, 0.14, 0.075],
-    hall: {field: z('tileGreenBrick'), upper: z('tileCream', [0.96, 1, 0.94]), ceil: PLASTER_WARM, floor: z('floorTerrazzo'), struct: PLASTER_WARM, pier: z('bandBottle')}},
+    pier: z('bandBottle', GLAZE_LIFT), accent: z('bandBottle'), columnPaint: [0.06, 0.14, 0.075],
+    hall: {field: z('tileGreenBrick'), upper: z('tileCream', [0.96, 1, 0.94]), ceil: PLASTER_WARM, floor: z('floorTerrazzo'), struct: PLASTER_WARM, pier: z('bandBottle', GLAZE_LIFT)}},
   // terracotta dado, warm cream field, ochre band
   terracotta: {plinth: z('plinthGranite'), dado: z('tileTerracotta'), field: z('tileCream', warm(0.98)), band: z('bandOchre'), upper: z('tileCream', warm(0.98)),
     ceil: PLASTER_WARM, floor: z('floorTerrazzo'), trim: z('stoneLimestone', warm()), struct: PLASTER_WARM,

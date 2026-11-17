@@ -113,7 +113,7 @@ function joinSpans(list: [number, number][]): [number, number][] {
   return out;
 }
 /** [0, len] minus the blocked spans, pieces shorter than `min` dropped. */
-function freeSpans(len: number, blocked: [number, number][], min = 0.2): [number, number][] {
+export function freeSpans(len: number, blocked: [number, number][], min = 0.2): [number, number][] {
   const out: [number, number][] = [];
   let pos = 0;
   for (const [a, b] of joinSpans(blocked)) { if (a > pos + min) out.push([pos, Math.min(a, len)]); pos = Math.max(pos, b); }
