@@ -1352,8 +1352,9 @@ export class Game {
 
   /** generateSection's generator inputs for `key` of `run` (the layout version of a versioned level, see above; lane BUILD: + the journey's pre-generation). */
   private sectionGenInputs(key: SectionKey, run: RunState): {layoutVersion: number | undefined; ctx: SectionGenContext} {
-    const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : key.level === 'market' ? marketLayoutVersionFor(run.peekMemory(key)) : key.level === 'bunker' ? bunkerLayoutVersionFor(run.peekMemory(key))
-      : key.level === 'mall' && key.section === 'main' ? mallLayoutVersionFor(run.peekMemory(key)) : key.level === 'subway' && key.section === 'main' ? this.qaSubwayVersion() ?? subwayLayoutVersionFor(run.peekMemory(key)) : undefined;
+    const qaSubway = key.level === 'subway' && key.section === 'main' ? this.qaSubwayVersion() : null;
+    const layoutVersion = qaSubway ?? (key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : key.level === 'market' ? marketLayoutVersionFor(run.peekMemory(key)) : key.level === 'bunker' ? bunkerLayoutVersionFor(run.peekMemory(key))
+      : key.level === 'mall' && key.section === 'main' ? mallLayoutVersionFor(run.peekMemory(key)) : key.level === 'subway' && key.section === 'main' ? subwayLayoutVersionFor(run.peekMemory(key)) : undefined);
     return {layoutVersion, ctx: {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {}),
       rosterVersion: rosterVersionFor(run.peekMemory(key)), // (the seeded enemy roster: always explicit — levels/types.ts SectionGenContext.rosterVersion)
       // (task studio-surface-run-opus-rebuild-20261116-020827-01) a host station's own world: its recorded Surface Run version (explicit)
