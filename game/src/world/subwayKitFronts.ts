@@ -181,7 +181,8 @@ export class HallFrontsKit {
       this.hb(accent, al, s0, s1, y0 + F.canopyT, y1, out(0), out(F.depth));
       this.hb(trim, al, s0, s1, y1, y1 + F.lip, out(0), out(F.depth + 0.06));
       this.hb(ceil, al, s0, s1, y0, y0 + F.canopyT, out(0), out(F.canopy));
-      this.hb(accent, al, s0, s1, y0, y0 + F.canopyT + 0.08, out(F.canopy - 0.05), out(F.canopy));
+      // (the front lip rises only 2 cm over the canopy slab: the fascia's sign plate, 0.32 m out from ~2.93 m up, stays in view)
+      this.hb(accent, al, s0, s1, y0, y0 + F.canopyT + 0.02, out(F.canopy - 0.05), out(F.canopy));
       this.stats.fascias++; this.stats.canopies++;
     }
     if (!spans.length) return;
