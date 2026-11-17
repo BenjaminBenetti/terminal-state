@@ -55,8 +55,11 @@ export const LEVEL_ONLY_RULES: readonly LevelOnlyRule[] = [
   // task studio-survivor-market-crevice-20261116-074419 (lane ARCH): the Survivor Market's version 5 (THE CREVICE) draws its cast walls,
   // rock-cut rooms and steel landings with the Reactor family's EXISTING surface sets (world/marketTextures.ts CREVICE_TEXTURES): exactly
   // those texture files (pit concrete, mine rock, rusted steel: colour / normal / ORM) — still the Reactor's family, never its models;
-  // matched before the general Reactor rule (+ 'surface': the general rule's Surface Run district, task studio-surface-run-opus-rebuild-20261116-020827-01)
-  {level: 'reactor', also: ['bunker', 'market', 'surface'], path: /^(?:\.\/)?assets\/textures\/reactor\/(?:pit-concrete|mine-rock|rusted-steel)-(?:color|normal|orm)\.jpg$/},
+  // matched before the general Reactor rule (+ 'surface': the general rule's Surface Run district, task studio-surface-run-opus-rebuild-20261116-020827-01).
+  // Task studio-subway-station-variety-20261117-043926-01: + 'subway' for the mine-rock / pit-concrete sets ONLY — a version-2 Subway station's
+  // painted-rock / cast-concrete identity (world/subwayArch.ts), loaded for a station whose identity draws them; rusted steel stays out
+  {level: 'reactor', also: ['bunker', 'market', 'surface', 'subway'], path: /^(?:\.\/)?assets\/textures\/reactor\/(?:pit-concrete|mine-rock)-(?:color|normal|orm)\.jpg$/},
+  {level: 'reactor', also: ['bunker', 'market', 'surface'], path: /^(?:\.\/)?assets\/textures\/reactor\/rusted-steel-(?:color|normal|orm)\.jpg$/},
   // task reactor-build-20261101 (lane ARCH): the Reactor's kit (assets/reactorKit.generated.ts: reactor-*.glb, textures/reactor/**).
   // Task studio-bunker-level-20261109-072224-01 (lane LEVEL): THE BUNKER reuses it (still the Reactor's family): the arch textures /
   // finishes (world/builder.ts BunkerArch), the shelter hero props (REACTOR_X_KIT bunk bed, radio console, air filtration unit, blast

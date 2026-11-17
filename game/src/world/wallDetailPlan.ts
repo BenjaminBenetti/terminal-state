@@ -85,6 +85,10 @@ export function treatmentOf(face: Pick<WallFace, 'zone' | 'finish'>): Treatment 
   if (/^skyways-boh/.test(face.finish)) return 'mallService';
   if (/^skyways-/.test(face.finish)) return 'mallWall';
   if (/^market-/.test(face.finish)) return 'mallWall'; // task studio-survivor-market-20261108-005807-01: no station identity either
+  // task studio-subway-station-variety-20261117-043926-01: a version-2 cavern's painted rock takes the tunnel's treatment (seepage, cable
+  // runs, spalls; no tile bands / pilasters / friezes) wherever it is, its stairs the stair core's (the tinted tile and the cast concrete
+  // keep their zone's: the finish family already gates tile loss, bands and pilasters)
+  if (/^subway-rock/.test(face.finish)) return face.zone === 'stair' ? 'stairCore' : 'trackTunnel';
   if (face.zone === 'trackbed' && /platformFace/i.test(face.finish)) return 'trackFace';
   return ZONE_TREATMENT[face.zone] ?? 'servicePaint';
 }
@@ -262,7 +266,10 @@ export function* planWallDetailSteps(layout: StationLayout, opts: PlanOptions = 
   const faces = normalizeFaces(opts.faces ?? stationWallFaces(layout));
   const levels = new Levels(stationLevels(layout));
   const srng = new Rng(hashString('wall-detail', layout.seed >>> 0));
-  const accent = STATION_ACCENTS[srng.int(0, STATION_ACCENTS.length - 1)];
+  const drawnAccent = STATION_ACCENTS[srng.int(0, STATION_ACCENTS.length - 1)];
+  // (task studio-subway-station-variety-20261117-043926-01: a version-2 station's identity sets its accent — the draw stays, so every
+  // later station-stream draw is unchanged)
+  const accent = layout.identity ? `#${layout.identity.accent.toString(16).padStart(6, '0')}` : drawnAccent;
   // Iteration 12 (ARCH): ~30 years without upkeep raise every wall's condition (more cracks, lost tiles, leak runs).
   const age = srng.range(-0.08, 0.14) + WALL_AGE_30Y;
   const bayPhase = srng.range(0, 1);

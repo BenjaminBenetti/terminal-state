@@ -40,7 +40,8 @@ export interface AreaOpts {
 export interface TrenchCells { x0: number; x1: number; y0: number; y1: number; px0: number; px1: number; tracks: number[]; third: number[]; columns: boolean; ceil: number }
 
 export interface TrackBlock {
-  kind: 'side' | 'island' | 'express';
+  /** (+ 'single': one side platform on a one-track bed, task studio-subway-station-variety-20261117-043926-01 — the hub's line 2) */
+  kind: 'side' | 'island' | 'express' | 'single';
   /** Platform areas, south-most first for side blocks (P1 = south platform). */
   platforms: Area[];
   trenches: TrenchCells[];
@@ -273,18 +274,34 @@ export class Kit {
   }
 
   /** Two side platforms on a two-track bed: P2 north (edge S), P1 south (edge N). */
-  sideBlock(px0: number, y0: number, Lp: number, ceil: number, labels: [string, string] = ['Platform 1', 'Platform 2']): TrackBlock {
+  sideBlock(px0: number, y0: number, Lp: number, ceil: number, labels: [string, string] = ['Platform 1', 'Platform 2'], columns = true): TrackBlock {
     const rng = this.rng;
     const W2 = rng.int(14, 17), W1 = rng.int(15, 18);
     const px1 = px0 + Lp, tx0 = px0 - TUN, tx1 = px1 + TUN;
     const ty0 = y0 + W2, ty1 = ty0 + TRACK_BED_CELLS;
-    const t = this.bed(tx0, tx1, ty0, TRACK_BED_CELLS, ceil, [ty0 * CELL + 2.0, ty0 * CELL + 6.0], [1, -1], true);
+    // (task studio-subway-station-variety-20261117-043926-01: `columns` false = a column-free bed, the cavern family's open span; default
+    // true = every classic archetype's centre columns, unchanged)
+    const t = this.bed(tx0, tx1, ty0, TRACK_BED_CELLS, ceil, [ty0 * CELL + 2.0, ty0 * CELL + 6.0], [1, -1], columns);
     t.px0 = px0; t.px1 = px1;
     const P1 = this.addArea({x: px0, y: ty1, w: Lp, h: W1}, 'platform', 'platform', ceil, -1, {label: labels[0], paid: true});
     P1.edge = 'N';
     const P2 = this.addArea({x: px0, y: y0, w: Lp, h: W2}, 'platform', 'platform', ceil, -1, {label: labels[1], paid: true});
     P2.edge = 'S';
     return {kind: 'side', platforms: [P1, P2], trenches: [t], px0, px1, tx0, tx1, y0, y1: ty1 + W1 - 1};
+  }
+
+  /**
+   * Task studio-subway-station-variety-20261117-043926-01 (the hub family's line 2): ONE side platform (edge S) on a one-track bed south of
+   * it, the tunnel wall beyond — a branch line's platform. `PW` = platform depth (cells). The caller checks the footprint is free.
+   */
+  singleBlock(px0: number, y0: number, Lp: number, ceil: number, PW: number, label: string): TrackBlock {
+    const px1 = px0 + Lp, tx0 = px0 - TUN, tx1 = px1 + TUN;
+    const S = SINGLE_BED_CELLS, by = y0 + PW;
+    const P = this.addArea({x: px0, y: y0, w: Lp, h: PW}, 'platform', 'platform', ceil, -1, {label, paid: true});
+    P.edge = 'S';
+    const t = this.bed(tx0, tx1, by, S, ceil, [by * CELL + 2.0], [1], false);
+    t.px0 = px0; t.px1 = px1;
+    return {kind: 'single', platforms: [P], trenches: [t], px0, px1, tx0, tx1, y0, y1: by + S - 1};
   }
 
   /** One island platform between two one-track beds. */

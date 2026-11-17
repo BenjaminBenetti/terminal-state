@@ -58,7 +58,9 @@ export const LEVELS: Record<LevelId, LevelDef> = {
     trackExtensions: trackExtConfig('subway'),
     generate: (section, ctx) => {
       if (section !== 'main') throw new Error(`Subway has no section '${section}'`);
-      const layout = withGear(generateStation(ctx.levelSeed >>> 0, {startWeapon: ctx.startWeapon, trackExtensions: LEVELS.subway.trackExtensions}), ctx, 'subway');
+      // (task studio-subway-station-variety-20261117-043926-01) the station's layout version (gen/subwayLayoutVersion.ts): the game always passes
+      // it; absent = version 1 (the classic archetypes every pinned fingerprint was taken with), like rosterVersion / surfaceVersion
+      const layout = withGear(generateStation(ctx.levelSeed >>> 0, {startWeapon: ctx.startWeapon, trackExtensions: LEVELS.subway.trackExtensions, ...(ctx.layoutVersion !== undefined ? {layoutVersion: ctx.layoutVersion} : {})}), ctx, 'subway');
       placeSubwayMapKiosks(layout); // (task studio-ui-subway-maps-20261108-074144-01) the station map kiosks: appended last, RNG-neutral (gen/subwayMapKiosks.ts)
       return layout;
     },

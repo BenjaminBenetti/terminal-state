@@ -22,6 +22,7 @@ import {archShopMaterial} from './decay';
 import {planWallDetailSteps, type FeatureKind, type Treatment, type WallDetailPlan, type Feature} from './wallDetailPlan';
 import {FRIEZE_SIZE, atlasCells, friezeTexture, wallDetailTextures, type CellRect} from './wallDetailAtlas';
 import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
+import {SUBWAY_WALL_TAG} from './subwayArch'; // task studio-subway-station-variety-20261117-043926-01
 import {Buf, LAYER_OFFSET, cutPolyC, cylinder, faceBox, flatFeature, frameOf, insetPrism, prepareCuts, pt, rimRing, rubble, type CutSpec, type DetailMat, type Frame} from './wallDetailGeometry';
 
 export interface WallDetailStats {
@@ -158,7 +159,8 @@ export function* buildWallDetailSteps(world: THREE.Group, layout: StationLayout,
   const baseMeshes: THREE.Mesh[] = [];
   world.traverse(o => {
     const m = o as THREE.Mesh;
-    if (m.isMesh && !(o as THREE.InstancedMesh).isInstancedMesh && !Array.isArray(m.material) && baseMats.has(m.material)) baseMeshes.push(m);
+    // (task studio-subway-station-variety-20261117-043926-01: + a version-2 station's identity walls, world/subwayArch.ts SUBWAY_WALL_TAG)
+    if (m.isMesh && !(o as THREE.InstancedMesh).isInstancedMesh && !Array.isArray(m.material) && (baseMats.has(m.material) || m.material.userData[SUBWAY_WALL_TAG] === true)) baseMeshes.push(m);
   });
   const cutFeatures = plan.features.filter(f => f.layer === 'cut');
   const specs: CutSpec[] = cutFeatures.map(f => {
