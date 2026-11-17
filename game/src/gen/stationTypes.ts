@@ -173,7 +173,20 @@ export interface LightPlacement {
   tint?: readonly [number, number, number];
   /** Task reactor-expansion-20261101 (lane GASLIGHT): where the fixture is MOUNTED (the Reactor pit's caged lamps); absent = ceiling. */
   mount?: LightMount;
+  /**
+   * Task studio-subway-architecture-materials-rework-20261117-072826-01: the architectural fixture of a Subway plan-family hall light
+   * (gen/subwayHallLights.ts; drawn by world/subwayKit.ts). Absent = the station's standard fluorescent fixture.
+   */
+  style?: SubwayLightStyle;
 }
+/**
+ * Task studio-subway-architecture-materials-rework-20261117-072826-01: hall fixture styles in the architectural rhythm (gen/subwayBays.ts):
+ *  - 'drum': a large drum pendant on one stem, hung at the bay centre of a tall nave / hall (y = the drum's underside);
+ *  - 'downlight': a recessed round downlight flush in a low soffit (an aisle, a gallery underside; y = just below the soffit);
+ *  - 'cove': a concealed linear uplight on top of a transverse beam / cornice (no visible fixture body; the kit draws the lit strip;
+ *    y = the strip, just below the ceiling it washes).
+ */
+export type SubwayLightStyle = 'drum' | 'downlight' | 'cove';
 /**
  * Task reactor-expansion-20261101 (lane GASLIGHT): a wall-bracket or post-mounted lamp. `x / y / z` = the mount point (the wall face at
  * the lamp's height, or the post's FOOT on the deck), `nx / nz` = the unit direction the head reaches out along (out of the wall into
