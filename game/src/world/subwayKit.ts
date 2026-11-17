@@ -25,6 +25,7 @@ import type {BuiltFace} from './levelGeometry';
 import {normalizeFaces, type TreatFace} from './wallDetailFaces';
 import {ZONES} from './subwayFinish';
 import type {SubwayArch} from './subwayArch';
+import {HallFrontsKit} from './subwayKitFronts'; // task studio-subway-rework-m2-finishing-20261117-111246-01 (lane FRONTS)
 
 /** The builder's trim sink. */
 export interface KitSink {
@@ -32,7 +33,11 @@ export interface KitSink {
   geo(mat: string, geo: THREE.BufferGeometry, cx: number, cy: number, cz: number): void;
 }
 
-export interface KitStats { boxes: number; strips: number; pilasters: number; beams: number; shifted: number; dropped: number; lanterns: number; coves: number; panels: number }
+export interface KitStats {
+  boxes: number; strips: number; pilasters: number; beams: number; shifted: number; dropped: number; lanterns: number; coves: number; panels: number;
+  /** (lane FRONTS, world/subwayKitFronts.ts) a version-3 hall's framed fronts, their hung clocks, its purposeful clerestory bays. */
+  fronts: number; clocks: number; features: number;
+}
 
 /** Lantern ('drum') body: outer size (m) and height above its underside. */
 export const LANTERN = {w: 1.0, h: 0.46, glass: 0.9, glassH: 0.4} as const;
@@ -185,7 +190,7 @@ interface HallKit { a: Area; form: CeilingForm; g: Grid; lines: number[] }
 
 export function buildSubwayKit(sink: KitSink, inp: KitInput): KitStats {
   const {layout, sub} = inp;
-  const st: KitStats = {boxes: 0, strips: 0, pilasters: 0, beams: 0, shifted: 0, dropped: 0, lanterns: 0, coves: 0, panels: 0};
+  const st: KitStats = {boxes: 0, strips: 0, pilasters: 0, beams: 0, shifted: 0, dropped: 0, lanterns: 0, coves: 0, panels: 0, fronts: 0, clocks: 0, features: 0};
   const box = (mat: string, cx: number, cy: number, cz: number, sx: number, sy: number, sz: number) => {
     if (sx <= 1e-3 || sy <= 1e-3 || sz <= 1e-3) return;
     sink.box(mat, cx, cy, cz, sx, sy, sz); st.boxes++;
@@ -337,6 +342,7 @@ export function buildSubwayKit(sink: KitSink, inp: KitInput): KitStats {
     return out;
   };
   const faces = normalizeFaces(inp.faces).filter(f => !f.slope && /^subway-/.test(f.finish));
+  const fk = new HallFrontsKit(box, sink.geo.bind(sink), layout, sub, halls, faces); // (lane FRONTS) the fronts + clerestory features
   for (const f of faces) {
     const a = f.area >= 0 ? layout.areas[f.area] : undefined;
     const alongX = Math.abs(f.z1 - f.z0) < 1e-6;
@@ -424,6 +430,7 @@ export function buildSubwayKit(sink: KitSink, inp: KitInput): KitStats {
         const s0 = p0 + CLERESTORY.inset, s1 = a0 - CLERESTORY.inset;
         p0 = a1;
         if (s1 - s0 < 1.2 || top - bot < 1.2) continue;
+        if (fk.panel(h.a, {alongX, plane, n, s0w, dir, openings: f.openings}, s0, s1, bot, top)) continue; // (lane FRONTS) a purposeful bay
         run(trim, s0, s1, bot, bot + t, 0.03);
         run(trim, s0, s1, top - t, top, 0.03);
         run(trim, s0, s0 + t, bot + t, top - t, 0.03);
@@ -470,5 +477,7 @@ export function buildSubwayKit(sink: KitSink, inp: KitInput): KitStats {
       st.coves++;
     }
   });
+  fk.fronts(); // (lane FRONTS)
+  st.fronts = fk.stats.fronts; st.clocks = fk.stats.clocks + fk.stats.upperClocks; st.features = fk.stats.features;
   return st;
 }

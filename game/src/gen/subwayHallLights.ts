@@ -26,7 +26,9 @@ import {CELL, FLOOR, type Grid} from './grid';
 import {bayBounds, type HallBays} from './subwayBays';
 import {ceilingFormOf, coveY, soffitAt, springCoves, type CeilingForm} from './subwayCeilings';
 import {hallSectionWorld} from './hallSection';
-import {SPAWN_LIT_RADIUS, type Area, type LightPlacement, type StationLayout, type SubwayLightStyle} from './stationTypes';
+import {CLOCK_LIGHT_OFFSET, frontAcross, frontClockSpot} from './hallFrontGeometry';
+import {PROP_DEFS} from './props';
+import {SPAWN_LIT_RADIUS, type Area, type HallFront, type HallSection, type LightPlacement, type StationLayout, type SubwayLightStyle} from './stationTypes';
 
 /** Hall roles relit by the plan (any hall of type 'fare-hall' >= RELIT_FARE_M2 too). */
 export const RELIT_ROLES: ReadonlySet<string> = new Set(['grand-ticket-hall', 'waiting-hall', 'interchange-hall', 'end-hall']);
@@ -60,6 +62,27 @@ const MIN_BAND = 2;
 const BASE_POWER: Readonly<Record<SubwayLightStyle, number>> = {drum: 0.92, cove: 0.7, downlight: 0.8};
 const POWER_JITTER = 0.1;
 const WARM: Readonly<Record<SubwayLightStyle, boolean>> = {drum: true, cove: true, downlight: false};
+/**
+ * Task studio-subway-rework-m2-finishing-20261117-111246-01 (lane FRONTS): the styled fixtures' COLOUR TEMPERATURE per station scheme
+ * (LightPlacement.tint: linear RGB, ~unit luminance — world/lightFieldLayout.ts fixtureTint gives it to the baked field, the probes and the
+ * runtime tubes / glow, and the enhanced-lighting digest reads it). The review: one warm tint on every lantern / cove turned civic and
+ * brutalist halls "the same warm brown" as heritage. Heritage / terracotta / municipal and the caverns keep the warm lanterns and neutral
+ * downlights (no tint: fixtureTint's defaults); civic takes a neutral white, moderne a clean neutral, brutalist a cool white — every styled
+ * fixture of the hall alike. Render-only: lights are never saved, positions / states / counts are unchanged.
+ */
+export const SCHEME_TINT: Readonly<Record<string, readonly [number, number, number]>> = {
+  civic: [1.06, 1.0, 0.88],
+  moderne: [1.02, 1.0, 0.96],
+  brutalist: [0.94, 1.0, 1.1],
+};
+/** The styled hall fixtures' tint of a station (undefined: the warm / neutral defaults). */
+export const hallFixtureTint = (layout: Pick<StationLayout, 'identity'>): readonly [number, number, number] | undefined => SCHEME_TINT[layout.identity?.theme ?? ''];
+/** An office front's fixtures: one per booth window (the dresser's booth pitch), at most this many. */
+const OFFICE_PITCH = 3.0, OFFICE_MAX = 4;
+/** A wall front's own fixtures replace the side band's generic downlight of every bay it covers by at least this share. */
+const FRONT_BAY_SHARE = 0.35;
+/** A nave island's lantern hangs this far across from a waiting island's centre (clear of its hung clock). */
+export const NAVE_CLOCK_CLEAR = 1.5;
 const BROKEN = 0.05, FLICKER = 0.08, DYING = 0.012;
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -74,8 +97,8 @@ export function relitHall(a: Area): boolean {
 /** Per-hall result of the pass (tests / QA). */
 export interface HallLightReport { area: number; role: string; before: number; after: number; styles: Record<SubwayLightStyle, number>; form: string; fromColumns: boolean }
 
-/** A fixture of the plan before its state: where it hangs and what it is. */
-interface Spot { x: number; y: number; z: number; rot: number; style: SubwayLightStyle }
+/** A fixture of the plan before its state: where it hangs and what it is (`rank`: a front's k-th own fixture, trimmed last-first). */
+interface Spot { x: number; y: number; z: number; rot: number; style: SubwayLightStyle; rank?: number }
 
 /** Relights every relit hall of a plan-family layout (in place). Returns the per-hall report. */
 export function planHallLights(layout: StationLayout): HallLightReport[] {
@@ -130,7 +153,7 @@ function bandsOf(a: Area, b: HallBays, form: CeilingForm): {nave: [number, numbe
   return {nave: [b.c0, b.c1], sides: []};
 }
 
-/** The fixtures of one hall in the bay rhythm (drums, then coves, then downlights; each along the hall). */
+/** The fixtures of one hall in the bay rhythm (drums, then coves, then downlights; each along the hall; then the fronts' own). */
 export function hallSpots(a: Area, form: CeilingForm, g: Grid): Spot[] {
   const b = form.bays;
   const bays = bayBounds(b);
@@ -142,9 +165,9 @@ export function hallSpots(a: Area, form: CeilingForm, g: Grid): Spot[] {
   const height = (along: number, across: number) => { const [x, z] = at(along, across); return soffitAt(form, x, z, g) - form.floor; };
   const low = height((b.a0 + b.a1) / 2, nave ? (nave[0] + nave[1]) / 2 : crown) < LOW_HALL;
   const spots: Spot[] = [];
-  const push = (along: number, across: number, y: number, rot: number, style: SubwayLightStyle) => {
+  const push = (along: number, across: number, y: number, rot: number, style: SubwayLightStyle, rank?: number) => {
     const [x, z] = at(along, across);
-    spots.push({x: r3(x), y: r2(y), z: r3(z), rot, style});
+    spots.push({x: r3(x), y: r2(y), z: r3(z), rot, style, ...(rank !== undefined ? {rank} : {})});
   };
   // drums: one per bay at its centre on the nave's centre line (a vault's crown)
   const drumLine = vaulted ? crown : nave ? (nave[0] + nave[1]) / 2 : null;
@@ -154,11 +177,15 @@ export function hallSpots(a: Area, form: CeilingForm, g: Grid): Spot[] {
     const y = Math.min(s - Math.min(2.6, Math.max(0, (H - 4.2) * 0.6)), s - DRUM_CLEAR);
     return y >= form.floor + DRUM_MIN_Y ? y : null;
   };
+  // (lane FRONTS) a version-3 hall's fronts: the side-band bays their own fixtures replace, the nave islands' lanterns
+  const S = hallSectionWorld(a);
+  const fp = S && !low && !vaulted ? frontPlan(a, S, bays, sides, drumLine) : null;
   if (drumLine !== null && (!low || vaulted)) {
-    for (const [p, q] of bays) {
-      const y = drumY((p + q) / 2, drumLine);
-      if (y !== null) push((p + q) / 2, drumLine, y, rotAlong, 'drum');
-    }
+    bays.forEach(([p, q], bi) => {
+      const line = fp?.drumAcross.get(bi) ?? drumLine;
+      const y = drumY((p + q) / 2, line);
+      if (y !== null) push((p + q) / 2, line, y, rotAlong, 'drum');
+    });
   }
   // coves: on the ledges (bay lines: beside each beam over the nave span; vaults: along both springs)
   if (!low || b.fromColumns) {
@@ -171,8 +198,9 @@ export function hallSpots(a: Area, form: CeilingForm, g: Grid): Spot[] {
       // (the row's ledge — strips as long as the spacing, centred on each source — keeps COVE_INSET inside the nave span)
       const band = nave ?? [b.c0, b.c1];
       const span: [number, number] = band[1] - band[0] > 4 * COVE_INSET ? [band[0] + COVE_INSET, band[1] - COVE_INSET] : band;
-      // (a wide nave — the version-3 gate-aisle hall's — thins its ledges so the hall keeps <= MAX_HALL_SOURCES)
-      const others = spots.length + (vaulted ? 0 : (low ? 2 : sides.length) * bays.length);
+      // (a wide nave — the version-3 gate-aisle hall's — thins its ledges so the hall keeps <= MAX_HALL_SOURCES; the fronts' own fixtures
+      // less the generic downlights they replace count too)
+      const others = spots.length + (vaulted ? 0 : (low ? 2 : sides.length) * bays.length) + (fp ? fp.spots.length - fp.replaced.size : 0);
       const n = Math.max(2, Math.min(Math.round((span[1] - span[0]) / COVE_STEP), Math.floor((MAX_HALL_SOURCES - others) / Math.max(1, b.lines.length))));
       const y = form.kind === 'flat' ? form.ceil - FLAT_COVE_DROP : coveY(form);
       b.lines.forEach((line, li) => {
@@ -186,12 +214,81 @@ export function hallSpots(a: Area, form: CeilingForm, g: Grid): Spot[] {
   // downlights: the side bands (low halls: two per bay across), never under a vault
   if (!vaulted) {
     const lines = low ? lowDownlightLines(b, nave, sides) : sides.map(([p, q]) => (p + q) / 2);
-    for (const across of lines) for (const [p, q] of bays) {
-      const [x, z] = at((p + q) / 2, across);
-      push((p + q) / 2, across, soffitAt(form, x, z, g) - DOWNLIGHT_DROP, 0, 'downlight');
-    }
+    lines.forEach((across, li) => bays.forEach(([p, q], bi) => {
+      if (fp?.replaced.has(`${li}:${bi}`)) return;
+      const along = (p + q) / 2, [x, z] = at(along, across), s = soffitAt(form, x, z, g);
+      // (lane FRONTS) a 'transept' hall's crossing: its aisle cells keep the nave ceiling (gen/stationHallV3.ts), so the side band's
+      // "recessed downlight just under the local soffit" sat in the coffers ~8.9 m up (soffit - DOWNLIGHT_DROP: 8.87 m at the transept
+      // seed 3, over a 4.5 m aisle elsewhere), a weak dot over the ~16 m crossing aisle. There the band hangs a lantern at the nave's drum
+      // height instead (drumY: 6.32 m there) — the crossing reads as the full-height space it is and its aisle floor is lit like the nave's.
+      if (S?.transept && along > S.transept[0] && along < S.transept[1] && s > S.aisleCeil + 0.5) {
+        const y = drumY(along, across);
+        if (y !== null) { push(along, across, y, rotAlong, 'drum'); return; }
+      }
+      push(along, across, s - DOWNLIGHT_DROP, 0, 'downlight');
+    }));
   }
-  return spots.filter(s => fits(a, g, s));
+  // (lane FRONTS) the fronts' own fixtures: a recessed downlight under the aisle soffit, a lantern where the front stands under a full
+  // height (the transept's crossing, the gate-aisle hall's nave wall)
+  if (fp) for (const f of fp.spots) {
+    const [x, z] = at(f.along, f.across), s = soffitAt(form, x, z, g);
+    const y = s > S!.aisleCeil + 0.5 ? drumY(f.along, f.across) : null;
+    if (y !== null) push(f.along, f.across, y, rotAlong, 'drum', f.rank);
+    else push(f.along, f.across, s - DOWNLIGHT_DROP, 0, 'downlight', f.rank);
+  }
+  const out = spots.filter(s => fits(a, g, s));
+  // the hall budget: a front's extra fixtures go first (its first one last); the architectural rhythm is never trimmed for them
+  while (out.length > MAX_HALL_SOURCES) {
+    let k = -1;
+    for (let i = 0; i < out.length; i++) if (out[i].rank !== undefined && (k < 0 || out[i].rank! >= out[k].rank!)) k = i;
+    if (k < 0) break;
+    out.splice(k, 1);
+  }
+  return out;
+}
+
+/**
+ * (lane FRONTS) A hall's fronts in its light plan: each WALL front's own fixtures (an office: one over the counter apron per booth window;
+ * a waiting group: one over its benches, clear of its hung clock; a kiosk / service point: one over its counter apron) REPLACE the side
+ * band's generic downlight of every bay the front covers (the hall keeps its count and its >= 60 % working rule); a NAVE island takes its
+ * bay's lantern across over it (a waiting island's beside its clock), so the drum count and the bay rhythm along the hall stay.
+ */
+function frontPlan(a: Area, S: HallSection, bays: [number, number][], sides: [number, number][], drumLine: number | null):
+  {spots: {along: number; across: number; rank: number}[]; replaced: Set<string>; drumAcross: Map<number, number>} {
+  const spots: {along: number; across: number; rank: number}[] = [], replaced = new Set<string>(), drumAcross = new Map<number, number>();
+  for (const f of S.fronts ?? []) {
+    const lo = Math.min(f.along[0], f.along[1]), hi = Math.max(f.along[0], f.along[1]), mid = (lo + hi) / 2;
+    const c = (f.across[0] + f.across[1]) / 2;
+    if (f.wall === 'nave') {
+      const bi = bays.findIndex(([p, q]) => mid >= p && mid < q);
+      if (bi < 0 || drumLine === null || drumAcross.has(bi)) continue;
+      const d = drumLine - c;
+      drumAcross.set(bi, r3(f.kind === 'waiting' ? (Math.abs(d) > NAVE_CLOCK_CLEAR ? c + Math.sign(d) * NAVE_CLOCK_CLEAR : drumLine) : c));
+      continue;
+    }
+    frontFixtures(a, S, f, lo, hi).forEach((o, k) => spots.push({...o, rank: k}));
+    const li = sides.findIndex(([p, q]) => c > p && c < q);
+    if (li < 0) continue;
+    bays.forEach(([p, q], bi) => { if (Math.min(hi, q) - Math.max(lo, p) >= FRONT_BAY_SHARE * (q - p)) replaced.add(`${li}:${bi}`); });
+  }
+  return {spots, replaced, drumAcross};
+}
+
+/** A wall front's own fixture points (along, across), its most important first. */
+function frontFixtures(a: Area, S: HallSection, f: HallFront, lo: number, hi: number): {along: number; across: number}[] {
+  if (f.kind === 'office') {
+    const n = Math.max(1, Math.min(OFFICE_MAX, Math.round((hi - lo) / OFFICE_PITCH)));
+    const across = frontAcross(a, S, f, PROP_DEFS.booth.d + 0.7);
+    const out = Array.from({length: n}, (_, i) => ({along: r3(lo + (hi - lo) * (i + 0.5) / n), across: r3(across)}));
+    // (the middle windows first: a trimmed office keeps its centre lit)
+    return out.sort((p, q) => Math.abs(p.along - (lo + hi) / 2) - Math.abs(q.along - (lo + hi) / 2) || p.along - q.along);
+  }
+  if (f.kind === 'waiting') {
+    const clock = frontClockSpot(a, S, f);
+    const along = clock.along + CLOCK_LIGHT_OFFSET <= hi - 0.3 || clock.along - CLOCK_LIGHT_OFFSET < lo + 0.3 ? clock.along + CLOCK_LIGHT_OFFSET : clock.along - CLOCK_LIGHT_OFFSET;
+    return [{along: r3(along), across: r3(frontAcross(a, S, f, 0.9))}];
+  }
+  return [{along: r3((lo + hi) / 2), across: r3(frontAcross(a, S, f, 1.2))}];
 }
 
 /** A low hall's two downlight lines across: the centres of its two widest bands, else its quarter points. */
@@ -231,6 +328,8 @@ function stateOf(layout: StationLayout, a: Area, s: Spot, i: number): LightPlace
   const u = (c: number) => lightHash(layout.seed, a.id, i, c);
   const l: LightPlacement = {x: s.x, y: s.y, z: s.z, rot: s.rot, area: a.id, broken: false, flicker: false, warm: WARM[s.style], power: 1, dying: false, style: s.style};
   if (a.level) l.level = a.level;
+  const tint = hallFixtureTint(layout); // (lane FRONTS) the scheme's colour temperature
+  if (tint) l.tint = tint;
   const base = BASE_POWER[s.style];
   if (a.lighting === 'lit') {
     l.power = r2(Math.min(1, base + (u(0) * 2 - 1) * POWER_JITTER));
