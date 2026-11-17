@@ -201,7 +201,7 @@ import {SKYWAYS_LAYOUT_LANE, skywaysLayoutVersionFor} from './gen/skyways/layout
 import {MARKET_LAYOUT_LANE, marketLayoutVersionFor} from './gen/market/layoutVersion'; // task studio-market-rework-20261108-074144-01 (lane LAYOUT)
 import {BUNKER_LAYOUT_LANE, bunkerLayoutVersionFor} from './gen/bunker/layoutVersion'; // task studio-bunker-level-20261109-072224-01 (lane LEVEL)
 import {MALL_LAYOUT_LANE, mallLayoutVersionFor} from './gen/mall/layoutVersion'; // task studio-mall-layout-variety-20261117-005520-01
-import {SUBWAY_LAYOUT_LANE, subwayLayoutVersionFor} from './gen/subwayLayoutVersion'; // task studio-subway-station-variety-20261117-043926-01
+import {SUBWAY_LAYOUT_LANE, SUBWAY_LAYOUT_VERSION, subwayLayoutVersionFor} from './gen/subwayLayoutVersion'; // task studio-subway-station-variety-20261117-043926-01
 import {ROSTER_LANE, rosterVersionFor} from './ai/enemyRoster'; // task studio-screacher-production-20261110-221858-01: the seeded family roster's version pin
 import {noisyPhysicsAudio} from './ai/screacherNoise'; // task studio-screacher-production-20261110-221858-01: prop / item contacts as world noise
 import {setObjectiveTitle} from './ui/objectiveTitle'; // task studio-bunker-rework-20261109-205115-01
@@ -759,6 +759,11 @@ export class Game {
    * (main.ts, session only): the torch-off frames trace nothing, as before.
    */
   rtStandby = true;
+  /**
+   * Task studio-subway-architecture-materials-rework-20261117-072826-01: QA-only (?qa=1&subwayLayout=N, main.ts) layout version of the scratch
+   * run's Subway stations (1..SUBWAY_LAYOUT_VERSION; anything else = the normal rule). Never set outside QA.
+   */
+  qaSubwayLayout: number | null = null;
   private readonly rtDrawSize = new THREE.Vector2();
   private readonly mirrorPassInfo: MirrorScenePass = {target: null as unknown as THREE.RenderTarget, depth: 0};
   private readonly mirrorSightA = {x: 0, y: 0, z: 0};
@@ -1339,10 +1344,16 @@ export class Game {
     return layout;
   }
 
+  /** The QA scratch run's forced Subway layout version (null: the normal rule). */
+  private qaSubwayVersion(): number | null {
+    const v = this.qaSubwayLayout;
+    return v !== null && Number.isInteger(v) && v >= 1 && v <= SUBWAY_LAYOUT_VERSION ? v : null;
+  }
+
   /** generateSection's generator inputs for `key` of `run` (the layout version of a versioned level, see above; lane BUILD: + the journey's pre-generation). */
   private sectionGenInputs(key: SectionKey, run: RunState): {layoutVersion: number | undefined; ctx: SectionGenContext} {
     const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : key.level === 'market' ? marketLayoutVersionFor(run.peekMemory(key)) : key.level === 'bunker' ? bunkerLayoutVersionFor(run.peekMemory(key))
-      : key.level === 'mall' && key.section === 'main' ? mallLayoutVersionFor(run.peekMemory(key)) : key.level === 'subway' && key.section === 'main' ? subwayLayoutVersionFor(run.peekMemory(key)) : undefined;
+      : key.level === 'mall' && key.section === 'main' ? mallLayoutVersionFor(run.peekMemory(key)) : key.level === 'subway' && key.section === 'main' ? this.qaSubwayVersion() ?? subwayLayoutVersionFor(run.peekMemory(key)) : undefined;
     return {layoutVersion, ctx: {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {}),
       rosterVersion: rosterVersionFor(run.peekMemory(key)), // (the seeded enemy roster: always explicit — levels/types.ts SectionGenContext.rosterVersion)
       // (task studio-surface-run-opus-rebuild-20261116-020827-01) a host station's own world: its recorded Surface Run version (explicit)
