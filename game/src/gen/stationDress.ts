@@ -651,13 +651,21 @@ function dressPaidConcourse(ctx: Ctx, a: Area): void {
   for (const d of ctx.doorsOf.get(a.id) ?? []) {
     if (d.fare) signAtDoor(ctx, d, a, {kind: 'info', text: 'EXIT · TICKET HALL · FOOD COURT', arrow: 'down', w: 2.6});
     else if (other(ctx, d, a).role === 'transfer') signAtDoor(ctx, d, a, {kind: 'info', text: 'TRANSFER · OTHER LINE', w: 2.2});
+    // (task studio-subway-station-variety-20261117-043926-01: a version-2 interchange hall's stairs down to its two lines — line 1's
+    // platforms north of the hall, line 2's single platform south: gen/stationPlans.ts hub)
+    else if (a.role === 'interchange-hall' && other(ctx, d, a).type === 'passage') {
+      const o = other(ctx, d, a), north = o.y + o.h / 2 < a.y + a.h / 2;
+      signAtDoor(ctx, d, a, {kind: 'info', text: north ? 'LINE 1 · PLATFORMS 1 – 2' : 'LINE 2 · PLATFORM 3', arrow: 'down', w: 2.6});
+    }
   }
 }
 
 function dressTicketHall(ctx: Ctx, a: Area, kioskAllowed: boolean): boolean {
   const {rng, layout} = ctx;
-  const fare = (ctx.doorsOf.get(a.id) ?? []).find(d => d.fare);
-  if (fare) {
+  // (task studio-subway-station-variety-20261117-043926-01: a version-2 GRAND ticket hall dresses EVERY gate bank — booth, machine bank
+  // and plate at each of its fare lines; every other ticket hall its first, exactly as before)
+  const fares = (ctx.doorsOf.get(a.id) ?? []).filter(d => d.fare);
+  for (const fare of a.role === 'grand-ticket-hall' ? fares : fares.slice(0, 1)) {
     // Agent booth beside the gate array (unpaid side), ticket machines on the other side.
     const side = doorSide(fare, a);
     const alongX = side === 'N' || side === 'S';

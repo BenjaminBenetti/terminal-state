@@ -7,7 +7,8 @@
 //  - the Office (world/officeArch.ts keys): painted drywall = plaster, the core / roof / raw slab = concrete, wet-room walls / tile
 //    floors = tile, carpet = fabric, vinyl = plastic, stone = terrazzo, timber = wood, raised server floors = laminate, the T-bar
 //    acoustic / plain plaster ceilings = plaster;
-//  - the Beyond-the-Station annexes' board-formed wall ('annexWall') = concrete.
+//  - the Beyond-the-Station annexes' board-formed wall ('annexWall') = concrete;
+//  - a version-2 Subway station's identity finishes ('subway-…', world/subwayArch.ts): tinted tile = tile, painted rock / cast concrete = concrete.
 // The Mall's finish rows ('mall-…|row') keep the station rule (its gallery terrazzo / tiled walls already match it).
 
 import type {DamageClass} from './materials';
@@ -56,6 +57,9 @@ export function finishClass(key: string | null | undefined): DamageClass | null 
   if (key in REACTOR) return REACTOR[key];
   if (key in REACTOR_CORE) return REACTOR_CORE[key]; // task reactor-expansion-20261101 (lane CORE)
   if (key === 'annexWall') return 'concrete';
+  // task studio-subway-station-variety-20261117-043926-01: a version-2 Subway station's identity finishes (world/subwayArch.ts SUBWAY_KEYS) —
+  // the tinted glazed tile chips like the station tile, the painted rock and the cast concrete like concrete
+  if (key.startsWith('subway-')) return key.startsWith('subway-tile') ? 'tile' : 'concrete';
   if (key.startsWith('surface-')) return surfaceImpactClass(key); // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): world/surface/arch*.ts keys
   if (key in SKYWAYS) return SKYWAYS[key]; // task studio-skyways-level-20261106-054448 (lane VIEW): world/skywaysArch.ts keys
   if (key in MARKET) return MARKET[key]; // task studio-survivor-market-20261108-005807-01 (lane LEVEL): world/marketArch.ts keys

@@ -34,6 +34,8 @@ import {lootProfile, type LootProfile} from '../items/lootTables'; // Task loot-
 // Track 2 (lane GEN): tunnels past the bed ends + service annexes (gen/trackExt), planned before the crop, attached after every core pass.
 import {dropExtensions, extendTracks, extensionIssues, finishExtensions, isExtensionArea, reserveTunnelRoom, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from './trackExt/index';
 import {populateExtensions} from './annexContent'; // Track 2 (lane CONTENT): the extensions' appended content
+import {SUBWAY_PLANS_MIN_VERSION} from './subwayLayoutVersion'; // task studio-subway-station-variety-20261117-043926-01
+import {buildPlanFamily, isPlanFamily, planFamilyOf, stationIdentityOf} from './stationPlans';
 
 /**
  * Track 2 (lane GEN): grid cell budget of a station with its track extensions (W x H of the cropped grid). The baked light field
@@ -71,7 +73,22 @@ export function pickArchetype(seed: number): Archetype {
  * Task enemy-spawn-tables-20261030 (lane SPAWN): `spawns` = the logical level's enemy spawn profile (ai/spawnTables.ts; default:
  * the Subway's) — context 'station', the storey moves and the room modifiers; validation reads the same profile.
  */
-export function generateStation(seed: number, opts: {archetype?: Archetype; startWeapon?: StartWeaponId; loot?: LootProfile; spawns?: SpawnProfile; trackExtensions?: TrackExtConfig | 'none'} = {}): StationLayout {
+export function generateStation(seed: number, opts: {archetype?: Archetype; startWeapon?: StartWeaponId; loot?: LootProfile; spawns?: SpawnProfile; trackExtensions?: TrackExtConfig | 'none'; layoutVersion?: number} = {}): StationLayout {
+  // Task studio-subway-station-variety-20261117-043926-01: the layout version (gen/subwayLayoutVersion.ts; absent = 1 = exactly the classic
+  // archetypes). From version 2 the seed's PLAN FAMILY roll (gen/stationPlans.ts) picks a classic archetype (the version-1 pick, so the
+  // station is its version-1 layout byte for byte) or a new plan family; every version-2 station also carries its visual identity.
+  const version = opts.layoutVersion ?? 1;
+  if (version >= SUBWAY_PLANS_MIN_VERSION) {
+    // A plan family that finds no valid attempt (never seen on the corpus) falls back to the seed's classic pick, deterministically.
+    const fam = planFamilyOf(seed);
+    const layout = generateStationCore(seed, {...opts, archetype: opts.archetype ?? (fam === 'classic' ? pickArchetype(seed) : fam)}, pickArchetype(seed));
+    layout.identity = stationIdentityOf(seed, layout.archetype);
+    return layout;
+  }
+  return generateStationCore(seed, opts);
+}
+
+function generateStationCore(seed: number, opts: {archetype?: Archetype; startWeapon?: StartWeaponId; loot?: LootProfile; spawns?: SpawnProfile; trackExtensions?: TrackExtConfig | 'none'}, fallback?: Archetype): StationLayout {
   const arch = opts.archetype ?? pickArchetype(seed);
   const sw = opts.startWeapon ?? 'rifle';
   const loot = opts.loot ?? lootProfile('subway');
@@ -86,6 +103,7 @@ export function generateStation(seed: number, opts: {archetype?: Archetype; star
     // Track 2: extensions never decide a retry (the core keeps main's attempt): drop them and re-check the core.
     if (layout.extensions?.tunnels.length || layout.extensions?.annexes.length) { dropExtensions(layout); if (validateLayout(layout, spawns).length === 0) { TRACK_EXT_STATS.rescued++; return layout; } }
   }
+  if (fallback && fallback !== arch) return generateStationCore(seed, {...opts, archetype: fallback});
   // Extremely unlikely; fall back to a deterministic layout even with warnings.
   for (let attempt = 24; attempt < 60; attempt++) {
     const layout = tryGenerate(hashString('retry' + attempt, seed), seed >>> 0, attempt, attempt < 40 ? arch : 'side-mezzanine', sw, loot, spawns, ext);
@@ -109,7 +127,7 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   const {areas, doors, wing} = k;
   const name = `${rng.pick(STREETS)} ${rng.pick(SUFFIX)}`;
   const terms = rng.shuffle(TERMINALS.slice());
-  const plan = buildSkeleton(k, arch, terms);
+  const plan = isPlanFamily(arch) ? buildPlanFamily(k, arch, terms) : buildSkeleton(k, arch, terms); // (+ the version-2 plan families: gen/stationPlans.ts)
   if (!plan) return null;
   // Track 2 (lane GEN): CORE-CHANGING option only (coreReserveM > 0; 0 keeps the station byte-identical to main). GEN-2: the
   // Subway's TRACK_EXT enables it (authorized incidence change: 40 m of rock kept past every bed end still open here).

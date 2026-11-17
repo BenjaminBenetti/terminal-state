@@ -236,7 +236,9 @@ describe('the Survivor Market crevice architecture (layout version 5)', () => {
       expect(assetAllowedIn('market', u), u).toBe(true);
       expect(assetAllowedIn('reactor', u), u).toBe(true);
       expect(assetAllowedIn('bunker', u), u).toBe(true);
-      expect(assetAllowedIn('subway', u), u).toBe(false);
+      // (task studio-subway-station-variety-20261117-043926-01: a version-2 Subway station's painted-rock / cast-concrete identity may load the
+      // mine-rock and pit-concrete sets; the rusted steel stays the Reactor family's alone)
+      expect(assetAllowedIn('subway', u), u).toBe(!/rusted-steel/.test(u));
     }
     expect(assetAllowedIn('market', 'assets/textures/reactor/grating-color.jpg')).toBe(false);
     expect(assetAllowedIn('market', REACTOR_KIT.generator.url)).toBe(false);

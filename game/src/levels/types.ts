@@ -73,6 +73,8 @@ export interface SectionGenContext {
   /**
    * Task studio-skyways-destinations-20261106-170011-01: the generator version a station regenerates with (Skyways only:
    * gen/skyways/layoutVersion.ts — a station entered under an older build keeps its layout). Absent = the current version.
+   * Task studio-subway-station-variety-20261117-043926-01: the SUBWAY reads it too (gen/subwayLayoutVersion.ts), but there absent = version 1
+   * (the classic archetypes every pinned Subway fingerprint was taken with): the game always passes the station's version explicitly.
    */
   layoutVersion?: number;
   /**

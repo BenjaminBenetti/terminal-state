@@ -19,7 +19,7 @@ import {ACCENT_COLORS, propShape, type ShapeMat} from '../gen/propShapes';
 import {isContainerKind} from '../items/loot';
 import type {Area, LightPlacement, SignPlacement, StationLayout} from '../gen/station';
 import type {WorldMaterials, MatKey} from './materials';
-import {canvasTexture, signPlate} from './canvasTextures';
+import {canvasTexture, signPlate, type PlatePalette} from './canvasTextures';
 import {companySignTexture, signStyleKey} from './companySigns'; // Task office-overhaul-20261030 (lane TENANTS)
 import {shapeMaterial, shapeMaterials} from './shapeMaterials';
 import {SHOP_BLOCKERS, SHOP_FURNITURE} from '../gen/storefronts';
@@ -70,6 +70,7 @@ import {buildWasteVisuals} from './reactor/wasteVisuals'; // task reactor-expans
 import {SkywaysArch} from './skywaysArch'; // task studio-skyways-level-20261106-054448 (lane VIEW): the Skyways finishes + atrium roofs
 import {MarketArch} from './marketArch'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL): the Survivor Market's corrugated / salvaged finishes
 import {SurfaceArch} from './surface/arch'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): the Surface Run district's streets, facades and interiors
+import {SubwayArch, subwayPlate} from './subwayArch'; // task studio-subway-station-variety-20261117-043926-01: a version-2 Subway station's identity finishes
 import {surfaceLookPlanSteps} from './surface/archPlan';
 import {surfaceOcclusionSee} from './surface/lookOcclusion'; // (lane LOOK, follow-up 2: the district culler's see-through structure)
 import {surfaceSkyVolumes} from './surface/roofAccessView'; // (task studio-surface-run-field-followup-20261116-211729-01, lane INTERIOR: v2 roofs' open air)
@@ -197,6 +198,8 @@ export interface BuiltWorld {
   bunkerArch?: BunkerArch;
   /** Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): the Surface Run district's arch (world/surface/arch.ts); district layouts only. */
   surfaceArch?: SurfaceArch;
+  /** Task studio-subway-station-variety-20261117-043926-01: a version-2 Subway station's identity finishes (world/subwayArch.ts); version-2 Subway layouts only. */
+  subwayArch?: SubwayArch;
   /** Task reactor-expansion-20261101 (lane CONTROLS): the arch-owned finish key under a structural hit (world/finishAt.ts; null: none). */
   finishAt?: FinishAt | null;
   /** Task studio-perf-ao-train-continuity-20261110-022206-01: the static ride gates (world/ridePortalView.ts); null / absent: none. */
@@ -362,9 +365,10 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   const bunk = office || mall || reactor || sky || mkt ? null : BunkerArch.for(layout, mats, levels); // task studio-bunker-level-20261109-072224-01: null on every other level
   if (layout.surface && !(office || mall || reactor || sky || mkt || bunk)) yield* surfaceLookPlanSteps(layout); // (lane LOOK: the district's look plan, ~0.5 s, in slices)
   const surf = office || mall || reactor || sky || mkt || bunk ? null : SurfaceArch.for(layout, mats, levels); // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): null without layout.surface
+  const sub = office || mall || reactor || sky || mkt || bunk || surf ? null : SubwayArch.for(layout, mats, levels); // task studio-subway-station-variety-20261117-043926-01: null without layout.identity (version-1 Subway stations, every other level)
   // Track 2 playtest revision (lane ART): + the annexes' board-formed wall finish (world/trackExt/wallFinish.ts), created on first use.
-  const scaleOf = (k: string): {u: number; v: number} => office?.scale(k) ?? mall?.scale(k) ?? reactor?.scale(k) ?? sky?.scale(k) ?? mkt?.scale(k) ?? bunk?.scale(k) ?? surf?.scale(k) ?? (k === ANNEX_WALL ? {u: BOARD_SPAN, v: BOARD_SPAN} : mats.scale[k as MatKey]); // (+ reactor: lane ARCH; + sky: lane VIEW)
-  const matOf = (k: string): THREE.Material => office?.material(k) ?? mall?.material(k) ?? reactor?.material(k) ?? sky?.material(k) ?? mkt?.material(k) ?? bunk?.material(k) ?? surf?.material(k) ?? (k === ANNEX_WALL ? annexWallMaterial(mats) : mats.get(k as MatKey)); // (+ reactor: lane ARCH; + sky: lane VIEW)
+  const scaleOf = (k: string): {u: number; v: number} => office?.scale(k) ?? mall?.scale(k) ?? reactor?.scale(k) ?? sky?.scale(k) ?? mkt?.scale(k) ?? bunk?.scale(k) ?? surf?.scale(k) ?? sub?.scale(k) ?? (k === ANNEX_WALL ? {u: BOARD_SPAN, v: BOARD_SPAN} : mats.scale[k as MatKey]); // (+ reactor: lane ARCH; + sky: lane VIEW)
+  const matOf = (k: string): THREE.Material => office?.material(k) ?? mall?.material(k) ?? reactor?.material(k) ?? sky?.material(k) ?? mkt?.material(k) ?? bunk?.material(k) ?? surf?.material(k) ?? sub?.material(k) ?? (k === ANNEX_WALL ? annexWallMaterial(mats) : mats.get(k as MatKey)); // (+ reactor: lane ARCH; + sky: lane VIEW)
 
   yield 'world.walls';
   // --- Walls: union-of-open-columns faces, merged per straight run and level band ----------
@@ -375,7 +379,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   const cutFaces: BuiltFace[] = cutSkywaysWindows(cutOfficeWindows(extracted, layout), layout);
   yield 'world.faces.remap';
   // Task office-overhaul-20261030 (lane ARCH): office storey walls get office finishes (drywall, accent, wet-room tile, core, roof).
-  const remapped: BuiltFace[] = office ? office.remapFaces(cutFaces, mats.tileLowerHeight) : mall ? mall.remapFaces(cutFaces, mats.tileLowerHeight) : reactor ? reactor.remapFaces(cutFaces) : sky ? sky.remapFaces(cutFaces, mats.tileLowerHeight) : mkt ? mkt.remapFaces(cutFaces) : bunk ? bunk.remapFaces(cutFaces) : surf ? surf.remapFaces(cutFaces) : cutFaces; // (+ reactor: lane ARCH; + sky: lane VIEW)
+  const remapped: BuiltFace[] = office ? office.remapFaces(cutFaces, mats.tileLowerHeight) : mall ? mall.remapFaces(cutFaces, mats.tileLowerHeight) : reactor ? reactor.remapFaces(cutFaces) : sky ? sky.remapFaces(cutFaces, mats.tileLowerHeight) : mkt ? mkt.remapFaces(cutFaces) : bunk ? bunk.remapFaces(cutFaces) : surf ? surf.remapFaces(cutFaces) : sub ? sub.remapFaces(cutFaces) : cutFaces; // (+ reactor: lane ARCH; + sky: lane VIEW)
   // Track 2 (VIS): where a track tunnel continues a bed, its smooth shell replaces the grid geometry inside the corridor
   // (no stair-stepped walls, bed end-face stubs or door reveals inside the shell; world/trackExt/view.ts). Null = unchanged.
   yield 'world.faces.clip';
@@ -529,7 +533,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     // The opening head d.height above a door standing at its storey's base (iteration 08: level 0 at y 0; task
     // office-seamless-20261029: any storey's baseY in a tower world), else the carved cell ceiling.
     const atBase = L === 0 ? df === 0 : storeyDoors && Math.abs(df - levels[L].baseY) < 1e-4;
-    const dk = office?.doorCeilKey(L, a, b) ?? mall?.doorCeilKey(L, a, b) ?? reactor?.doorCeilKey(L, a, b) ?? sky?.doorCeilKey(L, a, b) ?? mkt?.doorCeilKey(L, a, b) ?? bunk?.doorCeilKey(L, a, b) ?? surf?.doorCeilKey(L, a, b) ?? (b.publicSpace ? 'ceiling' : 'ceilingService'), dy = atBase ? df + d.height : g.ceil[i]; // (+ reactor: lane ARCH; + sky: lane VIEW)
+    const dk = office?.doorCeilKey(L, a, b) ?? mall?.doorCeilKey(L, a, b) ?? reactor?.doorCeilKey(L, a, b) ?? sky?.doorCeilKey(L, a, b) ?? mkt?.doorCeilKey(L, a, b) ?? bunk?.doorCeilKey(L, a, b) ?? surf?.doorCeilKey(L, a, b) ?? sub?.doorCeilKey(L, a, b) ?? (b.publicSpace ? 'ceiling' : 'ceilingService'), dy = atBase ? df + d.height : g.ceil[i]; // (+ reactor: lane ARCH; + sky: lane VIEW)
     // Track 2 (VIS): a tunnel door's cells inside the shell take the shell ceiling; the rest keep the door head.
     let owned = false;
     if (ext) for (let y = d.y; y < d.y + d.h && !owned; y++) for (let x = d.x; x < d.x + d.w; x++) if (ext.ownsCell(L, y * g0.w + x)) { owned = true; break; }
@@ -544,7 +548,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     // Task track3-eaton-centre-20261031 (lane ARCH): the mall's ceilings; none over the void (the glass vault), track bed included.
     // (task studio-survivor-market-crevice-20261116-074419, lane ARCH: + the market crevice's chasm / track-bed ceilings and the run's cell /
     // height for its rooms and bridge decks — versions 1-4 answer exactly as before)
-    const oc = r.voidCell ? (mall?.ceilKey(r.level, -1, r.row * g0.w + r.x0, r.y) ?? reactor?.ceilKey(r.level, -1, r.row * g0.w + r.x0, r.y) ?? mkt?.voidCeilKey(r.level, r.row * g0.w + r.x0, r.y) ?? null) : office?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? mall?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? reactor?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? sky?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? mkt?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? bunk?.ceilKey(r.level, r.area) ?? surf?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? null; // (+ reactor: lane ARCH; + sky: lane VIEW, none inside an atrium opening)
+    const oc = r.voidCell ? (mall?.ceilKey(r.level, -1, r.row * g0.w + r.x0, r.y) ?? reactor?.ceilKey(r.level, -1, r.row * g0.w + r.x0, r.y) ?? mkt?.voidCeilKey(r.level, r.row * g0.w + r.x0, r.y) ?? sub?.ceilKey(r.level, -1) ?? null) : office?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? mall?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? reactor?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? sky?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? mkt?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? bunk?.ceilKey(r.level, r.area) ?? surf?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? sub?.ceilKey(r.level, r.area) ?? null; // (+ reactor: lane ARCH; + sky: lane VIEW, none inside an atrium opening)
     if (oc === false) { drawnCeils.push(levels[r.level].id, r.x0 * CELL, r.row * CELL, r.x1 * CELL, (r.row + 1) * CELL, r.y, -1); continue; }
     const ck = oc ?? (r.voidCell || !a || a.publicSpace ? 'ceiling' : 'ceilingService');
     // Task mall-roof-stairwell-fix-20261117 (user: "a massive hole in the roof ... above a stairwell"): the mall's ceiling over a band two
@@ -944,11 +948,11 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     : mkt ? {atrium: mkt.atrium} : undefined); // (task studio-survivor-market-20261108-005807-01: the open shed as atrium tiles, no slabs)
   culler.register(group);
   return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: treatFaces, rails, levelAt, culler,
-    ...(office ? {officeArch: office} : {}), ...(mall ? {mallArch: mall} : {}), ...(trackExt ? {trackExt} : {}), ...(reactor ? {reactorArch: reactor} : {}), ...(sky ? {skywaysArch: sky} : {}), ...(mkt ? {marketArch: mkt} : {}), ...(bunk ? {bunkerArch: bunk} : {}), ...(surf ? {surfaceArch: surf} : {}),
+    ...(office ? {officeArch: office} : {}), ...(mall ? {mallArch: mall} : {}), ...(trackExt ? {trackExt} : {}), ...(reactor ? {reactorArch: reactor} : {}), ...(sky ? {skywaysArch: sky} : {}), ...(mkt ? {marketArch: mkt} : {}), ...(bunk ? {bunkerArch: bunk} : {}), ...(surf ? {surfaceArch: surf} : {}), ...(sub ? {subwayArch: sub} : {}),
     ...(rideGates ? {rideGates} : {}),
     drawn: {keys: drawnKeys, floors: drawnFloors, ceils: drawnCeils, faces, // task studio-baked-lighting-reflections-20261114-050258-01
       material: k => (k.startsWith('shop:') ? shapeMaterial(mats, k.slice(5)) : matOf(k.includes('|') ? splitFinishKey(k).base : k))},
-    finishAt: finishResolver(levels, faces, office ?? mall ?? reactor ?? sky ?? mkt ?? bunk ?? surf ?? null)}; // task reactor-expansion-20261101 (lane CONTROLS): bullet impacts take the drawn finish (+ sky: lane VIEW)
+    finishAt: finishResolver(levels, faces, office ?? mall ?? reactor ?? sky ?? mkt ?? bunk ?? surf ?? sub ?? null)}; // task reactor-expansion-20261101 (lane CONTROLS): bullet impacts take the drawn finish (+ sky: lane VIEW)
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -998,20 +1002,31 @@ function addProceduralProp(group: THREE.Group, kind: PropKind, list: PropPlaceme
 
 // Plate sizes (SIGN_SIZE / signDims) live in gen/doorways.ts: generation keeps plates off openings.
 const signTexCache = new Map<string, THREE.Texture>();
+/** Lettering that reads on a '#rrggbb' field (the platform roundel's numeral on an identity accent). */
+const inkOn = (hex: string): string => {
+  const v = parseInt(hex.slice(1), 16), l = 0.2126 * (v >> 16 & 255) + 0.7152 * (v >> 8 & 255) + 0.0722 * (v & 255);
+  return l > 140 ? '#1f2225' : '#f4f2ea';
+};
 
-function signTexture(s: SignPlacement, w: number, h: number): THREE.Texture {
-  const key = `${s.kind}|${s.text}|${s.arrow ?? ''}|${w.toFixed(2)}${signStyleKey(s)}`;
+/**
+ * A sign face. `pal` (task studio-subway-station-variety-20261117-043926-01): a version-2 Subway station's plate colours
+ * (world/subwayArch.ts subwayPlate) on its public plates — field, lettering and the info / platform accent (exit rules stay red,
+ * service plates their light field); absent = the classic charcoal plate exactly as before (same cache key).
+ */
+function signTexture(s: SignPlacement, w: number, h: number, pal: PlatePalette | null = null): THREE.Texture {
+  const p = s.style || s.kind === 'service' ? null : pal;
+  const key = `${s.kind}|${s.text}|${s.arrow ?? ''}|${w.toFixed(2)}${signStyleKey(s)}${p ? `|${p.bg}${p.fg}${p.accent}` : ''}`;
   let tex = signTexCache.get(key);
   if (tex) return tex;
   if (s.style) tex = companySignTexture(s, w, h); // Task office-overhaul-20261030 (lane TENANTS): company / directory plates
-  else if (s.kind === 'station') tex = signPlate(s.text.toUpperCase(), 'station', s.text.length * 31 + 7);
+  else if (s.kind === 'station') tex = signPlate(s.text.toUpperCase(), 'station', s.text.length * 31 + 7, p);
   else {
     const W = 1024, H = Math.max(160, Math.round(1024 * h / w));
     tex = canvasTexture(W, H, s.text.length * 17 + s.kind.length, (ctx, cw, ch) => {
       const light = s.kind === 'service';
-      ctx.fillStyle = light ? '#d8cfb6' : '#1f2225';
+      ctx.fillStyle = light ? '#d8cfb6' : p?.bg ?? '#1f2225';
       ctx.fillRect(0, 0, cw, ch);
-      ctx.fillStyle = light ? '#b53a2c' : s.kind === 'exit' ? '#c2463a' : '#d9a520';
+      ctx.fillStyle = light ? '#b53a2c' : s.kind === 'exit' ? '#c2463a' : p?.accent ?? '#d9a520';
       ctx.fillRect(0, ch - ch * 0.1, cw, ch * 0.045);
       let x = 36;
       let text = s.text;
@@ -1019,9 +1034,9 @@ function signTexture(s: SignPlacement, w: number, h: number): THREE.Texture {
         const m = /^(\d+)\s*·?\s*(.*)$/.exec(text);
         if (m) {
           const r = ch * 0.34;
-          ctx.fillStyle = '#d9a520';
+          ctx.fillStyle = p?.accent ?? '#d9a520';
           ctx.beginPath(); ctx.arc(36 + r, ch / 2 - ch * 0.04, r, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = '#1f2225';
+          ctx.fillStyle = p ? inkOn(p.accent) : '#1f2225';
           ctx.font = `bold ${Math.round(r * 1.3)}px "Helvetica Neue", Arial, sans-serif`;
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.fillText(m[1], 36 + r, ch / 2 - ch * 0.02);
@@ -1031,7 +1046,7 @@ function signTexture(s: SignPlacement, w: number, h: number): THREE.Texture {
         }
       }
       const arrowW = s.arrow ? ch * 0.6 : 0;
-      ctx.fillStyle = light ? '#1f2225' : '#ece4cf';
+      ctx.fillStyle = light ? '#1f2225' : p?.fg ?? '#ece4cf';
       let size = Math.round(ch * 0.5);
       const font = () => `bold ${size}px "Helvetica Neue", Arial, sans-serif`;
       ctx.font = font();
@@ -1073,10 +1088,11 @@ function buildSigns(group: THREE.Group, layout: StationLayout, mats: WorldMateri
     frameDepth = size.z;
     root.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) frameLocal.push({mesh: m, local: new THREE.Matrix4().multiplyMatrices(fit, m.matrixWorld)}); });
   }
+  const pal = subwayPlate(layout); // (task studio-subway-station-variety-20261117-043926-01: null on every version-1 station / other level)
   for (const s of layout.signs) {
     const size = SIGN_SIZE[s.kind];
     const {w, h} = signDims(s);
-    const tex = signTexture(s, w, h);
+    const tex = signTexture(s, w, h, pal);
     const sides = s.hang ? [s.rot, s.rot + Math.PI] : [s.rot];
     const useFrame = s.kind === 'station' && frameLocal.length && !s.hang && (s.w === undefined || s.w === size.w);
     const depth = useFrame ? frameDepth : 0.02;
@@ -1093,7 +1109,7 @@ function buildSigns(group: THREE.Group, layout: StationLayout, mats: WorldMateri
         .multiply(new THREE.Matrix4().makeTranslation(0, 0, front)).multiply(new THREE.Matrix4().makeScale(w * 0.96, h * 0.8, 1));
       // The back of a hanging sign mirrors left/right arrows so both faces point the same way in the world.
       const flip = k === 1 && (s.arrow === 'left' || s.arrow === 'right');
-      addFace(flip ? signTexture({...s, arrow: s.arrow === 'left' ? 'right' : 'left'}, w, h) : tex, m);
+      addFace(flip ? signTexture({...s, arrow: s.arrow === 'left' ? 'right' : 'left'}, w, h, pal) : tex, m);
     });
     if (s.hang) {
       // Two drop rods to the ceiling.

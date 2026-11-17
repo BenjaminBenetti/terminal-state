@@ -195,12 +195,14 @@ import {SKYWAYS_DEST_MODEL_FILES, skywaysDestModelKeysFor} from './gen/skyways/d
 import {installSkywaysDestinations} from './world/skywaysDestRuntime'; // (destinations, lane LANDMARKS) the posters' / plaques' art atlases
 import {installSkywaysArchTextures} from './world/skywaysArchTextures'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): court / bridge finish textures
 import {installMarketTextures} from './world/marketTextures'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL)
+import {installSubwayIdentityTextures} from './world/subwayArch'; // task studio-subway-station-variety-20261117-043926-01
 import {installMarketVisuals} from './world/marketVisuals'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL)
 import {skywaysGardenModelKeysFor} from './world/skywaysGardens'; // (lane ARCH) the planters' foliage model
 import {SKYWAYS_LAYOUT_LANE, skywaysLayoutVersionFor} from './gen/skyways/layoutVersion'; // task studio-skyways-destinations-20261106-170011-01
 import {MARKET_LAYOUT_LANE, marketLayoutVersionFor} from './gen/market/layoutVersion'; // task studio-market-rework-20261108-074144-01 (lane LAYOUT)
 import {BUNKER_LAYOUT_LANE, bunkerLayoutVersionFor} from './gen/bunker/layoutVersion'; // task studio-bunker-level-20261109-072224-01 (lane LEVEL)
 import {MALL_LAYOUT_LANE, mallLayoutVersionFor} from './gen/mall/layoutVersion'; // task studio-mall-layout-variety-20261117-005520-01
+import {SUBWAY_LAYOUT_LANE, subwayLayoutVersionFor} from './gen/subwayLayoutVersion'; // task studio-subway-station-variety-20261117-043926-01
 import {ROSTER_LANE, rosterVersionFor} from './ai/enemyRoster'; // task studio-screacher-production-20261110-221858-01: the seeded family roster's version pin
 import {noisyPhysicsAudio} from './ai/screacherNoise'; // task studio-screacher-production-20261110-221858-01: prop / item contacts as world noise
 import {setObjectiveTitle} from './ui/objectiveTitle'; // task studio-bunker-rework-20261109-205115-01
@@ -932,6 +934,7 @@ export class Game {
     installSkywaysDestinations(this); // task studio-skyways-destinations-20261106-170011-01 (lane LANDMARKS): poster / plaque atlases before the build; inert elsewhere
     installSkywaysArchTextures(this); // task studio-skyways-rework-20261107-054512-01 (lane ARCH): the courts' / bridges' Codex textures before the build (layout v3); inert elsewhere
     installMarketTextures(this); // task studio-survivor-market-20261108-005807-01 (lane LEVEL): the market's Codex surface textures before the build; inert elsewhere
+    installSubwayIdentityTextures(this); // task studio-subway-station-variety-20261117-043926-01: a version-2 station's rock / concrete sets before the build; inert elsewhere
     installMarketVisuals(this); hookName('marketVisuals'); // (lane LEVEL) the market's slow ceiling fans (frame hook) and stall awnings; inert elsewhere
     installSkywaysMapRead(this); hookName('skywaysMapRead'); // task studio-skyways-rework-20261107-054512-01 (lane MAPS): E at a directory board reads its face (inert without boards)
     installSkywaysNotes(this); hookName('skywaysNotes'); // task studio-skywalk-events-20261115-193624-01 (lane EVAC): E at an evacuation-centre note reads it (inert without notes)
@@ -1321,7 +1324,10 @@ export class Game {
     // (task studio-bunker-level-20261109-072224-01, lane LEVEL) and a Bunker: version 1 from its first release (gen/bunker/layoutVersion.ts)
     // (task studio-mall-layout-variety-20261117-005520-01) and a Mall: a mall entered before the plan families keeps version 1 (the atrium
     // family, exactly), an unvisited / new one builds the current version (gen/mall/layoutVersion.ts)
-    const versionLane = key.level === 'skyways' ? SKYWAYS_LAYOUT_LANE : key.level === 'market' ? MARKET_LAYOUT_LANE : key.level === 'bunker' ? BUNKER_LAYOUT_LANE : key.level === 'mall' && key.section === 'main' ? MALL_LAYOUT_LANE : null;
+    // (task studio-subway-station-variety-20261117-043926-01) and a Subway station: one entered before the plan families keeps version 1
+    // (the six classic archetypes, exactly), an unvisited / new one builds the current version (gen/subwayLayoutVersion.ts)
+    const versionLane = key.level === 'skyways' ? SKYWAYS_LAYOUT_LANE : key.level === 'market' ? MARKET_LAYOUT_LANE : key.level === 'bunker' ? BUNKER_LAYOUT_LANE : key.level === 'mall' && key.section === 'main' ? MALL_LAYOUT_LANE
+      : key.level === 'subway' && key.section === 'main' ? SUBWAY_LAYOUT_LANE : null;
     const {layoutVersion, ctx} = this.sectionGenInputs(key, run);
     // (campaign: the node's own seed; lane BUILD: a journey's destination comes pre-generated from the same inputs — takePregenerated)
     const layout = this.takePregenerated(key, run, ctx) ?? LEVELS[key.level].generate(key.section, ctx);
@@ -1341,7 +1347,7 @@ export class Game {
   /** generateSection's generator inputs for `key` of `run` (the layout version of a versioned level, see above; lane BUILD: + the journey's pre-generation). */
   private sectionGenInputs(key: SectionKey, run: RunState): {layoutVersion: number | undefined; ctx: SectionGenContext} {
     const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : key.level === 'market' ? marketLayoutVersionFor(run.peekMemory(key)) : key.level === 'bunker' ? bunkerLayoutVersionFor(run.peekMemory(key))
-      : key.level === 'mall' && key.section === 'main' ? mallLayoutVersionFor(run.peekMemory(key)) : undefined;
+      : key.level === 'mall' && key.section === 'main' ? mallLayoutVersionFor(run.peekMemory(key)) : key.level === 'subway' && key.section === 'main' ? subwayLayoutVersionFor(run.peekMemory(key)) : undefined;
     return {layoutVersion, ctx: {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {}),
       rosterVersion: rosterVersionFor(run.peekMemory(key)), // (the seeded enemy roster: always explicit — levels/types.ts SectionGenContext.rosterVersion)
       // (task studio-surface-run-opus-rebuild-20261116-020827-01) a host station's own world: its recorded Surface Run version (explicit)
