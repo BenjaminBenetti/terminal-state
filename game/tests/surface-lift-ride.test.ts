@@ -66,9 +66,10 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
     const h = installHeadless();
     // (CI runtime) on the validating device each flashlight-shadow variant is an off-screen draw of ~20 ms, so at the default quality one
     // ride's complete compile is ~6000 Node frames (~6 min: the ride test passed so in 544 s on 2026-11-17). The atmosphere OFF (a real
-    // setting: no scene-pass target, so no shadow / two-pass lanes; the scene lane in full) keeps the ride's compile to its scene items.
-    // SURFACE_LIFT_FULL=1 runs the default quality.
-    if (!process.env.SURFACE_LIFT_FULL) (globalThis as unknown as {location: {search: string}}).location.search = '?fog=off';
+    // setting: no scene-pass target, so no shadow / two-pass lanes) and the warm-up's 'view' coverage (?warmup=view: the representatives
+    // near the camera — still a real, complete job the doors wait for) keep each ride's compile short. SURFACE_LIFT_FULL=1 runs the default
+    // quality with the full coverage (the product's).
+    if (!process.env.SURFACE_LIFT_FULL) (globalThis as unknown as {location: {search: string}}).location.search = '?fog=off&warmup=view';
     try {
       const {Game} = await import('../src/game');
       const {installQaHooks} = await import('../src/qa');
