@@ -3,8 +3,8 @@
 //  - every present station (a sweep) gets its lift inside the building on the access storey, near the version-1 door's way out;
 //  - a real room: the car's FLOOR cells at the storey floor under the car's ceiling, the gate's doorway, the ring SOLID, the landing open;
 //  - connectivity: every cell reachable on foot in the plain station is reachable with the lift, and the car is;
-//  - append-only / RNG-neutral: the plain station's props, pickups, lights, enemies, doors and spawn unchanged; one area and one sign
-//    appended; the grid differs only inside the footprint;
+//  - append-only / RNG-neutral: the plain station's props, pickups, lights, enemies, doors and spawn unchanged; one area, one sign and
+//    one light (the landing's fixture) appended; the grid differs only inside the footprint;
 //  - version 1 keeps its street door (tests/surface-access.test.ts / surface-v1-compat.test.ts pin it).
 import {describe, expect, it} from 'vitest';
 import {LEVELS} from '../src/levels/registry';
@@ -81,7 +81,9 @@ describe('Surface Run v2: the Office / Mall cargo lift inside the building', () 
         // append-only: nothing generated moved; one area, one sign appended
         expect(plain(L.props)).toEqual(plain(P.props));
         expect(plain(L.pickups)).toEqual(plain(P.pickups));
-        expect(plain(L.lights)).toEqual(plain(P.lights));
+        // (follow-up 3) lights: the plain list, then the landing's fixture appended (tests/surface-lift-lights.test.ts)
+        expect(plain(L.lights.slice(0, P.lights.length))).toEqual(plain(P.lights));
+        expect(L.lights.length).toBe(P.lights.length + 1);
         expect(plain(L.zombies)).toEqual(plain(P.zombies));
         expect(plain(L.doors)).toEqual(plain(P.doors));
         expect(plain(L.playerSpawn)).toEqual(plain(P.playerSpawn));
