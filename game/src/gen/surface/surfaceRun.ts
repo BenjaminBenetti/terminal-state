@@ -32,8 +32,34 @@ export const SURFACE_SEED_SALT = 'surface-run-district-v1';
 
 /** Lane store on the HOST station's 'main' memory: the surface version the station was first generated with ({v}). */
 export const SURFACE_LANE = 'surface.run';
-/** Current surface version: 0 = no Surface Run (a station visited before it existed), 1 = the first release. */
-export const SURFACE_VERSION = 1;
+/**
+ * Current surface version: 0 = no Surface Run (a station visited before it existed), 1 = the first release, 2 = the field follow-up
+ * (task studio-surface-run-field-followup-20261116-211729-01: see surfaceFeatures). A station keeps the version it was first generated
+ * with forever (surfaceVersionFor); its district follows the HOST's record (districtVersionOf), so a v1 world regenerates exactly.
+ */
+export const SURFACE_VERSION = 2;
+
+/**
+ * What a surface version builds (task studio-surface-run-field-followup-20261116-211729-01, primary contract). Every STRUCTURAL / access /
+ * interior change of the follow-up is gated here so a version-1 host station and its district stay byte-identical (tests/
+ * surface-v1-compat.test.ts pins them); runtime fixes (doors, glass, truck damage / repair, the truck's map board, the depot's one-unit
+ * seeding of a not-yet-seeded depot) apply to every version.
+ */
+export function surfaceFeatures(version: number | undefined): {
+  /** The crossing is a cargo-lift ride (both directions) between a lift at the host's access and one inside the command tent. */
+  lift: boolean;
+  /** The Subway's way up is at a normal closed street exit (never off the food court). */
+  closedExitAccess: boolean;
+  /** The district side arrives inside the command tent (gas-free) whose doorway is a real walk-through opening. */
+  tentArrival: boolean;
+  /** No visible perimeter wall: thickening outer fog, filler blocks and the fog-pressure boundary (world/surface/fogPressure.ts). */
+  fogBoundary: boolean;
+  /** Deeper enterable destinations: public / back rooms, connected storeys, stairs, landings and reachable roofs. */
+  deepInteriors: boolean;
+} {
+  const v2 = (version ?? 0) >= 2;
+  return {lift: v2, closedExitAccess: v2, tentArrival: v2, fogBoundary: v2, deepInteriors: v2};
+}
 
 export function isSurfaceHost(level: LevelId): level is SurfaceHost {
   return (SURFACE_HOSTS as readonly string[]).includes(level);
@@ -62,6 +88,16 @@ export function surfaceVersionFor(mem: {visits: number; lanes: Record<string, un
   const rec = mem?.lanes[SURFACE_LANE] as {v?: unknown} | undefined;
   if (rec && typeof rec.v === 'number' && Number.isInteger(rec.v) && rec.v >= 0 && rec.v <= SURFACE_VERSION) return rec.v;
   return mem && mem.visits > 0 ? 0 : SURFACE_VERSION;
+}
+
+/**
+ * The version a DISTRICT generates with: its host station's recorded version (SectionGenContext.surfaceVersion as the game passes it for
+ * the 'surface' section: Game.sectionGenInputs reads the HOST's memory). Absent (a direct generator call, the older tests and fixtures)
+ * = 1, the first release's district; a district exists only for version >= 1, so anything lower is read as 1. Never above the current.
+ */
+export function districtVersionOf(surfaceVersion: number | undefined): number {
+  const v = surfaceVersion ?? 1;
+  return Number.isInteger(v) ? Math.min(SURFACE_VERSION, Math.max(1, v)) : 1;
 }
 
 export function isSurfaceKey(k: SectionKey | null | undefined): boolean {

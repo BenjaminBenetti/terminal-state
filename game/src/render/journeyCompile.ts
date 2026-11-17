@@ -78,6 +78,15 @@ export interface JourneyCompileOptions {
   chunk?: number;
   shadowChunk?: number;
   /**
+   * (Surface Run v2 lift ride, lane ACCESS follow-up) pacing overrides for a job the caller WAITS for while only a sealed car is drawn:
+   * the active ms a queued step waits before the scheduler runs it over budget (default JOURNEY_COMPILE.maxStaleMs; 0 = a step every
+   * frame within the scheduler's own overdue bounds), a slice's real-time budget for same-frame batching (default sliceMs) and the
+   * shadow draw's adaptive target (default shadowTargetMs).
+   */
+  maxStaleMs?: number;
+  sliceMs?: number;
+  shadowTargetMs?: number;
+  /**
    * The game's frame number (Game: FrameBudget.frame, stable from a frame's run() until the next frame callback): cheap items batch
    * only inside the frame whose step started the slice. Default: a counter
    * the job's own scheduler steps advance (each step = a new frame).
@@ -170,7 +179,7 @@ export class JourneyCompile {
   private readonly frameNo: () => number;
   private readonly now: () => number;
   private post: ((fn: () => void) => void) | null;
-  private readonly o: Required<Omit<JourneyCompileOptions, 'receiver' | 'frameNo' | 'now' | 'post'>> & {receiver: WarmItem | null};
+  private readonly o: Required<Omit<JourneyCompileOptions, 'receiver' | 'frameNo' | 'now' | 'post' | 'maxStaleMs' | 'sliceMs' | 'shadowTargetMs'>> & {receiver: WarmItem | null; maxStaleMs?: number; sliceMs?: number; shadowTargetMs?: number};
 
   constructor(o: JourneyCompileOptions) {
     // (the direct path — no scene pass target — would draw an off-screen shadow draw onto the canvas: no shadow work there)
@@ -227,7 +236,7 @@ export class JourneyCompile {
     this.requested[lane] = true;
     const r = this.o.scheduler.request({
       key: `${JOURNEY_COMPILE.key}.${lane}`, kind: `${JOURNEY_COMPILE.key}.${lane}`, priority: JOURNEY_COMPILE.priority,
-      maxStaleMs: JOURNEY_COMPILE.maxStaleMs, initialEstimateMs: lane === 'scene' ? 2 : lane === 'shadow' ? 6 : 4, generation: this.generation,
+      maxStaleMs: this.o.maxStaleMs ?? JOURNEY_COMPILE.maxStaleMs, initialEstimateMs: lane === 'scene' ? 2 : lane === 'shadow' ? 6 : 4, generation: this.generation,
       step: () => this.step(lane), onCancel: reason => { this.requested[lane] = false; this.end('cancelled', reason); },
     });
     if (r === 'stale' || r === 'dropped') { this.requested[lane] = false; this.end('cancelled', r); }
@@ -374,7 +383,7 @@ export class JourneyCompile {
     const sameFrame = this.frameNo() === this.sliceFrame, ms = this.now() - this.sliceStart;
     if (this.sliceCount > this.stats.maxPerSlice) this.stats.maxPerSlice = this.sliceCount;
     if (sameFrame && ms > this.stats.sliceMaxMs) this.stats.sliceMaxMs = ms;
-    if (sameFrame && ms < JOURNEY_COMPILE.sliceMs && this.sliceCount < JOURNEY_COMPILE.maxPerSlice && this.nextScene < this.o.items.length) { this.launch(); return; }
+    if (sameFrame && ms < (this.o.sliceMs ?? JOURNEY_COMPILE.sliceMs) && this.sliceCount < JOURNEY_COMPILE.maxPerSlice && this.nextScene < this.o.items.length) { this.launch(); return; }
     this.progress();
   }
 
@@ -418,7 +427,7 @@ export class JourneyCompile {
     if (!this.offscreen([[receiver, PREP_MASK], ...part.map(i => [i, CASTER_MASK] as [WarmItem, number])], 'shadow')) return;
     this.stats.shadowDone += part.length;
     if (part.length > this.stats.shadowMaxPerStep) this.stats.shadowMaxPerStep = part.length;
-    const ms = performance.now() - t0, target = JOURNEY_COMPILE.shadowTargetMs;
+    const ms = performance.now() - t0, target = this.o.shadowTargetMs ?? JOURNEY_COMPILE.shadowTargetMs;
     this.shadowN = ms < target ? Math.min(shadowChunk, this.shadowN * 2) : ms > 3 * target ? Math.max(1, this.shadowN >> 1) : this.shadowN;
   }
 

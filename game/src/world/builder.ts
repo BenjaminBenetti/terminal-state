@@ -74,6 +74,9 @@ import {SubwayArch, subwayPlate} from './subwayArch'; // task studio-subway-stat
 import {buildSubwayKit, coveLengths, styledTubeMatrix} from './subwayKit'; // task studio-subway-architecture-materials-rework-20261117-072826-01: the station's architectural relief
 import {surfaceLookPlanSteps} from './surface/archPlan';
 import {surfaceOcclusionSee} from './surface/lookOcclusion'; // (lane LOOK, follow-up 2: the district culler's see-through structure)
+import {surfaceSkyVolumes} from './surface/roofAccessView'; // (task studio-surface-run-field-followup-20261116-211729-01, lane INTERIOR: v2 roofs' open air)
+/** The culler's sky volumes of a district (v2 roofs), only when there are any (a v1 district's options stay exactly as they were). */
+const surfaceSky = (layout: StationLayout): {sky?: ReturnType<typeof surfaceSkyVolumes>} => { const sky = surfaceSkyVolumes(layout); return sky.length ? {sky} : {}; };
 import {BunkerArch} from './bunkerArch'; // task studio-bunker-level-20261109-072224-01: the Bunker's finishes (the Reactor's arch materials) + the shelter hero models
 import {CORPSE_DEN_MODEL_FOR} from '../gen/market/v4/denKinds'; // task studio-corpse-market-shop-20261114-031614-01: the Market den's chute / booth instanced through MODEL_FOR
 import {BUNKER_MODEL_FOR, isBunkerObjectiveKind} from '../gen/bunker/bunkerKinds'; // task studio-bunker-level-20261109-072224-01: objective kinds drawn by world/bunker; the model-backed flavour kinds instanced through MODEL_FOR
@@ -962,7 +965,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   const culler = yield* LevelCuller.steps(levels, cols, levelAt, mall ? {atrium: mall.atrium, slabs: {see: (layout.mall?.elevators ?? []).map(e => e.shaft)}}
     : reactor ? {atrium: reactor.pitMask, slabs: {see: reactor.occlusionSee(), glass: []}}
     : layout.skyways ? {slabs: {see: skywaysOcclusionSee(layout), windows: skywaysWindowSpans(layout)}}
-    : layout.surface ? {slabs: {see: surfaceOcclusionSee(layout)}} // (lane LOOK follow-up 2: a Surface Run district — interiors behind its facades; world/surface/lookOcclusion.ts)
+    : layout.surface ? {slabs: {see: surfaceOcclusionSee(layout), ...surfaceSky(layout)}} // (lane LOOK follow-up 2: a Surface Run district — interiors behind its facades; world/surface/lookOcclusion.ts)
     : mkt ? {atrium: mkt.atrium} : undefined); // (task studio-survivor-market-20261108-005807-01: the open shed as atrium tiles, no slabs)
   culler.register(group);
   return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: treatFaces, rails, levelAt, culler,

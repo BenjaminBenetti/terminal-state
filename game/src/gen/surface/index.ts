@@ -26,19 +26,20 @@ import type {Level, LevelLink} from '../levels';
 import {deriveRails, registerApertures} from '../levelGen';
 import type {StairFlight} from '../traversal';
 import type {SectionGenContext} from '../../levels/types';
-import {surfaceSeed, type SurfaceHost} from './surfaceRun';
+import {districtVersionOf, surfaceFeatures, surfaceSeed, type SurfaceHost} from './surfaceRun';
 import type {SRect, SurfaceBlock, SurfaceBuilding, SurfaceInfo, SurfaceRecoverable} from './surfaceTypes';
 import type {InteriorPlanner} from './rooms/api';
 import {planInterior} from './rooms/index';
 import {BLOCKS, CORE_FROM, CORE_TO, FRAME_CELLS, planFrame, type CR, type CityFrame} from './cityFrame';
 import {districtName} from './cityNames';
-import {KERB, SLAB, SURFACE_LEVELS, guaranteeCounts, planBlocks, repairGuarantees, type BlockPlans, type BuildingPlan} from './cityBlocks';
+import {KERB, SLAB, SURFACE_LEVELS, deepStoreyPlans, guaranteeCounts, planBlocks, repairGuarantees, type BlockPlans, type BuildingPlan} from './cityBlocks';
 import {SKY_CEIL, carveGround, type GroundMap} from './cityCarve';
-import {PORTAL, carvePortal, dressCheckpoint, reserveCheckpoint} from './checkpoint';
+import {carvePortal, dressCheckpoint, reserveCheckpoint} from './checkpoint';
 import {exposedSides, floorsOf, heightOf, planInteriors, roofOf, type DepotDoors} from './cityInteriors';
 import {OutdoorProps, type PlannedProp} from './outdoorKinds';
 import {dressOutdoors, reserveFronts} from './outdoorDress';
 import {districtNotes, junctionRecords, lotRecords, spawnZones, streetRecords} from './cityData';
+import {carveFogApron, fogBoundaryRecord, padFrame, planFogBoundary, type FogApron} from './fogFiller';
 
 /**
  * The district frame's numbers (metres unless noted). The original contract keys keep their meaning as NOMINAL values (the real frame is
@@ -152,12 +153,22 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const seed = surfaceSeed(ctx.levelSeed);
   const rng = new Rng(seed);
+  // (task studio-surface-run-field-followup-20261116-211729-01) the district's version = its host's record (1 when absent): every v2 stage
+  // is gated on surfaceFeatures(version) and a v1 district stays byte-identical (tests/surface-v1-compat.test.ts)
+  const version = districtVersionOf(ctx.surfaceVersion);
 
   // --- 1-2. frame and block plans ---------------------------------------------------------------------------------------------
-  const f = planFrame(rng.fork('frame'));
+  // (task studio-surface-run-field-followup-20261116-211729-01, lane FOG) v2: the fog-pressure boundary instead of the cordon wall — the
+  // same frame (no draw), moved onto a grid padded where the edge needs room (gen/surface/fogFiller.ts); v1: exactly the first release's
+  const f0 = planFrame(rng.fork('frame'));
+  const fog = surfaceFeatures(version).fogBoundary ? planFogBoundary(f0) : null;
+  const f = fog ? padFrame(f0, fog) : f0;
   const dn = districtName(rng.fork('district-name'));
   const plans = planBlocks(rng.fork('blocks'), f, host, dn.root);
   repairGuarantees(rng.fork('repair'), f, plans, dn.root);
+  // (v2, lane INTERIOR) the deep interiors' storey plans: upper floors / roofs of the destinations (no draws)
+  const deep = surfaceFeatures(version).deepInteriors;
+  if (deep) deepStoreyPlans(plans);
 
   // --- 3-4. the ground, the portal and the tent -------------------------------------------------------------------------------
   const kit = new Kit(rng.fork('kit'), {w: f.W, h: f.H, levels: SURFACE_LEVELS});
@@ -165,7 +176,7 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
   const outdoor = new Set(gm.outdoor);
   const compoundLot = plans.lots.find(l => l.use === 'compound')!;
   const compoundArea = [...gm.lotOfArea].find(([, l]) => l === compoundLot)![0];
-  const pc = carvePortal(kit, f, plans, gm, host, rng.fork('portal'), dn.root);
+  const pc = carvePortal(kit, f, plans, gm, host, rng.fork('portal'), dn.root, {lift: surfaceFeatures(version).tentArrival}); // (v2: the cargo lift in the tent)
   const portalDoor: number[] = [];
   for (const d of pc.doors) { d.id = kit.doors.length; portalDoor.push(d.id); kit.doors.push(d); }
   if (pc.head) for (const fl of pc.head.flights) { fl.id = kit.flights.length; kit.flights.push(fl); }
@@ -179,13 +190,13 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
   const loadSide: Side = L.y0 >= s.y1 ? 'S' : L.y1 <= s.y0 ? 'N' : L.x0 >= s.x1 ? 'E' : 'W';
   const depotDoors: DepotDoors = {id: depotPlan.id, trackSide: plans.spur.dir, trackV: plans.spur.v, loadSide};
   const props: PropPlacement[] = [];
-  const inner = planInteriors(kit, gm, outdoor, plans.buildings, rec, rng.fork('interiors'), planner, depotDoors, props);
+  const inner = planInteriors(kit, gm, outdoor, plans.buildings, rec, rng.fork('interiors'), planner, depotDoors, props, deep);
   // the command tent and the headhouse: GEN's own small interiors
   const tentRec = rec[pc.tent.plan.id];
   const tentDoor = kit.doors[portalDoor[portalDoor.length - 1]];
   tentRec.areas = [pc.tent.area]; tentRec.levels = [0]; tentRec.enterable = true;
-  tentRec.entrances = [{id: `b${tentRec.id}-e0`, building: tentRec.id, level: 0, x: pc.tent.door.x, z: pc.tent.door.z, side: pc.tent.door.side, width: PORTAL.tent.door * CELL,
-    height: PORTAL.tent.doorH, inner: pc.tent.area, outer: compoundArea, door: 'open', cells: pc.tent.doorCells, doorIndex: tentDoor.id}];
+  tentRec.entrances = [{id: `b${tentRec.id}-e0`, building: tentRec.id, level: 0, x: pc.tent.door.x, z: pc.tent.door.z, side: pc.tent.door.side, width: pc.tent.dims.door * CELL,
+    height: pc.tent.dims.doorH, inner: pc.tent.area, outer: compoundArea, door: 'open', cells: pc.tent.doorCells, doorIndex: tentDoor.id}];
   if (pc.head) {
     const hr = rec[pc.head.plan.id], md = kit.doors[portalDoor[0]];
     const cells: number[] = [];
@@ -213,6 +224,9 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
     rec[id].collapse = {corner: c.corner, rect: toM({x0, y0, x1: x0 + c.w, y1: y0 + c.d})};
   }
 
+  // (lane FOG) v2: the open rubble apron out to the edge (after the dressing: nothing is placed on it)
+  const apron: FogApron | null = fog ? carveFogApron(kit, f, fog, gm, plans.lots.length) : null;
+
   // --- 7. levels, apertures, rails, stairs, links -------------------------------------------------------------------------------
   const grids = kit.levelGrids;
   let nLevels = grids.length;
@@ -225,6 +239,15 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
     return Number.isFinite(m) ? m : Math.round((KERB + 4.6 * k) * 100) / 100;
   };
   const levels: Level[] = grids.slice(0, nLevels).map((grid, id) => ({id, role: id === 0 ? 'main' : 'office', grid, baseY: baseY(id)}));
+  // (v2, lane INTERIOR) every reader of an upper-storey window span adds its LEVEL's base (the median storey floor) to the sill / head the
+  // planner gave relative to the building's OWN storey floor: re-based here so the opening is cut where the room is (v1 keeps its numbers)
+  if (deep) for (const w of inner.windows) {
+    const fl = w.level > 0 && w.level < nLevels ? floorsOf(plans.buildings[w.building])[w.level] : undefined;
+    if (!fl) continue;
+    const d = fl.y - levels[w.level].baseY;
+    w.sill = Math.round((w.sill + d) * 1000) / 1000;
+    w.head = Math.round((w.head + d) * 1000) / 1000;
+  }
   registerApertures(levels);
   const rails = deriveRails(levels);
   const flights = flightsOf(kit, grids.slice(0, nLevels));
@@ -248,12 +271,14 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
     roadblock: dress.roadblock?.rect ?? null, enemies: inner.enemies, checkpoint: {x: (tentM.x0 + tentM.x1) / 2, z: (tentM.z0 + tentM.z1) / 2}});
   const storeys = levels.map(L => ({level: L.id, label: L.id === 0 ? 'Street' : L.id === 1 ? 'Upper floor' : 'Top floor', y: L.baseY}));
   const surface: SurfaceInfo = {
-    v: 1, name: dn.name, host, seed, extent: toM(f.ext), core, cols: BLOCKS, rows: BLOCKS, blocks, streets, buildings: rec, windows, outdoorAreas: [...gm.outdoor],
+    v: version as SurfaceInfo['v'], name: dn.name, host, seed, extent: toM(f.ext), core, cols: BLOCKS, rows: BLOCKS, blocks, streets, buildings: rec, windows, outdoorAreas: [...gm.outdoor],
     portal: pc.portal, checkpoint: cd.checkpoint, truck: cd.truck,
     depot: {building: depotPlan.id, recoverables, ...(inner.depotFeatures ? {features: inner.depotFeatures} : {})}, // (+ features: lane ROOMS, for LOOK)
     outdoor: {areas: [...gm.outdoor], spawnZones: spawnZones(f, plans, cd.safe), safe: cd.safe}, notes, storeys,
-    lots: lotRecords(plans, gm), junctions: junctionRecords(f, gm), rubble: dress.rubble, rail: {rects: gm.rail.map(toM), dir: plans.spur.dir, centre: (plans.spur.v + 0.5) * CELL},
-    ...(dress.roadblock ? {roadblock: dress.roadblock.rect} : {}), cordon: {x0: 0, z0: 0, x1: f.W * CELL, z1: f.H * CELL},
+    lots: [...lotRecords(plans, gm), ...(apron?.lots ?? [])], junctions: junctionRecords(f, gm), rubble: dress.rubble, rail: {rects: gm.rail.map(toM), dir: plans.spur.dir, centre: (plans.spur.v + 0.5) * CELL},
+    ...(dress.roadblock ? {roadblock: dress.roadblock.rect} : {}),
+    // (lane FOG) v1: the cordon wall band; v2: no wall — the fog-pressure boundary (world/surface/fogPressure.ts reads it: hazard + visual)
+    ...(fog ? {boundary: fogBoundaryRecord(fog)} : {cordon: {x0: 0, z0: 0, x1: f.W * CELL, z1: f.H * CELL}}),
   };
 
   const g0 = kit.g;

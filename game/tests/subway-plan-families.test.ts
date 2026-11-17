@@ -190,15 +190,17 @@ describe('the plan families at natural seeds', () => {
   }, 240_000);
 
   it('the Surface Run access: its normal closed exit stair opens on every family (no new validator issue)', () => {
-    for (const [fam, s] of Object.entries(SURFACE_SEEDS)) {
-      const L0 = gen(s, 2, 0), L1 = gen(s, 2);
+    // (task studio-surface-run-pr141-integration-20261117-063829-01) each Surface Run version explicitly: version 1 opens the closed exit's
+    // stairwell; version 2 puts its cargo lift at the far end of a closed exit hall (gen/surface/accessLift.ts carveSubwayLift)
+    for (const [fam, s] of Object.entries(SURFACE_SEEDS)) for (const [v, kind] of [[1, 'subway-stair'], [2, 'lift']] as const) {
+      const L0 = gen(s, 2, 0), L1 = gen(s, 2, v);
       expect(L1.archetype).toBe(fam);
       expect(L0.surfaceAccess).toBeUndefined();
       const a = L1.surfaceAccess!;
-      expect(a?.kind, `${fam} ${s}`).toBe('subway-stair');
+      expect(a?.kind, `${fam} ${s} v${v}`).toBe(kind);
       expect(L1.areas[a.hall!].type).toBe('exit-stair');
       const base = new Set(validateLayout(L0));
-      expect(validateLayout(L1).filter(x => !base.has(x)), `${fam} ${s}`).toEqual([]);
+      expect(validateLayout(L1).filter(x => !base.has(x)), `${fam} ${s} v${v}`).toEqual([]);
     }
   }, 240_000);
 

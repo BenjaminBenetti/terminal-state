@@ -38,7 +38,15 @@ export interface GasHudState {
   hint: string;
   /** The volumetric gas is not drawn (fallback haze). */
   haze: boolean;
+  /**
+   * Task studio-surface-run-field-followup-20261116-211729-01 (lane FOG): the fog pressure is past what gas protection holds (a v2 Surface
+   * Run district's outer fog) — the tag reads TOXIC GAS even behind a working mask and the hint is GAS_PRESSURE_HINT.
+   */
+  pressure?: boolean;
 }
+
+/** (lane FOG) The hint while the fog pressure is too high for any protection. */
+export const GAS_PRESSURE_HINT = 'Gas pressure too high';
 
 export class GasHud {
   private tag: HTMLElement | null = null;
@@ -72,8 +80,8 @@ export class GasHud {
 
   update(s: GasHudState): void {
     const inGas = s.c >= s.min;
-    const tag = !inGas ? '' : s.protected ? 'FILTERING' : 'TOXIC GAS';
-    const hint = inGas ? s.hint : '';
+    const tag = !inGas ? '' : s.protected && !s.pressure ? 'FILTERING' : 'TOXIC GAS'; // (lane FOG: protection no longer holds in high pressure)
+    const hint = inGas ? (s.pressure ? GAS_PRESSURE_HINT : s.hint) : '';
     const vig = s.dps > 0 ? Math.round((0.3 + 0.55 * Math.min(1, s.dps / s.dpsMax)) * 20) / 20 : 0;
     const haze = s.haze ? Math.round(Math.min(0.62, s.c * 0.75) * 40) / 40 : 0;
     const key = `${tag}|${hint}|${vig}|${haze}|${s.dps > 0}`;
@@ -83,7 +91,7 @@ export class GasHud {
     if (!this.ensure()) return;
     const t = this.tag!;
     t.classList.toggle('show', !!tag);
-    t.classList.toggle('safe', s.protected);
+    t.classList.toggle('safe', s.protected && !s.pressure);
     t.classList.toggle('hurt', s.dps > 0);
     t.querySelector('.t')!.textContent = tag;
     t.querySelector('.h')!.textContent = hint;

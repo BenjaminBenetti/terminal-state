@@ -143,6 +143,8 @@ export interface SurfaceBuilding {
   collapse?: {corner: 'NW' | 'NE' | 'SW' | 'SE'; rect: SRect};
   /** The host's own building (the portal: subway headhouse / host tower / host mall) or the checkpoint's command tent. */
   host?: 'subway' | 'office' | 'mall' | 'tent' | 'headhouse';
+  /** (v2, lane INTERIOR) Its reachable roof, when it has one (world/surface/arch*.ts draws the bulkhead and keeps the roof walkable). */
+  roofAccess?: SurfaceRoofAccess;
 }
 
 /** (lane GEN) A street-level debris mound: its cells are FLOOR raised above their own ground (ring +edge, crown +crown, m). */
@@ -180,8 +182,11 @@ export interface SurfaceJunction { id: number; rect: SRect; streets: number[]; a
 
 /** The district side of the host station's access: where the player arrives and the way back down / in. */
 export interface SurfacePortal {
-  /** 'stair' = a subway entrance stair down (Subway host); 'door' = a building's street doors (Office tower / Mall entrance). */
-  kind: 'stair' | 'door';
+  /**
+   * 'stair' = a subway entrance stair down (Subway host); 'door' = a building's street doors (Office tower / Mall entrance); 'lift' =
+   * (version 2, lane ACCESS follow-up) the cargo lift inside the command tent (`lift`).
+   */
+  kind: 'stair' | 'door' | 'lift';
   /** Arrival pose (standing just outside the portal, facing the checkpoint). */
   pose: SPose;
   /** The interaction box of the way back (the door / the grille at the stair foot): [E] goes back to the host station. */
@@ -190,6 +195,30 @@ export interface SurfacePortal {
   building: number | null;
   /** What it is called in prompts ("Back down to <Station>", set by ACCESS from the host). */
   label: string;
+  /** (version 2, lane ACCESS follow-up) The cargo lift the crossing rides (kind 'lift'): its car stands at the tent's stop. */
+  lift?: SurfaceLift;
+}
+
+/**
+ * Lane ACCESS follow-up (version 2): ONE END of the Surface Run's cargo lift — the car's room GEN carved (FLOOR cells walled by a one-cell
+ * SOLID ring, its gate a doorway through the ring at the car's front), drawn with the cargo lift kit (world/elevator.ts) by
+ * world/surface/liftSite.ts and ridden by world/surface/liftRide.ts. World metres, absolute y. The station's end is the shaft's LOWER
+ * stop, the district's (the command tent) its UPPER one; both ends share one car shape (gen/surface/accessLift.ts LIFT_CAR).
+ */
+export interface SurfaceLift {
+  /** The car's interior (the room's FLOOR cells) and the shaft (the interior + its ring). */
+  cab: SRect;
+  shaft: SRect;
+  /** The car's front (the wall its gate pierces, as a side of `cab`) and the gate: its centre on the cab's front plane, clear width (m). */
+  doorSide: Side;
+  door: {x: number; z: number; width: number};
+  /** The stop's floor (absolute y) and storey. */
+  y: number;
+  level: number;
+  /** The car room's layout area (the station's appended area / the tent's own area). */
+  area: number;
+  /** Which stop of the shaft this end is. */
+  end: 'lower' | 'upper';
 }
 
 /** The military checkpoint by the portal (tent, sandbags, the map table, the truck). */
@@ -260,7 +289,8 @@ export interface SurfaceOutdoor {
 // The record
 
 export interface SurfaceInfo {
-  v: 1;
+  /** The district's surface version (its host's record: gen/surface/surfaceRun.ts surfaceFeatures says what each builds). */
+  v: 1 | 2;
   /** The district's display name ("Calder Heights"). */
   name: string;
   /** The host archetype (portal kind, the far skyline the look shows behind the tower / mall). */
@@ -299,15 +329,56 @@ export interface SurfaceInfo {
   roadblock?: SRect;
   /** The cordon: the quarantine wall band around the playable extent (outer rect; extent = its inner edge). */
   cordon?: SRect;
+  /**
+   * (v2, task studio-surface-run-field-followup-20261116-211729-01, lane FOG writes) The natural fog-pressure boundary that replaces the
+   * visible cordon wall: world/surface/fogPressure.ts fogPressureAt reads it (hazard AND visual: one source of truth). Absent = v1.
+   */
+  boundary?: SurfaceBoundary;
+}
+
+/**
+ * (v2) The fog-pressure boundary (world metres, concentric axis-aligned rects): pressure 0 inside `clear` (the meaningful district), rising
+ * outward over `ramp` metres to 1 (the truck is broken down / an unprotected-or-protected walker is overwhelmed), and on beyond it to the
+ * finite geometry `edge` (filler blocks hide it; a last-resort collider stands there, far past the point nothing survives).
+ */
+export interface SurfaceBoundary {
+  clear: SRect;
+  /** Metres from the `clear` rect's edge to pressure 1 (the same on every side). */
+  ramp: number;
+  edge: SRect;
+}
+
+/**
+ * (v2, lane INTERIOR writes, lane FACADE / LOOK draws) A building's REACHABLE roof: the walkable roof surface on layout level `level`
+ * (absolute `y`; inside the parapet) and the stair bulkhead / hatch housing the way up (its footprint on the roof, the side its door opens
+ * onto the roof, its height above the roof).
+ */
+export interface SurfaceRoofAccess {
+  level: number;
+  y: number;
+  walk: SRect;
+  bulkhead: SRect & {side: Side; h: number};
+  /**
+   * (lane INTERIOR, task studio-surface-run-field-followup-20261116-211729-01) The roof door in the bulkhead wall on `bulkhead.side`: an
+   * entrance record (level `level`, leaf on the bulkhead's outer face, `inner` = the stair landing, `outer` = the roof area it opens onto,
+   * `cells` = its doorway cells on that level's grid). Kept OUT of `entrances` (those are the street doorways on level 0). The walkable roof
+   * is `walk` minus the bulkhead; `areas` = the roof's own (outdoor) layout areas on `level`.
+   */
+  door?: SurfaceEntrance;
+  areas?: number[];
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // The host station's side (ACCESS lane: gen/surface/access.ts)
 
 export interface SurfaceAccessInfo {
-  v: 1;
-  /** 'subway-stair' = an extended stairwell up from a street-exit hall; 'office-door' / 'mall-door' = an exterior street exit. */
-  kind: 'subway-stair' | 'office-door' | 'mall-door';
+  /** The host station's surface version this access was carved for (gen/surface/surfaceRun.ts surfaceFeatures). */
+  v: 1 | 2;
+  /**
+   * 'subway-stair' = an extended stairwell up from a street-exit hall; 'office-door' / 'mall-door' = an exterior street exit; 'lift' =
+   * (version 2, lane ACCESS follow-up) a cargo lift at a closed street-exit hall (`lift`).
+   */
+  kind: 'subway-stair' | 'office-door' | 'mall-door' | 'lift';
   /** The [E] box of the way out (the door at the top of the stairwell / the street door). */
   trigger: SBox;
   /** Where a player coming back down / in stands (inside, facing away from the door). */
@@ -330,4 +401,6 @@ export interface SurfaceAccessInfo {
   hall?: number;
   rise?: number;
   street?: string;
+  /** (version 2, lane ACCESS follow-up) The cargo lift (kind 'lift'): the station's end of the shaft. */
+  lift?: SurfaceLift;
 }

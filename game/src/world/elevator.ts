@@ -757,12 +757,13 @@ const faceMats = new Map<string, SurfaceNodeMaterial>();
  * A face-UV surface material (geometry UVs in metres / span: the texture moves WITH the cab, never swims) with an optional
  * warm self-glow (emissive x the albedo map) — the cab's own downlights light it; no scene light is added.
  */
-function faceMat(name: string, surf: SurfaceName, p: {color?: number; metalness?: number; glow?: number}): SurfaceNodeMaterial {
+function faceMat(name: string, surf: SurfaceName, p: {color?: number; metalness?: number; glow?: number; tint?: boolean}): SurfaceNodeMaterial {
   let m = faceMats.get(name);
   if (!m) {
     const s = surface(surf);
     m = new SurfaceNodeMaterial({map: s.map, roughnessMap: s.roughnessMap, normalMap: s.normalMap, roughness: 1, metalness: p.metalness ?? 0, color: p.color ?? 0xffffff});
     if (p.glow) { m.emissive.setRGB(1, 0.93, 0.82); m.emissiveMap = s.map; m.emissiveIntensity = p.glow; }
+    if (p.glow && p.tint) m.emissive.multiply(new THREE.Color(p.color ?? 0xffffff)); // (the glow in the finish's own colour)
     m.name = name;
     faceMats.set(name, m);
   }
@@ -1156,7 +1157,8 @@ export function cabGlassMaterial(): MeshStandardNodeMaterial {
 }
 
 /** Task studio-bunker-rework-20261109-205115-01: the cargo car's face-UV finishes (nothing swims on the moving car). */
-export function cargoMaterials() {
+export function cargoMaterials(lit = false) {
+  if (lit) return cargoLitMaterials();
   return {
     paint: faceMat('cargo-cab-paint', 'paintedSteel', {color: 0x7a8474, metalness: 0.3, glow: 0.12}),
     deck: faceMat('cargo-cab-deck', 'brushedSteel', {color: 0x8c8b86, metalness: 0.5, glow: 0.1}),
@@ -1164,6 +1166,25 @@ export function cargoMaterials() {
     bars: faceMat('cargo-gate-bars', 'paintedSteel', {color: 0x3c403a, metalness: 0.35, glow: 0.08}),
     door: faceMat('cargo-landing-door', 'paintedSteel', {color: 0x6e7867, metalness: 0.3, glow: 0.08}),
     liner: faceMat('cargo-shaft-liner', 'paintedSteel', {color: 0x9a948a, metalness: 0.1, glow: 0.06}),
+  };
+}
+
+/**
+ * Task studio-surface-run-field-followup-20261116-211729-01 (lane ACCESS): the Surface Run cargo car's OWN LIT FINISH (its own material
+ * names: the Bunker's car keeps the set above). The Surface car rides through rock and between storeys where the station's baked light
+ * field does not reach, and once the origin world is left nothing else is drawn: its finishes carry the cab lamp's light themselves — the
+ * same colours on the light enamel panel stock (the charcoal steel stock x the olive tint is ~1 % albedo: black without a strong fixture),
+ * with a self-glow in their own colour (emissive = tint x warm white x the albedo map). No scene light; the light state never changes.
+ */
+function cargoLitMaterials() {
+  const o = {tint: true} as const;
+  return {
+    paint: faceMat('cargo-cab-paint@lit', 'paintedPanel', {color: 0x7a8474, metalness: 0.3, glow: 1.4, ...o}),
+    deck: faceMat('cargo-cab-deck@lit', 'brushedSteel', {color: 0x8c8b86, metalness: 0.5, glow: 1.3, ...o}),
+    hazard: faceMat('cargo-hazard@lit', 'paintedPanel', {color: 0xd6a032, metalness: 0.2, glow: 0.7, ...o}),
+    bars: faceMat('cargo-gate-bars@lit', 'paintedSteel', {color: 0x3c403a, metalness: 0.35, glow: 2}),
+    door: faceMat('cargo-landing-door@lit', 'paintedPanel', {color: 0x6e7867, metalness: 0.3, glow: 1.1, ...o}),
+    liner: faceMat('cargo-shaft-liner@lit', 'paintedPanel', {color: 0x9a948a, metalness: 0.1, glow: 0.55, ...o}),
   };
 }
 
@@ -1180,14 +1201,14 @@ function cargoBarLeaf(leafW: number, dH: number): THREE.BufferGeometry {
   return merged(parts);
 }
 
-export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, opts: {glass?: boolean; cargo?: boolean} = {}): ElevatorView {
+export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, opts: {glass?: boolean; cargo?: boolean; cargoLit?: boolean} = {}): ElevatorView {
   const glass = opts.glass === true; // task track3 (lane ARCH): the mall's glass car (the office car: false, unchanged)
   // task studio-bunker-rework-20261109-205115-01: the Bunker's CARGO LIFT — the same car / landings / panels re-finished as an industrial
   // freight car (painted civil-defence steel, a chequer deck in a hazard border, no handrail / mirror / veneer), barred see-through car
   // gates, painted landing doors in hazard-yellow portals, and a shaft liner with the landing openings, so the shaft visibly slides past
   // the barred gate while it travels. Every other car is unchanged (cargo false).
   const cargo = opts.cargo === true;
-  const CG = cargo ? cargoMaterials() : null;
+  const CG = cargo ? cargoMaterials(opts.cargoLit === true) : null;
   const {info, gate: G, doorH: dH, cabH: H, frame: F, cop} = plan;
   const M = elevatorMaterials();
   const floor = cabFloorMats(mats);

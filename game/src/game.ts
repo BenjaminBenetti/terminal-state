@@ -11,6 +11,7 @@ import {PropModelLibrary, loadAssets, type AssetBundle} from './assets/loader';
 import {foreignTo, levelWorkingSet, selectLevelKeys} from './assets/levelAssets';
 import {SURFACE_LANE, hostKeyOf, isSurfaceHost, isSurfaceKey, sectionAssetLevel, surfaceKeyOf, surfaceVersionFor} from './gen/surface/surfaceRun';
 import {abortCrossers, arriveCrossers, departCrossers, surfaceCrossRefusal, surfaceCrossers, type SurfaceCrosser, type SurfaceCrossGate, type SurfaceCrossRefusal, type SurfaceCrossResult} from './world/surface/crossing'; // (lane ACCESS: Game.crossSurface)
+import {LIFT_RIDE_COMPILE, liftOfLayout, type SurfaceLiftRuntime} from './world/surface/liftRuntime'; // (lane ACCESS follow-up: the v2 crossing is a cargo-lift ride)
 import {installSurfaceRun} from './world/surface/install'; // task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN // Task track3-eaton-centre-20261031 (lane PACKAGE): level-scoped lazy assets
 import {adoptStationName} from './campaign/stationName';
 import {LevelResources} from './assets/levelResources'; // lane PACKAGE (track3): level textures / GPU resources released with their level
@@ -226,6 +227,7 @@ import {installMarketWares, type MarketWares} from './market/wares/wares'; // ta
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {installSkywaysTrunk} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): the Skyways car's 16-slot trunk
 import {installSurfaceTruck} from './world/surface/truckStorage'; // task surface-run-opus-rebuild-20261116 (lane TRUCK): the Surface Run truck (vehicle definition + storage compartments)
+import {shieldTruckHit} from './world/surface/truckConditionRuntime'; // task studio-surface-run-field-followup-20261116-211729-01 (lane TRUCK): the seated truck cab takes the hits
 import {installTrainRide, type TrainRide} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): the moving train (ride mode, transit tunnel)
 import {installRidePortals, type RidePortalRuntime} from './world/ridePortalRuntime'; // task studio-perf-ao-train-continuity-20261110-022206-01: the ride portals (gates / breaches) the moving train uses
 import {installTrainCargo, type TrainCargoSystem} from './world/trainCargo'; // task train-loose-cargo: every loose item / bag aboard travels with the train
@@ -273,6 +275,7 @@ import {collectGlassPlanes} from './world/glassPanes';
 import {installShadowAlphaTwin} from './render/shadowOverride'; // (lane RENDER-CPU)
 import {installUploadDedupe} from './render/uploadDedupe'; // task mall-horde-performance-20261105
 import {installBindingRefresh} from './render/bindingRefresh'; // task studio-death-retry-render-fix-20261114-044607-01
+import {installGeometryDisposeRef} from './render/geometryDisposeRef'; // task studio-surface-run-field-followup-20261116-211729-01 (resource teardown)
 // task studio-rt-flashlight-compute-20261115-233136-01: RT Flashlight — the flashlight's bounce traced by WebGPU compute (render/rt/)
 import {probeRtComputeBounded, type RtProbe} from './render/rt/rtGpu';
 import {RtFlashlight} from './render/rt/rtFlashlightRuntime';
@@ -1135,6 +1138,7 @@ export class Game {
       installGlowLightNode(this.renderer); // task studio-reactor-glowing-zombies-20261115-013245-01: the irradiated zombies' gated, occluded glow lights
       installUploadDedupe(this.renderer); // task mall-horde-performance-20261105: no identical / split per-frame uniform uploads (WebGPU only)
       installBindingRefresh(this.renderer); // task studio-death-retry-render-fix-20261114-044607-01: a swapped shared texture (the station light field) reaches unchanged objects too
+      installGeometryDisposeRef(this.renderer); // (lane ACCESS, resource teardown) a disposed render object no longer stays alive with its geometry
       // Task studio-gi-mood-bounce-loading-20261115-081523-01 (lane LOAD): the pools of one instanced material share ONE node build (three
       // builds every InstancedMesh on its own: 903 of a Subway station's 1044 loading builds); `?instshare=off` = three's keyed builds
       installSharedInstancing(this.renderer);
@@ -1338,7 +1342,8 @@ export class Game {
     if (!isSurfaceKey(key) && run.laneStore(ROSTER_LANE, key) === undefined) run.setLaneStore(ROSTER_LANE, {v: ctx.rosterVersion ?? 0}, key);
     // (task studio-surface-run-opus-rebuild-20261116-020827-01) a Subway / Office / Mall station: the SURFACE RUN version it was first built
     // with (gen/surface/surfaceRun.ts: a station visited before the feature stays 0 — no access, its world exact; a new one gets the current)
-    if (ctx.surfaceVersion !== undefined && run.laneStore(SURFACE_LANE, key) === undefined) run.setLaneStore(SURFACE_LANE, {v: ctx.surfaceVersion}, key);
+    // (task studio-surface-run-field-followup-20261116-211729-01: stamped on the host's 'main' memory only — a district reads its host's record)
+    if (key.section === 'main' && ctx.surfaceVersion !== undefined && run.laneStore(SURFACE_LANE, key) === undefined) run.setLaneStore(SURFACE_LANE, {v: ctx.surfaceVersion}, key);
     const node = key.station ? run.node(key.station) : null;
     if (node) adoptStationName(layout, node.name); // campaign: the map's / save's name is the one on the signs and the HUD
     return layout;
@@ -1358,7 +1363,9 @@ export class Game {
     return {layoutVersion, ctx: {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {}),
       rosterVersion: rosterVersionFor(run.peekMemory(key)), // (the seeded enemy roster: always explicit — levels/types.ts SectionGenContext.rosterVersion)
       // (task studio-surface-run-opus-rebuild-20261116-020827-01) a host station's own world: its recorded Surface Run version (explicit)
-      ...(key.section === 'main' && isSurfaceHost(key.level) ? {surfaceVersion: surfaceVersionFor(run.peekMemory(key))} : {})}};
+      ...(key.section === 'main' && isSurfaceHost(key.level) ? {surfaceVersion: surfaceVersionFor(run.peekMemory(key))} : {}),
+      // (task studio-surface-run-field-followup-20261116-211729-01) a district: its HOST station's recorded version (a v1 world stays v1)
+      ...(isSurfaceKey(key) && isSurfaceHost(key.level) ? {surfaceVersion: surfaceVersionFor(run.peekMemory(hostKeyOf(key)))} : {})}};
   }
 
   /**
@@ -1756,6 +1763,7 @@ export class Game {
     // ends any ride first)
     if (fresh) this.trainRide?.reset();
     if (this.trainRide?.riding) { /* the car drives into this station; TrainRide.arrive() parks it at trainPlacement */ }
+    else if (this.surfaceLiftRide?.holding) { /* (lane ACCESS follow-up) riding the cargo lift: the ride already placed the player in this end's car */ }
     else if (fresh) this.player.spawn(pose.x, pose.z, pose.yaw, y); else this.player.place(pose.x, pose.z, pose.yaw, y);
     this.ladderAim = null;
     this.recoilPitch = this.recoilYaw = this.bloom = this.shake = 0;
@@ -2260,6 +2268,11 @@ export class Game {
 
   /** True while no station world exists during a journey (the old one torn down, the next not built yet). */
   private transitGap = false;
+  /**
+   * (version 2, lane ACCESS follow-up) The cargo lift ride's destination is BUILT (still in the transit gap while it compiles — no world
+   * system runs, the player held in the car): its level culler runs again, so the frames drawn meanwhile cull as in play.
+   */
+  private liftBuilt = false;
 
   /** The transit gap's update: look, the riding car + the player in it, the camera. Nothing touches a station world. */
   private updateTransitGap(dt: number): void {
@@ -2267,6 +2280,11 @@ export class Game {
     applyMouseLook(p, inp.dx, inp.dy, this.settings); // task mouse-axis-invert: the one look step (sensitivity, X / Y inverts, pitch clamp)
     if (inp.hit('KeyF')) this.toggleFlashlight(); // task campaign-polish (lane TRAIN, item 15): the dark transit — the flashlight stays usable
     if (this.trainRide.riding) this.trainRide.stepPlayer(dt, inp, {aiming: false, speedMult: 1, canSprint: false});
+    // (lane ACCESS follow-up) the Surface Run's cargo lift: the car (doors, travel) and the player held in it
+    if (this.surfaceLiftRide && this.surfaceLiftRide.phase !== 'idle') {
+      this.surfaceLiftRide.tick(dt);
+      if (this.surfaceLiftRide.holding) this.surfaceLiftRide.stepPlayer(dt, inp, {aiming: false, speedMult: 1, canSprint: false});
+    }
     this.updateCamera(dt);
     this.trainRide.tiltCamera(this.camera);
   }
@@ -2454,10 +2472,11 @@ export class Game {
    * shadow-map variants by off-screen draws nested at the real frame's depth. The arrival still waits at most 8 s for the scene-pass
    * phase; nothing holds a frame or hides the canvas. 'view' (software rasterizer): the representatives within 24 m only.
    */
-  private async backgroundCompile(): Promise<void> {
-    if (!this.world || !this.renderer.initialized || this.gpu?.deviceLost) return;
+  private async backgroundCompile(full = false): Promise<'done' | 'cancelled' | 'skipped' | 'arrived'> {
+    // (lane ACCESS follow-up) `full`: the Surface Run lift ride waits for the WHOLE job (no cap) and is told how it ended
+    if (!this.world || !this.renderer.initialized || this.gpu?.deviceLost) return this.gpu?.deviceLost ? 'cancelled' : 'skipped';
     const mode = warmupMode(location.search, this.softwareGl?.software === true);
-    if (mode === 'off') return;
+    if (mode === 'off') return 'skipped';
     this.journeyCompile?.cancel();
     this.refreshRuntimeVariants(mode); // task runtime-variant-warmup-20261105: the destination's play-only variants join the paced job
     const t0 = performance.now();
@@ -2478,14 +2497,21 @@ export class Game {
       const casters = mode === 'full' && this.flashlight.castShadow ? runtimeVariantsFirst(byNear([...plan.items, ...plan.others].filter(i => i.caster))) : [];
       const receiver = plan.items.find(i => i.object.receiveShadow && !i.flips.length) ?? null;
       // (task journey-compile-pacing-20261104: paced to real frames — frameNo = the scheduler's frame callbacks begun)
+      // (lane ACCESS follow-up) the lift ride waits for it with only the sealed car drawn: a step every frame, bigger chunks / slices
       const job = (this.journeyCompile = new JourneyCompile({renderer: this.renderer as unknown as JourneyCompileOptions['renderer'], scheduler: this.frameBudget,
-        scene: this.scene, camera: this.camera, target, depth, items, casters, receiver, frameNo: () => this.frameBudget.frame}).start());
+        scene: this.scene, camera: this.camera, target, depth, items, casters, receiver, frameNo: () => this.frameBudget.frame, ...(full ? LIFT_RIDE_COMPILE : {})}).start());
+      if (full) {
+        await job.done;
+        console.info(`Terminal State: lift ride compile ${job.stats.phase} — scene ${job.stats.sceneDone}/${job.stats.sceneItems}, shadows ${job.stats.shadowDone}/${job.stats.casters}, ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+        return job.stats.phase === 'done' ? 'done' : 'cancelled';
+      }
       // the arrival waits for the scene-pass phase at most 8 s, as before; the job keeps going in spare frame time after that
       await Promise.race([job.sceneDone, new Promise(r => setTimeout(r, 8000))]);
       const st = job.stats;
       console.info(`Terminal State: next station prepared during the ride (${mode}) — scene ${st.sceneDone}/${st.sceneItems}, shadows ${st.shadowDone}/${st.casters} at arrival after ${((performance.now() - t0) / 1000).toFixed(1)} s (continuing in spare frame time)`);
       void job.done.then(() => console.info(`Terminal State: journey compile ${job.stats.phase} — scene ${job.stats.sceneDone}/${job.stats.sceneItems}, shadows ${job.stats.shadowDone}/${job.stats.casters}, ${job.stats.steps} steps (max ${job.stats.stepMaxMs.toFixed(1)} ms), ${((performance.now() - t0) / 1000).toFixed(1)} s`));
-    } catch (err) { console.warn('campaign: background compile failed', err); }
+    } catch (err) { console.warn('campaign: background compile failed', err); if (full) return 'cancelled'; }
+    return 'arrived';
   }
 
   /** Lane RENDER-CPU: the journey's background preparation of the next station (render/journeyCompile.ts; QA / tests). */
@@ -2703,6 +2729,9 @@ export class Game {
   surfaceCrossing: {from: SectionKey; to: SectionKey; phase: 'prepare' | 'depart' | 'build' | 'arrive' | 'warmup' | 'recover'} | null = null;
   /** Crossings started / completed / refused / failed (QA, tests). */
   readonly surfaceCrossCounts = {started: 0, done: 0, refused: 0, failed: 0, recovered: 0};
+  /** (lane ACCESS follow-up) The Surface Run's cargo lift runtime (world/surface/liftRuntime.ts installs itself); the last ride's [E]-press generation (ms). */
+  surfaceLiftRide: SurfaceLiftRuntime | null = null;
+  surfaceLiftGenMs = 0;
   /** Set only while a crossing's loading screen replaces play: the [E] press keeps the pointer captured (enterPlay resumes with it). */
   private holdPointerLock = false;
 
@@ -2735,6 +2764,13 @@ export class Game {
     const refusal = surfaceCrossRefusal(this.surfaceCrossGate(), from, surfaceCrossers(this));
     if (refusal || !to) { this.surfaceCrossCounts.refused++; return Promise.resolve({ok: false, reason: refusal?.code ?? 'no-access', error: refusal?.text ?? 'There is no way out here.'}); }
     const flight = this.lifecycle.run(async (): Promise<SurfaceCrossResult> => {
+      // (version 2, lane ACCESS follow-up) both ends have a cargo lift and the player stands in this end's car: the RIDE is the crossing
+      // (rideSurfaceLift; null = the destination has none: the loading screen below, its layout already generated)
+      const lift = this.surfaceLiftRide;
+      if (lift?.canRide() && lift.inCar()) {
+        const r = await this.rideSurfaceLift(from, to);
+        if (r) return r;
+      }
       this.surfaceCrossCounts.started++;
       const up = !isSurfaceKey(from), station = this.surfaceStationName(up ? from : hostKeyOf(from));
       const crossers = surfaceCrossers(this).slice();
@@ -2790,6 +2826,89 @@ export class Game {
       }
     });
     return flight ?? Promise.resolve({ok: false, reason: 'busy', error: 'Busy — try again in a moment.'});
+  }
+
+  /**
+   * (version 2, lane ACCESS follow-up) THE CARGO LIFT RIDE — the crossing without a loading screen (world/surface/liftRuntime.ts). The
+   * destination is generated at the press (the one synchronous block, measured: surfaceLiftGenMs); the doors close with the player held in
+   * the car; the participants depart (the old world intact); the transit gap: the old world is left (the car's view kept, drawn), the
+   * destination prepared, its end's view placed with the car where it was in the shaft, the destination built PACED (frames drawn), the
+   * participants arrive, the destination compiled COMPLETELY (backgroundCompile(true): the scene pass in its render context, the shadow
+   * variants, the hidden groups, the runtime variants; no cap); only then the doors open (in a playing frame: paused, they wait). A
+   * failure before the old world was left reopens the doors; after, the ride is reset and the left section rebuilt (recoverSurfaceCrossing,
+   * behind the loading screen; the error screen if that fails too). Null: the destination has no lift (the caller crosses by loading screen).
+   */
+  private async rideSurfaceLift(from: SectionKey, to: SectionKey): Promise<SurfaceCrossResult | null> {
+    const R = this.surfaceLiftRide!, up = !isSurfaceKey(from), station = this.surfaceStationName(up ? from : hostKeyOf(from));
+    const t0 = performance.now();
+    this.pregenerateSection(to, this.run);
+    this.surfaceLiftGenMs = performance.now() - t0;
+    if (!liftOfLayout(this.pregenerated?.layout)) return null;
+    this.surfaceCrossCounts.started++;
+    const crossers = surfaceCrossers(this).slice();
+    this.surfaceCrossing = {from, to, phase: 'depart'};
+    let departed: SurfaceCrosser[] = [], left: BuiltWorld | null = null;
+    try {
+      if (!(await R.begin(up))) { this.pregenerated = null; return {ok: false, reason: 'cancelled', error: 'The ride was interrupted.'}; }
+      try { departed = departCrossers(crossers, from, to); } catch (err) {
+        console.error('Surface Run: a participant could not depart', err);
+        this.lastError = String((err as Error)?.stack ?? err);
+        this.surfaceCrossCounts.failed++;
+        this.pregenerated = null;
+        await R.reopen();
+        return {ok: false, reason: 'failed', error: 'Something you carry cannot come along right now.'};
+      }
+      this.surfaceCrossing.phase = 'prepare';
+      this.cancelUse('surface');
+      this.cancelFlareHold();
+      this.aiming = false;
+      await this.warmRun;
+      this.surfaceCrossing.phase = 'build';
+      left = this.world;
+      this.transitGap = true;
+      R.holdForLeave();
+      this.leaveSection(true);
+      const layout = await this.prepareSection(to, this.run);
+      if (layout.surface) $('#station-intro').textContent = layout.surface.name;
+      const dest = liftOfLayout(layout);
+      if (!dest || !R.repose(dest)) throw new Error('the destination has no lift');
+      await this.warmRun;
+      await this.buildSectionPaced(to, layout, {kind: 'surface'}, false);
+      this.liftBuilt = true;
+      this.surfaceCrossing.phase = 'arrive';
+      const failed = arriveCrossers(departed, to);
+      departed = [];
+      this.surfaceCrossing.phase = 'warmup';
+      this.glassMirror?.prime();
+      const c = await this.backgroundCompile(true);
+      if (c === 'cancelled') { R.reset(); this.transitGap = this.liftBuilt = false; return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'}; }
+      this.transitGap = this.liftBuilt = false;
+      this.settleRtScene();
+      if (!(await R.markReady())) return {ok: false, reason: 'cancelled', error: 'The ride was interrupted.'};
+      this.flushRetired(); // the left section's queued releases (its programs are re-used by now)
+      this.hud.toast(up ? `${layout.surface?.name ?? 'The street'} — street level` : `${station} — back underground`);
+      if (failed.length) this.hud.toast(`Something you carried did not come with you (${failed.join(', ')})`, true);
+      this.surfaceCrossCounts.done++;
+      return {ok: true, to};
+    } catch (err) {
+      this.transitGap = this.liftBuilt = false;
+      R.reset();
+      if (err instanceof PacedBuildCancelled) return {ok: false, reason: 'cancelled', error: 'The crossing was interrupted.'};
+      console.error('Surface Run: the lift ride failed', err);
+      this.lastError = String((err as Error)?.stack ?? err);
+      this.surfaceCrossCounts.failed++;
+      if (!left) {
+        abortCrossers(departed, from);
+        this.hud.toast(`${up ? 'The way up' : 'The way down'} is blocked — you are still here.`, true);
+        return {ok: false, reason: 'failed', error: String((err as Error)?.message ?? err).slice(0, 120)};
+      }
+      this.holdPointerLock = true;
+      const ui = this.showLoading(up ? `${station} · the street` : station, 'The lift stopped — going back…');
+      this.holdPointerLock = false;
+      return await this.recoverSurfaceCrossing(from, up, departed, left, ui, err);
+    } finally {
+      this.surfaceCrossing = null;
+    }
   }
 
   /**
@@ -3048,7 +3167,7 @@ export class Game {
       const flesh = this.physics.chunks.fleshPrototypes(layers);
       const pickup = this.pickups.pickupPrototypes(Object.keys(ITEMS)); // (lane PLAY: the variety weapons are their own pool's)
       const movingSets = prepareStockMovingSets(this.stock); // (lane PLAY: hidden, empty; the 'shelf-stock-moving' pool)
-      this.damage.props.dropWarmup();
+      this.damage.props.dropWarmup(retire); // (lane ACCESS: their render objects, if drawn, released after this job)
       const st = this.runtimeVariants.rebuild([
         {name: 'takeover', meshes: cm.takeover}, {name: 'highlight', meshes: cm.highlight}, {name: 'damaged', meshes: dmg.meshes}, {name: 'flesh', meshes: flesh.meshes},
         {name: 'pickup', meshes: pickup.meshes},
@@ -3452,7 +3571,7 @@ export class Game {
   render(): boolean {
     if (this.gpu?.deviceLost || !this.renderer.initialized) return false; // Iteration 13 (CORE): lost device / not initialized: nothing to draw with
     this.prof.lap(SPAN.cull); // lane MEASURE
-    if (!this.transitGap) this.world?.culler.update(this.camera); // Iteration 08 (Lane G): level / fog culling (cheap; skipped while still); (lane BUILD) never in the transit gap: no station is live (a paced build is in progress)
+    if (!this.transitGap || this.liftBuilt) this.world?.culler.update(this.camera); // Iteration 08 (Lane G): level / fog culling (cheap; skipped while still); (lane BUILD) never in the transit gap: no station is live (a paced build is in progress)
     this.prof.lap(SPAN.draw); // lane MEASURE
     this.rtTraceFrame = true; // (RT Flashlight: this frame traces the bounce; the warm-up's hidden frames do not)
     this.drawFrame();
@@ -4030,7 +4149,8 @@ export class Game {
     const moveOpts = {aiming: this.aiming, speedMult: (this.use ? 0.6 : wdef?.moveMult ?? 1) * this.mods.speedMult, canSprint: !this.use && !inp.mouse[0]};
     // (lane RIDE) riding: car pose -> the player's car-local step -> the world pose (TrainRide.stepPlayer); else the world body as ever
     // (lane CAR) driving the Skyways prize car: the car's step puts the player in the driver seat (world/skywaysCar.ts stepPlayer)
-    const step = this.trainRide.riding ? this.trainRide.stepPlayer(dt, inp, moveOpts) : this.skywaysCar.driving ? this.skywaysCar.stepPlayer(dt, inp) : p.update(dt, inp, this.levels, this.propIndex, moveOpts);
+    // (lane ACCESS follow-up) held in the Surface Run's cargo lift car while its doors close / open: the car's own model (liftRuntime.ts)
+    const step = this.surfaceLiftRide?.holding ? this.surfaceLiftRide.stepPlayer(dt, inp, moveOpts) : this.trainRide.riding ? this.trainRide.stepPlayer(dt, inp, moveOpts) : this.skywaysCar.driving ? this.skywaysCar.stepPlayer(dt, inp) : p.update(dt, inp, this.levels, this.propIndex, moveOpts);
     if (step) this.sfx.footstep(p.sprinting, p.crouched);
     if (p.justJumped) this.sfx.jump();
     if (p.justLanded) this.sfx.land(Math.min(1, p.landSpeed / 6));
@@ -4895,6 +5015,9 @@ export class Game {
   }
 
   private hurtPlayer(z: EnemyActor): void {
+    // Task studio-surface-run-field-followup-20261116-211729-01 (lane TRUCK): seated in the closed truck cab, the hit lands on the truck
+    // (its condition; a metal impact) and never on the player (world/surface/truckConditionRuntime.ts shieldTruckHit); a small jolt only
+    if (shieldTruckHit(this, z.brain.stats.attackDamage, z.brain.x, z.brain.z, 'claw')) { this.shake = Math.min(1, this.shake + 0.2); return; }
     const p = this.player;
     // Iteration 16: one hit pipeline — location -> armor (worn gear) -> HP -> listeners (limb injuries)
     // Iteration 16 (lane INJURY): rat / dog bites are 'creature' hits that land low (legs ~58 %, player/injuries.ts biteHitLocation)
@@ -4928,6 +5051,9 @@ export class Game {
    * used is knocked away like any hit. The gas mask plays no part (it only filters the gas cloud).
    */
   blastPlayer(hit: PlayerHit, fromX: number, fromZ: number): ResolvedHit {
+    // Task studio-surface-run-field-followup-20261116-211729-01 (lane TRUCK): a blast / a survivor's round reaching the closed truck cab
+    // lands on the truck, never on the seated player (nothing applied; world/surface/truckConditionRuntime.ts shieldTruckHit)
+    if (shieldTruckHit(this, hit.amount, fromX, fromZ, 'blast')) { this.shake = Math.min(1, this.shake + 0.25); return {...hit, applied: 0, absorbed: 0}; }
     const p = this.player, resolved = this.applyPlayerHit(hit);
     const dx = fromX - p.x, dz = fromZ - p.z, s = Math.sin(p.yaw), c = Math.cos(p.yaw);
     this.hud.damage(Math.atan2(dx * c - dz * s, -dx * s - dz * c), resolved.applied);

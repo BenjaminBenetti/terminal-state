@@ -19,10 +19,22 @@
 // draw after it: three's own update path re-reads the node's current texture and builds the bind group with it, before the draw. No
 // program or pipeline is rebuilt, uniform writes go through the usual path (render/uploadDedupe.ts skips the unchanged ones), and an
 // object drawn later (culled meanwhile) is refreshed when it is next drawn. Both backends (the wrapper is the renderer's, not WebGPU's).
+//
+// Task studio-surface-run-field-followup-20261116-211729-01 (lane ACCESS, resource teardown): a NEW render object's first bind groups
+// RESURRECTED a released station's texture. three r186 copies a render object's per-object bindings from its node build's template
+// (NodeBuilderState.createBindings: Binding.clone), and a template's sampled texture is the node's value AT THAT BUILD — the station the
+// material was first built in. Bindings._createBindings then uploads each sampled binding's `texture` (textures.updateTexture) BEFORE
+// the binding reads its node (`update()` in _update): an object first drawn at a later station re-created the earlier station's light
+// field / decay field on the GPU (disposed at its release: three uploads a disposed texture again) — the right texture was bound one
+// step later, the old one stayed alive for the session, one more per station whose node builds were captured (measured in the real
+// Game: decay-field 1 -> 2 -> 3 live after two round trips by either crossing; the lift ride's frames in the transit gap made the first
+// one appear on the way up). syncNewBindings: before those first bind groups are created, every sampled binding takes its node's
+// CURRENT value through three's own setter (which resets its version / generation, so the following update still rebuilds and tracks
+// the group exactly as three's path does). Only groups not created yet are touched; once per render object.
 import {RenderObjectRefreshType} from 'three/webgpu';
 
-/** Epoch bumps and the refreshes they forced (QA / tests). */
-export const bindingRefreshStats = {installs: 0, bumps: 0, forced: 0};
+/** Epoch bumps and the refreshes they forced (QA / tests); `synced` = new render objects' sampled bindings re-pointed at the node's texture. */
+export const bindingRefreshStats = {installs: 0, bumps: 0, forced: 0, synced: 0};
 
 let epoch = 0;
 
@@ -37,11 +49,38 @@ const EPOCH = Symbol('textureBindingEpoch');
 const installed = new WeakSet<object>();
 
 interface Nodes { needsRefresh(renderObject: object): number }
+interface SampledBinding { isSampledTexture?: boolean; textureNode?: {value?: unknown} | null; texture?: unknown }
+interface BindGroupLike { bindings: SampledBinding[] }
+interface BindingsLike { _createBindings(groups: BindGroupLike[]): unknown; get(group: object): {bindGroup?: unknown} }
+
+/**
+ * Wrap three's Bindings._createBindings (a render object's first bind groups): each sampled binding of a group not created yet takes its
+ * node's current texture first (the template's may be a released station's; see the header). False when the renderer has none.
+ */
+function syncNewBindings(renderer: unknown): boolean {
+  const b = (renderer as {_bindings?: BindingsLike | null} | null)?._bindings;
+  if (!b || typeof b._createBindings !== 'function' || typeof b.get !== 'function') return false;
+  if (installed.has(b)) return true;
+  installed.add(b);
+  const create = b._createBindings.bind(b);
+  b._createBindings = (groups: BindGroupLike[]) => {
+    for (const g of groups) {
+      if (b.get(g).bindGroup !== undefined) continue; // (a shared group already created: three's update path keeps it)
+      for (const s of g.bindings) {
+        const v = s.isSampledTexture ? s.textureNode?.value : undefined;
+        if (v && s.texture !== v) { s.texture = v; bindingRefreshStats.synced++; }
+      }
+    }
+    return create(groups);
+  };
+  return true;
+}
 
 /** Wrap `renderer`'s needsRefresh (after renderer.init(): three creates its node manager there). False when it has none. */
 export function installBindingRefresh(renderer: unknown): boolean {
   const nodes = (renderer as {_nodes?: Nodes | null} | null)?._nodes;
   if (!nodes || typeof nodes.needsRefresh !== 'function') return false;
+  syncNewBindings(renderer);
   if (installed.has(nodes)) return true;
   installed.add(nodes);
   bindingRefreshStats.installs++;

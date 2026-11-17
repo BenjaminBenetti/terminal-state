@@ -15,7 +15,7 @@ import {OPENABLE_AUDIT, VEHICLE_OPEN_AUDIT} from '../src/world/openablesSpec';
 import {PROP_PHYSICS_AUDIT, VEHICLE_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
 import {carToWorld} from '../src/world/skywaysCarSpec';
 import {TRUCK_ANCHORS} from '../src/world/surface/truckAnchors.generated';
-import {truckAuditKind} from '../src/world/surface/truckAudit';
+import {TRUCK_FIXED_PARTS, truckAuditKind} from '../src/world/surface/truckAudit';
 import {TRUCK_LOCKER_DOOR, type TruckView} from '../src/world/surface/truckModel';
 import {TRUCK_COMPARTMENT_BOXES, TRUCK_STORAGE_TEXT} from '../src/world/surface/truckStorage';
 import {TRUCK_COMPARTMENTS} from '../src/world/surface/truckStore';
@@ -91,8 +91,10 @@ describe('the truck compartments open like the openables', () => {
 
   it('classified with honest reasons: openable player storage, part of the vehicle, starting empty; static built-in parts of a too-heavy body', () => {
     // registry-driven: every compartment present now and later has its rows
-    expect(VEHICLE_OPEN_AUDIT.map(r => r.kind)).toEqual(TRUCK_COMPARTMENTS.map(c => truckAuditKind(c.id)));
-    for (const r of VEHICLE_OPEN_AUDIT) {
+    // (re-pin, field follow-up: the fixed non-storage parts — the map board — follow the compartments; tests/surface-truck-board.test.ts)
+    const parts = TRUCK_FIXED_PARTS.map(p => truckAuditKind(p.id));
+    expect(VEHICLE_OPEN_AUDIT.map(r => r.kind)).toEqual([...TRUCK_COMPARTMENTS.map(c => truckAuditKind(c.id)), ...parts]);
+    for (const r of VEHICLE_OPEN_AUDIT.filter(e => !parts.includes(e.kind))) {
       expect([r.cls, r.role], r.kind).toEqual(['openable', 'storage']);
       expect(r.how, r.kind).toMatch(/part of the vehicle/);
       expect(r.how, r.kind).toMatch(/door swings out/);
@@ -100,11 +102,11 @@ describe('the truck compartments open like the openables', () => {
       expect(r.how, r.kind).toMatch(/starts EMPTY/);
       expect(r.how, r.kind).toMatch(/no loot table/);
     }
-    expect(VEHICLE_PHYSICS_AUDIT.map(r => r.kind)).toEqual([truckAuditKind(), ...TRUCK_COMPARTMENTS.map(c => truckAuditKind(c.id))]);
-    const [body, ...parts] = VEHICLE_PHYSICS_AUDIT;
+    expect(VEHICLE_PHYSICS_AUDIT.map(r => r.kind)).toEqual([truckAuditKind(), ...TRUCK_COMPARTMENTS.map(c => truckAuditKind(c.id)), ...parts]);
+    const [body, ...rest] = VEHICLE_PHYSICS_AUDIT;
     expect([body.cls, body.why, body.src]).toEqual(['static', 'too heavy', 'surface']);
     expect(body.how).toMatch(/bullets stop on its body/);
-    for (const p of parts) {
+    for (const p of rest) {
       expect([p.cls, p.why], p.kind).toEqual(['static', 'built-in']);
       expect(p.how, p.kind).toMatch(/never detaching/);
     }

@@ -173,7 +173,13 @@ describe('the journey builds the next station paced (lane BUILD)', async () => {
     const fs = await import('node:fs');
     const src = fs.readFileSync(new URL('../src/game.ts', import.meta.url), 'utf8');
     const paced = [...src.matchAll(/this\.buildSectionPaced\(/g)].length, sliced = [...src.matchAll(/this\.buildSectionSliced\(/g)].length, sync = [...src.matchAll(/this\.buildSection\(/g)].length;
-    expect(paced).toBe(1);
+    // the train journey + (task studio-surface-run-field-followup-20261116-211729-01, lane ACCESS) the Surface Run version-2 cargo-lift
+    // ride: the ride IS the crossing's loading experience, so the destination is built paced with frames drawn, then compiled completely
+    // before the doors open (tests/surface-lift-ride.test.ts)
+    expect(paced).toBe(2);
+    const ride = src.slice(src.indexOf('  private async rideSurfaceLift('), src.indexOf('  private async recoverSurfaceCrossing('));
+    expect(ride).toContain('await this.buildSectionPaced(to, layout, {kind: \'surface\'}, false);');
+    expect(ride.slice(ride.indexOf('this.buildSectionPaced('))).toMatch(/await this\.backgroundCompile\(true\)[\s\S]*await R\.markReady\(\)/);
     expect(sliced).toBe(6); // (tests/loading-build-sliced.test.ts: what that drain does; + the Surface Run crossing and its recovery, lane ACCESS)
     expect(sync).toBe(0); // (the game itself no longer builds a station in one block; tests and tools do, through the wrapper below)
     const journey = src.slice(src.indexOf('async travelToStation('), src.indexOf('private fuelCartsLike('));

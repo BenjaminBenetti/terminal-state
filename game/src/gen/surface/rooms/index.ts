@@ -23,7 +23,9 @@ import {planEnemies, planEntrances, planLights, planLoose, planWindows} from './
 import {assignLootKeys} from './lootKeys';
 import {planOffice} from './office';
 import {surfaceProgramme} from './programmes';
-import {planStore} from './stores';
+import {STORE_SPEC_IDS, planStore} from './stores';
+import {planDeepStore} from './deepStores';
+import {deepFinish} from './deepFinish';
 
 export {SURFACE_PROGRAMMES, SURFACE_PROGRAMME_IDS, resolveProgramme, surfaceProgramme} from './programmes';
 
@@ -33,7 +35,10 @@ export function planInterior(plot: InteriorPlot): InteriorPlan {
   // (an id the planner does not know on a kind without a fallback — a residential block — gets the plain room below)
   if (b.pid && b.W >= 8 && b.D >= 8 && b.storeys.length) {
     const kind = surfaceProgramme(b.pid)?.kind;
-    if (b.pid === 'rail-depot') planDepot(b);
+    // (v2, lane INTERIOR: InteriorPlot.deep) a store's deep plan — back corridor, back rooms, the dog-leg core to its upper floor or roof;
+    // the other programmes keep their plans with the dog-leg core (rooms/builder.ts deep mode). A v1 plot never takes this branch.
+    if (b.deep && kind === 'store' && STORE_SPEC_IDS.includes(b.pid) && planDeepStore(b)) { /* planned */ }
+    else if (b.pid === 'rail-depot') planDepot(b);
     else if (b.pid === 'strip-centre') planStripCentre(b);
     else if (b.pid === 'arcade') planArcade(b);
     else if (b.pid === 'office-block') planOffice(b);
@@ -48,6 +53,7 @@ export function planInterior(plot: InteriorPlot): InteriorPlan {
   planLights(b);
   planEnemies(b);
   planLoose(b);
+  if (b.deep) deepFinish(b); // (v2: an upper floor never stands empty of the dead)
   const entrances = planEntrances(b).filter(e => entranceOk(b, e.cells, e.side));
   const areas = plot.kit.areas.slice(first).map(a => a.id);
   return {

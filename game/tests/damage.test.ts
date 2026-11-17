@@ -29,7 +29,7 @@ import {
 } from '../src/damage/materials';
 import {DEBRIS_CAPS, DEBRIS_SPAWN_BUDGET, DEBRIS_TOTAL_CAP, DebrisSystem} from '../src/damage/debris';
 import {CRATER_CAP, CRATER_HOOK, CraterField} from '../src/damage/craters';
-import {DMG_MAX, MAX_DETACHED, PROP_DAMAGE_HOOK, PROP_DATA, PROP_DATA_KEY, hasPropDamage, propColorNode} from '../src/damage/propDamage';
+import {DMG_MAX, MAX_DETACHED, PROP_DAMAGE_HOOK, PROP_DATA, PROP_DATA_KEY, PropDamage, hasPropDamage, propColorNode} from '../src/damage/propDamage';
 import {WOUND_DATA, WOUND_DATA_KEY, WOUND_HOOK, WOUND_MAX, hasWounds, installWounds, woundColorNode, woundsOf} from '../src/damage/wounds';
 import {toNodeMaterial} from '../src/damage/tsl';
 import {DamageSystem} from '../src/damage/system';
@@ -280,6 +280,48 @@ describe('per-instance prop damage on a built station (Node, procedural props)',
     expect(spies.every(s => s.mock.calls.length === 0)).toBe(true); // deferred (after the next station's warm-up)
     for (const fn of queue) fn();
     expect(spies.every(s => s.mock.calls.length === 1)).toBe(true);
+  });
+
+  it('lane ACCESS (resource teardown): warm meshes handed over to the prototypes release their render objects through retire; a disposed source takes its warm clone', () => {
+    type Disp = THREE.EventDispatcher<{dispose: object}>;
+    const warmOf = (P: PropDamage) => P.group.children.filter(o => o.name === 'damage-warmup') as THREE.Mesh[];
+    const watch = (meshes: THREE.Mesh[]) => {
+      const n = new Map<THREE.Object3D, number>();
+      for (const m of meshes) (m as unknown as Disp).addEventListener('dispose', () => n.set(m, (n.get(m) ?? 0) + 1));
+      return n;
+    };
+    // (Game.refreshRuntimeVariants) dropped with retire: removed now, their render objects released when the queue runs (after the job)
+    const st = station(9001);
+    const warm = warmOf(st.sys.props);
+    expect(warm.length).toBeGreaterThan(0);
+    expect(st.sys.props.warming).toBe(warm.length);
+    const events = watch(warm);
+    const queue: (() => void)[] = [];
+    st.sys.props.dropWarmup(fn => queue.push(fn));
+    expect(st.sys.props.warming).toBe(0);
+    expect(warmOf(st.sys.props)).toEqual([]);
+    expect(events.size, 'nothing released before the queue runs').toBe(0);
+    expect(queue.length).toBe(1);
+    for (const fn of queue) fn();
+    expect(warm.every(m => events.get(m) === 1), 'one object dispose event per dropped mesh').toBe(true);
+    // without retire (the first played frames): dropped, their render objects kept (the station's first-hit programs), as before
+    const st2 = station(9002);
+    const warm2 = warmOf(st2.sys.props);
+    expect(warm2.length).toBeGreaterThan(0);
+    const events2 = watch(warm2);
+    st2.sys.props.dropWarmup();
+    expect(warmOf(st2.sys.props)).toEqual([]);
+    expect(events2.size).toBe(0);
+    // a source material disposed with its world takes its warm clone (once)
+    const warmMats = (PropDamage as unknown as {warmMats: Map<THREE.Material, THREE.Material>}).warmMats;
+    const clone = warm2[0].material as THREE.Material;
+    const src = [...warmMats].find(([, c]) => c === clone)![0];
+    const spy = vi.spyOn(clone, 'dispose');
+    src.dispose();
+    expect(warmMats.has(src)).toBe(false);
+    expect(spy).toHaveBeenCalledTimes(1);
+    src.dispose();
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 
   it('crate: staged damage, then splinters; its finite lots stay (same ids / counts) and are takeable', () => {

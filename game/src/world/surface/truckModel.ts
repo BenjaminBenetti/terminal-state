@@ -30,6 +30,8 @@ import {lampTriangles, lensMaterialFrom, type CarBeam} from '../skywaysCarLights
 import {buildTruckCab, truckCabMaterials} from './truckCab';
 import {TRUCK_LAMPS, TRUCK_WHEELS, TRUCK_WHEEL_RATIO} from './truckSpec';
 import {TRUCK_ANCHORS} from './truckAnchors.generated';
+import {buildTruckBoard, releaseTruckBoard, type TruckBoardView} from './truckBoard';
+import {buildTruckDash, releaseTruckDash, type TruckDashView} from './truckPressureDash';
 
 /** The steering wheel follows the steering through a light ease (time constant, s), like the car's. */
 export const TRUCK_WHEEL_EASE = 0.05;
@@ -43,6 +45,10 @@ export interface TruckView extends CarView {
   steer: number;
   /** (follow-up) The storage compartments' doors (index = TRUCK_ANCHORS.storage). */
   lockers: TruckLockerDoor[];
+  /** (field follow-up) The planning-map board on the bed's right side (world/surface/truckBoard.ts) and the dash's FOG PRESSURE lamp
+   *  (world/surface/truckPressureDash.ts, in the cockpit); both stay through a model refresh. */
+  board: TruckBoardView | null;
+  dash: TruckDashView | null;
 }
 
 /**
@@ -139,6 +145,9 @@ export function loadTruckModel(spec: CarSpec): Promise<GLTF | null> {
 export function releaseTruckModel(): boolean {
   const g = loaded;
   cache = null;
+  // (field follow-up) the board's / dash lamp's shared resources go with the truck too (the GLB alone decides the result, as before)
+  releaseTruckBoard();
+  releaseTruckDash();
   if (!g) return false;
   g.scene.traverse(o => {
     const m = o as THREE.Mesh;
@@ -370,7 +379,10 @@ export function buildTruckView(spec: CarSpec): TruckView {
   group.add(cab.group);
   for (const w of wheels) w.rotation.order = 'YXZ';
   const lockers = lockerDoors(group);
-  return {group, body, cockpit: cab.group, wheel: cab.wheel, wheelAngle: 0, lens, gen: truckModelsGen, standIn: !loaded, roadWheels: wheels, roll: 0, steer: 0, lockers};
+  const board = buildTruckBoard(), dash = buildTruckDash();
+  group.add(board.group);
+  cab.group.add(dash.group);
+  return {group, body, cockpit: cab.group, wheel: cab.wheel, wheelAngle: 0, lens, gen: truckModelsGen, standIn: !loaded, roadWheels: wheels, roll: 0, steer: 0, lockers, board, dash};
 }
 
 /** Rebuild the body from the current model (it arrived after the view was built); the cab stays. */
