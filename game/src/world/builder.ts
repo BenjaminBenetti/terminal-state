@@ -71,6 +71,7 @@ import {SkywaysArch} from './skywaysArch'; // task studio-skyways-level-20261106
 import {MarketArch} from './marketArch'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL): the Survivor Market's corrugated / salvaged finishes
 import {SurfaceArch} from './surface/arch'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): the Surface Run district's streets, facades and interiors
 import {SubwayArch, subwayPlate} from './subwayArch'; // task studio-subway-station-variety-20261117-043926-01: a version-2 Subway station's identity finishes
+import {buildSubwayKit, coveLengths, styledTubeMatrix} from './subwayKit'; // task studio-subway-architecture-materials-rework-20261117-072826-01: the station's architectural relief
 import {surfaceLookPlanSteps} from './surface/archPlan';
 import {surfaceOcclusionSee} from './surface/lookOcclusion'; // (lane LOOK, follow-up 2: the district culler's see-through structure)
 import {BunkerArch} from './bunkerArch'; // task studio-bunker-level-20261109-072224-01: the Bunker's finishes (the Reactor's arch materials) + the shelter hero models
@@ -156,6 +157,8 @@ export interface Fixture {
   level: number;
   /** Task mall-round3-20261031 (lane LIGHT, R7): off-colour tube tint (LightPlacement.tint of a real fixture; absent elsewhere). */
   tint?: readonly [number, number, number];
+  /** Task studio-subway-architecture-materials-rework-20261117-072826-01: no glow card (a concealed Subway cove strip). */
+  noGlow?: boolean;
 }
 
 /**
@@ -494,7 +497,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
       const f = g.floorOf(i);
       for (let k = 0; k < cols.count(i); k++) { const M = cols.level(i, k); if (M !== L && Math.abs(cellCeilAt(levels[M].grid, i) - f) < 0.02) return null; }
       // Task office-overhaul-20261030 (lane ARCH): office storey floors (carpet tiles, vinyl, tile, stone, concrete, roof deck ...).
-      const of = office ? office.floorKey(L, i) : mall ? mall.floorKey(L, i) : (reactor ?? sky ?? mkt ?? bunk ?? surf)?.floorKey(L, i); // task track3 (lane ARCH): + the mall's floors (reactor-build: + the Reactor's; skyways lane VIEW: + the Skyways')
+      const of = office ? office.floorKey(L, i) : mall ? mall.floorKey(L, i) : (reactor ?? sky ?? mkt ?? bunk ?? surf ?? sub)?.floorKey(L, i); // task track3 (lane ARCH): + the mall's floors (reactor-build: + the Reactor's; skyways lane VIEW: + the Skyways')
       if (of) return of;
       const dm = doorFloor.get(L * n0 + i);
       if (dm) return dm;
@@ -665,7 +668,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     const fm = office?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a])
       ?? mall?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a])
       ?? reactor?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a])
-      ?? sky?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? mkt?.doorTrimKey() ?? bunk?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? surf?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? 'steel'; // task track3 (lane ARCH) (+ reactor-build: lane ARCH; + sky: lane VIEW)
+      ?? sky?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? mkt?.doorTrimKey() ?? bunk?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? surf?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? sub?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? 'steel'; // task track3 (lane ARCH) (+ reactor-build: lane ARCH; + sky: lane VIEW)
     // Task studio-bunker-rework-20261109-205115-01: a THICK opening (both spans > 1 cell: the 2-row vault / Reactor bulkhead lanes) runs
     // along the wall its two areas share — areas apart in Z = a wall along X — and its jambs / head span its whole depth. (Before, it
     // was framed as a wall along Z through its first column: two steel slabs and a bar standing across the lane, walked through.)
@@ -738,6 +741,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   for (const l of layout.lights) {
     if (l.virtual) continue; // Iteration 16 (WORLD-GEN): fixture-less daylight sources have no rods
     if (reactor?.isLamp(l)) continue; // task reactor-build-20261101 (lane ARCH): pit lamps hang on their own bracket (ReactorArch.buildLamps)
+    if (l.style) continue; // task studio-subway-architecture-materials-rework-20261117-072826-01: a hall light's body / stem is the Subway kit's (world/subwayKit.ts)
     // Lane T: the local ceiling (follows flights / landings / the underpass), not the area's top.
     const local = gridOf(levelOf(l)).ceilAt(l.x, l.z);
     const ceil = Math.min(layout.areas[l.area]?.ceil ?? l.y, Number.isFinite(local) ? local : Infinity);
@@ -856,16 +860,21 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   // Task track3-eaton-centre-20261031 (lane ARCH): mall ring fixtures are square downlight cans (their tube = the can's lens).
   const down = (i: number) => !!mall && mall.isDownlight(layout.lights[i]);
   const lamp = (i: number) => !!reactor && reactor.isLamp(layout.lights[i]); // task reactor-build-20261101 (lane ARCH): pit fixtures = caged industrial lamps
-  if (models.light) instances += instanceModel(group, models.light, mall || reactor ? lightMats.filter((_, i) => !down(i) && !lamp(i)) : lightMats, {w: mats.fixture.w, h: mats.fixture.h, d: mats.fixture.d, anchor: 'top'}, 'light');
+  // Task studio-subway-architecture-materials-rework-20261117-072826-01: a Subway hall light with a style (lantern, downlight, cove) has no
+  // tube fixture model; its tube instance is the lantern glass / lens / cove strip (world/subwayKit.ts styledTubeMatrix), its body the kit's.
+  const styled = (i: number) => !!layout.lights[i].style;
+  const coves = sub ? coveLengths(layout.lights) : null;
+  if (models.light) instances += instanceModel(group, models.light, mall || reactor || sub ? lightMats.filter((_, i) => !down(i) && !lamp(i) && !styled(i)) : lightMats, {w: mats.fixture.w, h: mats.fixture.h, d: mats.fixture.d, anchor: 'top'}, 'light');
   if (mall) instances += mall.buildDownlights(group, lightMats, layout.lights, mats.fixture);
   if (reactor) instances += reactor.buildLamps(group, lightMats, layout.lights); // (reactor-build, lane ARCH)
   {
     const geo = new THREE.BoxGeometry(mats.fixture.w * 0.82, 0.025, mats.fixture.d * 0.42);
     geo.translate(0, -mats.fixture.h - 0.004, 0);
     tubes = new THREE.InstancedMesh(geo, mats.get('tube'), layout.lights.length);
-    lightMats.forEach((m, i) => tubes!.setMatrixAt(i, down(i) ? downlightLensMatrix(m, mats.fixture) : lamp(i) ? reactor!.lampLensMatrix(m, mats.fixture) : m)); // (reactor-build, lane ARCH: + the pit lamps' lens)
+    lightMats.forEach((m, i) => tubes!.setMatrixAt(i, down(i) ? downlightLensMatrix(m, mats.fixture) : lamp(i) ? reactor!.lampLensMatrix(m, mats.fixture) : (sub && !layout.lights[i].virtual && styledTubeMatrix(layout.lights[i], mats.fixture, coves?.get(i))) || m)); // (reactor-build, lane ARCH: + the pit lamps' lens; subway rework: + the hall lights' glass / lens / strip)
     const c = new THREE.Color();
     fixtures.forEach((f, i) => tubes!.setColorAt(i, f.broken ? c.setRGB(0.05, 0.05, 0.05) : c.setRGB(1, 1, 1)));
+    if (sub) fixtures.forEach((f, i) => { if (layout.lights[i].style === 'cove') f.noGlow = true; }); // (subway rework: a concealed cove strip has no glow card)
     tubes.name = 'light-tubes';
     tubes.computeBoundingSphere();
     group.add(tubes);
@@ -898,6 +907,18 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   if (bunk) bunk.build(group, models); // task studio-bunker-level-20261109-072224-01: the shelter's hero props (REACTOR_X_KIT models)
   yield 'world.levelKit.surface';
   if (surf) yield* surf.buildSteps(group); // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): facades, shopfronts, roofs, the tent
+
+  yield 'world.levelKit.subway';
+  // Task studio-subway-architecture-materials-rework-20261117-072826-01: a version-2+ station's architectural relief — bases, caps, band
+  // fillets, cornices, pilasters, beams, coffers, jack arches, vaults and the hall lights' bodies (world/subwayKit.ts), in the trim chunks.
+  if (sub) {
+    try {
+      sub.kit = buildSubwayKit({
+        box: (k, cx, cy, cz, sx, sy, sz) => addBox(k, cx, cy, cz, sx, sy, sz),
+        geo: (k, geo, cx, cy, cz) => { trimList(k, cx, cz, levelAt(cx, cy, cz)).push(geo); },
+      }, {layout, gridOf, faces, sub});
+    } catch (e) { console.warn('subway kit skipped', e); }
+  }
 
   yield 'world.trimMerge';
   for (const [key, e] of boxes) {

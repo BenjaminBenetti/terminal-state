@@ -3,8 +3,8 @@
 //  - the roll: the classic archetypes keep ~40 % (their version-1 layout byte for byte + only the identity), the three new families
 //    (grand hall, cavern, hub) ~20 % each — at natural seeds, never forced;
 //  - each family at a natural seed: valid, its signature spaces, the player's train, the track extensions, the Surface Run access;
-//  - the identity's render: arch-owned finishes from the existing tile / mine-rock / pit-concrete sets, impact classes, wall treatment,
-//    the level-asset rule; version-1 stations draw no identity at all.
+//  - the identity's render: arch-owned zone finishes from the Subway architecture sets (task studio-subway-architecture-materials-rework-
+//    20261117-072826-01), impact classes, wall treatment, the level-asset rule; version-1 stations draw no identity at all.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -24,8 +24,8 @@ import {LEVELS} from '../src/levels/registry';
 import {createRun} from '../src/run/runState';
 import {WorldMaterials} from '../src/world/materials';
 import {buildWorld, type BuiltWorld} from '../src/world/builder';
-import {SET_MEAN, SUBWAY_KEYS, SUBWAY_WALL_TAG, identitySlots, setTarget, subwayPlate, tileTint} from '../src/world/subwayArch';
-import {setCreviceTexture} from '../src/world/marketTextures';
+import {SUBWAY_WALL_TAG, subwayArchKeysOf, subwayPlate} from '../src/world/subwayArch';
+import {SUBWAY_ARCH_TEXTURES} from '../src/assets/subwayArchTextures.generated';
 import {finishClass} from '../src/damage/impactFinish';
 import {isArchFinish} from '../src/world/finishAt';
 import {finishFamily, treatmentOf} from '../src/world/wallDetailPlan';
@@ -208,90 +208,73 @@ describe('the plan families at natural seeds', () => {
   }, 120_000);
 });
 
-describe('the station identity: drawn with the existing sets', () => {
+describe('the station identity: drawn with the Subway architecture sets', () => {
+  // (task studio-subway-architecture-materials-rework-20261117-072826-01: the identity no longer stretches the Reactor's pit concrete / the
+  // mine rock over walls and ceilings; every public wall is zoned in the scheme's Codex-generated sets — world/subwayFinish.ts; the kit's
+  // relief is tests/subway-arch-kit.test.ts)
   const mats = () => new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
   const meshes = (w: BuiltWorld): THREE.Mesh[] => { const out: THREE.Mesh[] = []; w.group.traverse(o => { if ((o as THREE.Mesh).isMesh) out.push(o as THREE.Mesh); }); return out; };
   const keyed = (w: BuiltWorld, k: string) => meshes(w).filter(m => m.name.startsWith(`arch-${k}@`));
 
-  it('the pure parts: impact classes, arch-owned keys, wall treatments, tints, the asset rule, plates, atmosphere', () => {
-    expect(finishClass(SUBWAY_KEYS.tileUpper)).toBe('tile');
-    expect(finishClass(SUBWAY_KEYS.rock)).toBe('concrete');
-    expect(finishClass(SUBWAY_KEYS.concreteCeil)).toBe('concrete');
-    for (const k of Object.values(SUBWAY_KEYS)) expect(isArchFinish(k), k).toBe(true);
-    expect(finishFamily(SUBWAY_KEYS.tileUpper)).toBe('tile');
-    expect(finishFamily(SUBWAY_KEYS.rock)).toBe('concrete');
-    expect(treatmentOf({zone: 'platform', finish: SUBWAY_KEYS.rock})).toBe('trackTunnel');
-    expect(treatmentOf({zone: 'stair', finish: SUBWAY_KEYS.rock})).toBe('stairCore');
-    expect(treatmentOf({zone: 'platform', finish: SUBWAY_KEYS.tileLower})).toBe(treatmentOf({zone: 'platform', finish: 'tileLower'}));
-    // the tile tint keeps the glaze's luminance; rock / concrete land on their target albedo after the set's own mean
-    for (const t of Object.values(STATION_THEMES).filter(q => q.walls === 'tile')) {
-      const [r, g, b] = tileTint(t.wallTint);
-      expect(Math.max(r, g, b)).toBeLessThanOrEqual(1.5 + 1e-9);
-      expect(0.2126 * r + 0.7152 * g + 0.0722 * b).toBeLessThanOrEqual(1 + 1e-9);
-      expect(0.2126 * r + 0.7152 * g + 0.0722 * b).toBeGreaterThan(0.85);
-    }
-    const want = setTarget(STATION_THEMES.cavernBlue.wallTint, 'rock', false);
-    expect(want[2]).toBeGreaterThan(want[0]);
-    expect(Math.max(...want)).toBeLessThan(0.5);
-    expect(identitySlots({identity: stationIdentityOf(FAMILY_SEEDS.cavern, 'cavern')})).toEqual(['rock']);
-    expect(identitySlots({})).toEqual([]);
+  it('the pure parts: impact classes, arch-owned keys, wall treatments, the asset rule, plates, atmosphere', () => {
+    expect(finishClass('subway-tile-field')).toBe('tile');
+    expect(finishClass('subway-rock-dado')).toBe('concrete');
+    expect(finishClass('subway-concrete-ceil-hall')).toBe('concrete');
+    expect(finishClass('subway-plaster-ceil')).toBe('plaster');
+    expect(finishClass('subway-metal-ceil')).toBe('steel');
+    expect(finishClass('subway-terrazzo-floor')).toBe('terrazzo');
+    for (const k of ['subway-tile-field', 'subway-stone-plinth', 'subway-rock-dado', 'subway-plaster-ceil']) expect(isArchFinish(k), k).toBe(true);
+    // the scheme's tile / stone never take the station tile grid's cuts; precast concrete spalls; painted rock is the tunnel's treatment
+    expect(finishFamily('subway-tile-field')).toBe('office');
+    expect(finishFamily('subway-stone-plinth')).toBe('office');
+    expect(finishFamily('subway-concrete-dado')).toBe('concrete');
+    expect(finishFamily('subway-rock-dado')).toBe('concrete');
+    expect(treatmentOf({zone: 'platform', finish: 'subway-rock-dado'})).toBe('trackTunnel');
+    expect(treatmentOf({zone: 'stair', finish: 'subway-rock-dado'})).toBe('stairCore');
+    expect(treatmentOf({zone: 'platform', finish: 'subway-tile-field'})).toBe(treatmentOf({zone: 'platform', finish: 'tileLower'}));
     expect(subwayPlate({})).toBeNull();
-    // the Subway may load exactly the Reactor family's rock / concrete surface sets — never its models or its other textures
-    expect(assetAllowedIn('subway', 'assets/textures/reactor/mine-rock-color.jpg')).toBe(true);
-    expect(assetAllowedIn('subway', 'assets/textures/reactor/pit-concrete-orm.jpg')).toBe(true);
-    expect(assetAllowedIn('subway', 'assets/models/reactor-generator.glb')).toBe(false);
-    expect(assetAllowedIn('subway', 'assets/textures/reactor/rusted-steel-color.jpg')).toBe(false);
+    expect(subwayArchKeysOf({})).toEqual([]);
+    for (const fam of ['classic', 'grand-hall', 'cavern', 'hub'] as const) {
+      const keys = subwayArchKeysOf({identity: stationIdentityOf(FAMILY_SEEDS[fam], fam === 'classic' ? 'split' : fam)});
+      expect(keys.length, fam).toBeGreaterThanOrEqual(3);
+      for (const k of keys) expect(assetAllowedIn('subway', SUBWAY_ARCH_TEXTURES[k].color.url), k).toBe(true);
+    }
     expect(atmosphereFor({archetype: 'cavern'}).density).toBeGreaterThan(atmosphereFor({archetype: 'side-mezzanine'}).density);
   });
 
-  it('a cavern draws painted rock on its public walls, track bed and ceilings (stand-in, then the loaded set); version 1 draws none', () => {
-    const L = gen(FAMILY_SEEDS.cavern, 2), id = L.identity!;
+  it('a cavern draws painted rock on its public walls, track bed and ceilings over a granite base; version 1 draws none', () => {
+    const L = gen(FAMILY_SEEDS.cavern, 2);
     const w = buildWorld(L, mats(), {});
     expect(w.subwayArch).toBeTruthy();
-    expect(w.subwayArch!.stats.faces[SUBWAY_KEYS.rock]).toBeGreaterThan(100);
-    const walls = keyed(w, SUBWAY_KEYS.rock), ceils = keyed(w, SUBWAY_KEYS.rockCeil);
+    expect(w.subwayArch!.stats.faces['subway-rock-dado']).toBeGreaterThan(100);
+    const walls = keyed(w, 'subway-rock-dado'), ceils = keyed(w, 'subway-rock-ceil');
     expect(walls.length).toBeGreaterThan(0);
     expect(ceils.length).toBeGreaterThan(0);
-    // the stand-in (no set loaded in Node): the tunnel lining tinted to the paint's target albedo, cut by the wall detail like a base wall
-    const m = walls[0].material as THREE.MeshStandardMaterial;
-    const want = setTarget(id.wallTint, 'rock', false);
-    for (let c = 0; c < 3; c++) expect([m.color.r, m.color.g, m.color.b][c]).toBeCloseTo(want[c] / SET_MEAN.tunnel[c], 5);
-    expect(m.userData.lightAlbedo).toEqual(want);
+    expect(keyed(w, 'subway-stone-plinth').length).toBeGreaterThan(0);
+    const m = walls[0].material as THREE.Material;
     expect(m.userData[SUBWAY_WALL_TAG]).toBe(true);
+    expect(m.userData.subwayArchTex).toBe('rockPainted');
     expect((ceils[0].material as THREE.Material).userData[SUBWAY_WALL_TAG]).toBeUndefined();
-    // the loaded set: a world-mapped material over the mine-rock maps
-    const tex = new THREE.Texture();
-    setCreviceTexture('rock', 'color', tex);
-    try {
-      const w2 = buildWorld(L, mats(), {});
-      const m2 = keyed(w2, SUBWAY_KEYS.rock)[0].material as THREE.MeshStandardMaterial;
-      expect(m2.map).toBe(tex);
-      expect(m2.userData.lightAlbedo).toEqual(want);
-    } finally { setCreviceTexture('rock', 'color', null); }
     // the same seed's version-1 build: no identity, no identity finish anywhere
     const w1 = buildWorld(gen(FAMILY_SEEDS.cavern, 1), mats(), {});
     expect(w1.subwayArch).toBeUndefined();
-    const keys = new Set<string>(Object.values(SUBWAY_KEYS));
-    expect(meshes(w1).some(q => /^arch-subway-/.test(q.name) || keys.has((q.material as THREE.Material).name))).toBe(false);
+    const zoneKey = /^subway-(tile|stone|concrete|plaster|metal|terrazzo|rock)-/;
+    expect(meshes(w1).some(q => /^(arch|trim)-subway-/.test(q.name) || zoneKey.test((q.material as THREE.Material).name))).toBe(false);
   }, 240_000);
 
-  it('a tinted tile station clones the glazed tile (same maps, tinted colour); cast concrete takes walls and ceilings', () => {
+  it('a tile station zones its walls in the scheme sets; a brutalist one is precast concrete with concrete coffers', () => {
     // seed 4: a civic grand hall (tile); seed 3: a brutalist grand hall (concrete)
     const tile = gen(4, 2), conc = gen(3, 2);
-    expect([tile.identity!.walls, conc.identity!.walls]).toEqual(['tile', 'concrete']);
-    const M = mats();
-    const wt = buildWorld(tile, M, {});
-    const up = keyed(wt, SUBWAY_KEYS.tileUpper);
-    expect(up.length).toBeGreaterThan(0);
-    const um = up[0].material as THREE.MeshStandardMaterial, base = M.get('tileUpper') as THREE.MeshStandardMaterial;
-    expect(um).not.toBe(base);
-    expect(um.map).toBe(base.map);
-    const t = tileTint(tile.identity!.wallTint);
-    expect([um.color.r, um.color.g, um.color.b].map(v => +v.toFixed(5))).toEqual(t.map(v => +v.toFixed(5)));
-    expect(um.userData[SUBWAY_WALL_TAG]).toBe(true);
+    expect([tile.identity!.theme, conc.identity!.theme]).toEqual(['civic', 'brutalist']);
+    const wt = buildWorld(tile, mats(), {});
+    for (const k of ['subway-stone-plinth', 'subway-tile-dado', 'subway-tile-field', 'subway-tile-band', 'subway-stone-field-hall', 'subway-plaster-ceil', 'subway-stone-floor']) expect(keyed(wt, k).length, k).toBeGreaterThan(0);
+    expect((keyed(wt, 'subway-tile-field')[0].material as THREE.Material).userData.subwayArchTex).toBe('tileBlueSquare');
+    // the old glazed tile set is gone from the public walls
+    expect(keyed(wt, 'tileUpper').length + keyed(wt, 'tileLower').length).toBe(0);
     const wc = buildWorld(conc, mats(), {});
-    expect(keyed(wc, SUBWAY_KEYS.concrete).length).toBeGreaterThan(0);
-    expect(keyed(wc, SUBWAY_KEYS.concreteCeil).length).toBeGreaterThan(0);
-    expect(keyed(wc, SUBWAY_KEYS.tileUpper).length).toBe(0);
+    expect(keyed(wc, 'subway-concrete-dado').length).toBeGreaterThan(0);
+    expect(keyed(wc, 'subway-concrete-ceil').length).toBeGreaterThan(0);
+    expect((keyed(wc, 'subway-concrete-dado')[0].material as THREE.Material).userData.subwayArchTex).toBe('concretePrecast');
+    expect(meshes(wc).some(m => /pit-concrete|mine-rock/.test(String((m.material as THREE.MeshStandardMaterial).map?.name ?? '')))).toBe(false);
   }, 240_000);
 });

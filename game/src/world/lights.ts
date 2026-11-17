@@ -435,7 +435,7 @@ export class StationLighting {
     }
     // Glow cards for every working fixture.
     this.glowIndex = new Int32Array(fixtures.length).fill(-1);
-    const working = fixtures.map((_, i) => i).filter(i => !fixtures[i].broken && fixtures[i].power > 0.01);
+    const working = fixtures.map((_, i) => i).filter(i => !fixtures[i].broken && fixtures[i].power > 0.01 && !fixtures[i].noGlow); // (subway rework: + a concealed cove strip has no glow card)
     if (working.length && MOOD.glow > 0) {
       const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), glowMaterial(opts.far ?? 70), working.length);
       const m4 = new THREE.Matrix4();

@@ -11,9 +11,9 @@
 // keeps at least FORM_MIN_CLEAR of clear height above the floor (taller than any door head or MIN_HEADROOM).
 // Version-1 stations (no identity) and every non-public / extension / stair area are 'flat' (drawn exactly as before).
 
-import {CELL, type Grid} from './grid';
+import {CELL, SOLID, type Grid} from './grid';
 import {hallBays, type HallBays} from './subwayBays';
-import type {Area, StationLayout} from './stationTypes';
+import {PENDANT_Y, type Area, type StationLayout} from './stationTypes';
 
 export type CeilingKind = 'flat' | 'beams' | 'coffer' | 'jack' | 'vault' | 'rock';
 
@@ -29,7 +29,7 @@ export interface CeilingForm {
   rib: number; module: number;
   /** Vault rise (m): 'jack' = between two beams along the long axis; 'vault' / 'rock' = across the hall's width. */
   rise: number;
-  /** 'vault' / 'rock': the springing height along both long walls (absolute, m). */
+  /** 'vault' / 'rock': the springing height along both long walls (absolute, m; the drawn vault is VAULT_GAP lower throughout). */
   spring: number;
   /** The bay rhythm the form follows. */
   bays: HallBays;
@@ -39,6 +39,13 @@ export interface CeilingForm {
 export const FORM_MIN_CLEAR = 3.4;
 /** Areas lower than this (floor to ceiling, m) stay flat. */
 const FORM_MIN_HEIGHT = 3.9;
+/**
+ * A vault ('vault' / 'rock') springs at least this high above the floor: above every dresser pendant (PENDANT_Y) with room for its body,
+ * so no existing fixture of a reloaded station ends up above (inside) the vault.
+ */
+const VAULT_MIN_SPRING = PENDANT_Y + 0.4;
+/** A drawn vault stays this far below the flat cell ceiling it hangs from (no coplanar crown). */
+export const VAULT_GAP = 0.04;
 
 const STAIRISH: ReadonlySet<string> = new Set(['stair', 'end-stair', 'stair-core', 'landing', 'escalator', 'crossover', 'catwalk', 'upper-concourse', 'overlook']);
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -63,8 +70,26 @@ function formable(layout: Pick<StationLayout, 'identity'>, a: Area): boolean {
   return a.ceil - areaFloor(a) >= FORM_MIN_HEIGHT;
 }
 
+/**
+ * Are an area's two long sides walls (a vault springs from them)? False when more than a quarter of either side is open — a platform's
+ * track bed, a hall open to a neighbouring space — where a vault's edge would hang in mid-air.
+ */
+function longSidesClosed(layout: Partial<Pick<StationLayout, 'levels' | 'grid'>>, a: Area, b: HallBays): boolean {
+  const g = layout.levels?.[a.level ?? 0]?.grid ?? layout.grid;
+  if (!g) return true;
+  let open = 0, n = 0;
+  for (let s = b.a0 + 0.75; s < b.a1 - 0.5; s += 1) {
+    for (const c of [b.c0 - CELL / 2, b.c1 + CELL / 2]) {
+      const x = Math.floor((b.alongX ? s : c) / CELL), z = Math.floor((b.alongX ? c : s) / CELL);
+      n++;
+      if (x >= 0 && z >= 0 && x < g.w && z < g.h && g.cells[z * g.w + x] !== SOLID) open++;
+    }
+  }
+  return n === 0 || open / n <= 0.25;
+}
+
 /** The ceiling form of an area (deterministic from the layout; 'flat' for version-1 stations). */
-export function ceilingFormOf(layout: Pick<StationLayout, 'identity' | 'props'>, a: Area): CeilingForm {
+export function ceilingFormOf(layout: Pick<StationLayout, 'identity' | 'props'> & Partial<Pick<StationLayout, 'levels' | 'grid'>>, a: Area): CeilingForm {
   const floor = areaFloor(a), ceil = a.ceil, H = ceil - floor;
   const bays = hallBays(layout, a);
   const flat: CeilingForm = {kind: 'flat', ceil, floor, beam: 0, beamW: 0, rib: 0, module: 0, rise: 0, spring: ceil, bays};
@@ -77,13 +102,15 @@ export function ceilingFormOf(layout: Pick<StationLayout, 'identity' | 'props'>,
   const beamW = H >= 6 ? 0.6 : 0.45;
   const with_ = (o: Partial<CeilingForm>): CeilingForm => ({...flat, beam, beamW, ...o});
   // the cavern family: every formable public space sits in painted rock — a rock vault across its width
+  // (a vault needs walls to spring from: never over a platform, whose track side is open, nor a hall open along a long side)
+  const closed = a.type !== 'platform' && longSidesClosed(layout, a, bays);
   if (theme === 'cavern') {
-    const rise = r2(Math.max(0, Math.min(width * 0.22, H - FORM_MIN_CLEAR - 0.6, 3.2)));
-    return rise >= 0.6 ? with_({kind: 'rock', beam: 0, beamW: 0, rise, spring: r2(ceil - rise)}) : with_({kind: 'beams'});
+    const rise = r2(Math.max(0, Math.min(width * 0.22, H - VAULT_MIN_SPRING, 3.2)));
+    return rise >= 0.6 && closed ? with_({kind: 'rock', beam: 0, beamW: 0, rise, spring: r2(ceil - rise)}) : with_({kind: 'beams'});
   }
   // signature halls
-  if (a.role === 'interchange-hall') {
-    const rise = r2(Math.max(0, Math.min(width * 0.18, H - FORM_MIN_CLEAR - 0.8, 3.0)));
+  if (a.role === 'interchange-hall' && closed) {
+    const rise = r2(Math.max(0, Math.min(width * 0.18, H - VAULT_MIN_SPRING, 3.0)));
     if (rise >= 0.8) return with_({kind: 'vault', beam: 0.3, beamW: 0.5, rise, spring: r2(ceil - rise)});
   }
   if (a.role === 'grand-ticket-hall' || a.role === 'waiting-hall' || theme === 'brutalist') {
@@ -113,7 +140,7 @@ export function soffitAt(form: CeilingForm, x: number, z: number, grid?: Pick<Gr
   const b = form.bays, along = b.alongX ? x : z, across = b.alongX ? z : x;
   if (form.kind === 'vault' || form.kind === 'rock') {
     const t = Math.max(0, Math.min(1, (across - b.c0) / Math.max(1e-6, b.c1 - b.c0)));
-    return r2(form.ceil - form.rise * (2 * t - 1) * (2 * t - 1));
+    return r2(form.ceil - VAULT_GAP - form.rise * (2 * t - 1) * (2 * t - 1));
   }
   const onBeam = b.lines.some(l => Math.abs(along - l) <= form.beamW / 2);
   if (onBeam) return r2(form.ceil - form.beam);
