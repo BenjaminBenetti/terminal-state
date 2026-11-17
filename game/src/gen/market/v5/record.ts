@@ -37,9 +37,9 @@ function standNear(g: Grid, x: number, z: number, area: number, ok: (x: number, 
   return best;
 }
 
-/** layout.market (version 5, or 6: the same crevice in its irregular envelope — task studio-market-irregular-envelope-20261116-210503-01)
- *  of a furnished crevice. */
-export function creviceRecord(layout: StationLayout, cc: CreviceCarve, anchors: CreviceAnchors, names: Record<MarketStallId, string>, rng: Rng, v: 5 | 6 = 5): MarketLayout {
+/** layout.market (version 5, or 6: the same crevice in its irregular envelope — task studio-market-irregular-envelope-20261116-210503-01;
+ *  or 7: + its irregular settlement floorplan — task studio-market-irregular-settlement-20261117-003819-01) of a furnished crevice. */
+export function creviceRecord(layout: StationLayout, cc: CreviceCarve, anchors: CreviceAnchors, names: Record<MarketStallId, string>, rng: Rng, v: 5 | 6 | 7 = 5): MarketLayout {
   const base = (lv: number) => cc.bases[lv] ?? 0;
   const stallOf = (d: StallDressed2, nearX: number, nearZ: number, nearY: number): MarketStall => {
     const y = base(d.level);

@@ -18,6 +18,9 @@
 // and every container is a separate box on its own ledge (the stacks step back, storey by storey, into the rock).
 // Layout version 6 (task studio-market-irregular-envelope-20261116-210503-01) carves the same settlement and then breaks the box around
 // it (gen/market/v6/envelope.ts: the overhead, the top terrace's alcoves, the end clefts, the chasm's bed); version 5 never reaches it.
+// Layout version 7 (task studio-market-irregular-settlement-20261117-003819-01) carves the settlement itself on an irregular floorplan
+// (gen/market/v7/settlement.ts): every band's columns, every walk's and low walk's width and the pit's edges per row, from the plan's
+// sections (each walk / low walk several areas, one per run of rows with the same span); versions 5 / 6 never reach it.
 
 import {CELL, FLOOR, SOLID, VOID, type Grid} from '../../grid';
 import {Kit, TUN, type TrenchCells} from '../../stationKit';
@@ -27,6 +30,7 @@ import type {Rng} from '../../../core/rng';
 import type {MarketShopId} from '../marketTypes';
 import {fillRun} from '../v2/carve';
 import {stampEnvelope, type AlcovePlan, type CreviceEnvelope, type EnvelopeStamp} from '../v6/envelope';
+import {SETTLEMENT, settlementColumns, type CreviceSettlement} from '../v7/settlement';
 import {CREVICE, creviceRows, type CreviceFrame} from './frame';
 
 /** Open stairs / the crevice: headroom capped by the cell ceiling (the crevice's top: Ramp.capCeil). */
@@ -98,6 +102,20 @@ export interface CreviceCarve {
   M: (r: Rect) => Rect;
   /** (layout version 6, task studio-market-irregular-envelope-20261116-210503-01) The irregular envelope stamped on this carve. */
   envelope?: {plan: CreviceEnvelope; stamp: EnvelopeStamp};
+  /** (layout version 7, task studio-market-irregular-settlement-20261117-003819-01) The irregular settlement floorplan this carve follows. */
+  settle?: CreviceSettle;
+}
+
+/** A version-7 carve's floorplan (gen/market/v7/settlement.ts): per row, world columns. Canonical sides ('W' / 'E': the frame's). */
+export interface CreviceSettle {
+  plan: CreviceSettlement;
+  /** Every walk / low walk's areas: per canonical side, storey 0 (the low walk's runs) and storeys 1-3 (the terrace's runs). */
+  parts: {W: Area[][]; E: Area[][]};
+  /** The pit's runs of rows with the same span (world cells): the chasm is their union (`chasm` their bounding rect). */
+  pit: Rect[];
+  /** World columns of side s's walk in front of band L on row y: [first, last] (first: the column against the band's fronts; the walk
+   *  runs from it away from the rock to `last`). Storey 0: the low walk / the square's / weir's side lane (its first 5 columns). */
+  walkCols: (s: 'W' | 'E', L: number, y: number) => [number, number];
 }
 
 /** Why the last attempts failed (QA / tests). */
@@ -111,9 +129,10 @@ export const CREVICE_PAINTS = 8;
  * Carves the whole crevice into a fresh 4-storey kit; null when the program does not fit (the caller re-rolls). `env` (layout version
  * 6, task studio-market-irregular-envelope-20261116-210503-01): the irregular envelope (gen/market/v6/envelope.ts) — the top terrace's
  * alcoves reserved before the container fill, every top-storey nook under its soffit, the envelope stamped last. Absent: version 5,
- * exactly as shipped.
+ * exactly as shipped. `plan` (layout version 7, task studio-market-irregular-settlement-20261117-003819-01): the irregular settlement
+ * floorplan (gen/market/v7/settlement.ts) — every band's, walk's and the pit's columns per row; absent: version 5's columns, as shipped.
  */
-export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnvelope): CreviceCarve | null {
+export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnvelope, plan?: CreviceSettlement): CreviceCarve | null {
   const W = k.g.w, H = k.g.h;
   const M = (r: Rect): Rect => (f.mirror ? {x: W - r.x - r.w, y: r.y, w: r.w, h: r.h} : {...r});
   const mx = (x: number) => (f.mirror ? W - 1 - x : x);
@@ -131,9 +150,22 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnv
   /** Band L's back wall column (west side, canonical). */
   const xb = (L: number) => R.x0 + S.pitch * (S.bands - 1 - L);
   const faceOf = (s: 'W' | 'E'): Side => ((s === 'W') !== f.mirror ? 'E' : 'W');
+  // (layout version 7: the floorplan's columns per row — band L's back wall on row y; versions 5 / 6: version 5's fixed columns)
+  const P = plan ? settlementColumns(R, plan) : null;
+  const xbAt = (s: 'W' | 'E', L: number, y: number) => (P ? P.back(s, L, y) : xb(L));
+  /** Runs of rows [y0, y1) with the same side-canonical column span [a, b) (`at`). */
+  const runsOf = (y0: number, y1: number, at: (y: number) => [number, number]) => {
+    const out: {y0: number; y1: number; a: number; b: number}[] = [];
+    for (let y = y0; y < y1; y++) {
+      const [a, b] = at(y), q = out[out.length - 1];
+      if (q && q.a === a && q.b === b) q.y1 = y + 1; else out.push({y0: y, y1: y + 1, a, b});
+    }
+    return out;
+  };
+  const longest = (as: Area[]) => as.reduce((p, q) => (q.w * q.h > p.w * p.h ? q : p));
 
   // --- 1. Track bed + side platform under the hall's vault (edge N, the track 2.0 m north of the edge): the earlier versions' docking ---
-  const bed = M({x: S.bedX, y: S.bedY, w: f.Lp + 2 * TUN, h: SINGLE_BED_CELLS});
+  const bed = M({x: S.bedX + (f.shift ?? 0), y: S.bedY, w: f.Lp + 2 * TUN, h: SINGLE_BED_CELLS});
   for (let y = bed.y; y < bed.y + bed.h; y++) for (let x = bed.x; x < bed.x + bed.w; x++) {
     const i = g[0].idx(x, y);
     g[0].cells[i] = VOID; g[0].ceil[i] = S.hallY; g[0].floor[i] = -TRENCH_DEPTH;
@@ -150,21 +182,46 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnv
   const wL = R.xc0 - S.lowWalk, wR = R.xc1 + S.lowWalk; // the floor's columns [wL, wR) (canonical)
   const pub = (r: Rect, label: string, L = 0, role?: string) => k.addArea(M(r), 'concourse', 'concourse', top, -1, {...lvl(L, label, role ? {role} : {}), publicSpace: true});
   const square = pub({x: wL, y: R.z0, w: wR - wL, h: f.square}, 'Arrival Square');
-  const weir = pub({x: wL, y: R.chasm1, w: wR - wL, h: f.weir}, 'The Weir');
-  const lowW = pub({x: wL, y: R.chasm0, w: S.lowWalk, h: R.chasm1 - R.chasm0}, 'Low walk');
-  const lowE = pub({x: R.xc1, y: R.chasm0, w: S.lowWalk, h: R.chasm1 - R.chasm0}, 'Low walk');
-  const chasm = M({x: R.xc0, y: R.chasm0, w: f.chasmW, h: R.chasm1 - R.chasm0});
-  for (let y = chasm.y; y < chasm.y + chasm.h; y++) for (let x = chasm.x; x < chasm.x + chasm.w; x++) {
-    const i = g[0].idx(x, y);
-    g[0].cells[i] = VOID; g[0].area[i] = -1; g[0].ceil[i] = top; g[0].floor[i] = S.chasmY;
+  let weir: Area, chasm: Rect, low: {W: Area; E: Area};
+  const parts: {W: Area[][]; E: Area[][]} = {W: [[], [], [], []], E: [[], [], [], []]};
+  const pit: Rect[] = [];
+  const pitCell = (x: number, y: number) => { const i = g[0].idx(x, y); g[0].cells[i] = VOID; g[0].area[i] = -1; g[0].ceil[i] = top; g[0].floor[i] = S.chasmY; };
+  if (!P) {
+    weir = pub({x: wL, y: R.chasm1, w: wR - wL, h: f.weir}, 'The Weir');
+    const lowW = pub({x: wL, y: R.chasm0, w: S.lowWalk, h: R.chasm1 - R.chasm0}, 'Low walk');
+    const lowE = pub({x: R.xc1, y: R.chasm0, w: S.lowWalk, h: R.chasm1 - R.chasm0}, 'Low walk');
+    chasm = M({x: R.xc0, y: R.chasm0, w: f.chasmW, h: R.chasm1 - R.chasm0});
+    for (let y = chasm.y; y < chasm.y + chasm.h; y++) for (let x = chasm.x; x < chasm.x + chasm.w; x++) pitCell(x, y);
+    low = {W: f.mirror ? lowE : lowW, E: f.mirror ? lowW : lowE};
+  } else {
+    // (layout version 7) the weir between the two ground bands' fronts on its rows (the ground band's last section: one span); each low
+    // walk from its band's fronts to the pit's edge, one area per run of rows with the same span; the pit between the two edges
+    weir = pub({x: P.front('W', 0, R.chasm1) + 1, y: R.chasm1, w: sx('E', P.front('E', 0, R.chasm1)) - P.front('W', 0, R.chasm1) - 1, h: f.weir}, 'The Weir');
+    for (const s of ['W', 'E'] as const) {
+      for (const q of runsOf(R.chasm0, R.chasm1, y => [P.front(s, 0, y) + 1, P.pit(s, y)])) parts[s][0].push(pub({...span(s, q.a, q.b), y: q.y0, h: q.y1 - q.y0}, 'Low walk'));
+    }
+    let bx0 = Infinity, bx1 = -Infinity;
+    for (const q of runsOf(R.chasm0, R.chasm1, y => [P.pit('W', y), sx('E', P.pit('E', y)) + 1])) {
+      pit.push(M({x: q.a, y: q.y0, w: q.b - q.a, h: q.y1 - q.y0}));
+      for (let y = q.y0; y < q.y1; y++) for (let x = q.a; x < q.b; x++) pitCell(mx(x), y);
+      bx0 = Math.min(bx0, q.a); bx1 = Math.max(bx1, q.b);
+    }
+    chasm = M({x: bx0, y: R.chasm0, w: bx1 - bx0, h: R.chasm1 - R.chasm0});
+    low = {W: longest(parts.W[0]), E: longest(parts.E[0])};
   }
-  const low = {W: f.mirror ? lowE : lowW, E: f.mirror ? lowW : lowE};
 
   // --- 3. The terrace walks (storeys 1-3): per side, on the roofs of the band below (B_(L-1)'s columns), the whole crevice length -----
   const walks: {W: Area[]; E: Area[]} = {W: [], E: []};
   for (const s of ['W', 'E'] as const) for (let L = 1; L < S.bands; L++) {
+    const label = L === 1 ? 'Lower terrace' : L === 2 ? 'Middle terrace' : 'Upper terrace';
+    if (P) {
+      // (layout version 7) the walk between this band's fronts and the band below's: one area per run of rows with the same span
+      for (const q of runsOf(R.z0, R.z1, y => [P.front(s, L, y) + 1, P.front(s, L - 1, y) + 1])) parts[s][L].push(pub({...span(s, q.a, q.b), y: q.y0, h: q.y1 - q.y0}, label, L, 'catwalk'));
+      walks[s].push(longest(parts[s][L]));
+      continue;
+    }
     const a = xb(L - 1) + 1;
-    walks[s].push(pub({...span(s, a, a + S.pitch), y: R.z0, h: f.Lc}, L === 1 ? 'Lower terrace' : L === 2 ? 'Middle terrace' : 'Upper terrace', L, 'catwalk'));
+    walks[s].push(pub({...span(s, a, a + S.pitch), y: R.z0, h: f.Lc}, label, L, 'catwalk'));
   }
 
   // --- 4. The bar's deck (storey 1) over the square's north part, from the west lower terrace to the east one ------------------------
@@ -199,7 +256,11 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnv
   let prevPaint = -1;
   const paintOf = () => { let p = rng.int(0, CREVICE_PAINTS - 1); if (p === prevPaint) p = (p + 3) % CREVICE_PAINTS; prevPaint = p; return p; };
   /** The walk (area) in front of band L of side s: the low walk / square / weir (L = 0, by row) or the storey-L walk. */
-  const walkOf = (s: 'W' | 'E', L: number, y: number): Area => (L === 0 ? (y < R.chasm0 ? square : y >= R.chasm1 ? weir : low[s]) : walks[s][L - 1]);
+  const walkOf = (s: 'W' | 'E', L: number, y: number): Area => {
+    // (layout version 7: the walk area just in front of the band's fronts on that row — several per walk; versions 5 / 6 as shipped)
+    if (P) return k.areas[g[L].area[g[L].idx(mx(sx(s, P.front(s, L, y) + 1)), y)]];
+    return L === 0 ? (y < R.chasm0 ? square : y >= R.chasm1 ? weir : low[s]) : walks[s][L - 1];
+  };
   /** Band L's rows where the walk in front of its fronts is a stair run (band L-1's bays: the run lies along band L's front walls), +- a
    *  row (the run's rails): no door opens there. */
   const runRows = (s: 'W' | 'E', L: number) => f.stairs.filter(st => st.side === s && st.from === L - 1).map(st => [R.z0 + st.y + S.stairFoot - 1, R.z0 + st.y + bayLen + 1] as const);
@@ -226,7 +287,7 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnv
    * shift), `wide` a shopfront.
    */
   const container = (s: 'W' | 'E', L: number, y0: number, y1: number, use: CrevUse, opts: {open?: boolean; back?: 'room' | 'merge' | null; width?: number; wide?: boolean; shift?: number; label?: string; stall?: MarketShopId} = {}): CrevContainer => {
-    const b = xb(L);
+    const b = xbAt(s, L, y0);
     const boxC: Rect = {...span(s, b, b + S.pitch + 1), y: y0 - 1, h: y1 - y0 + 2};
     const inner: Rect = {...span(s, b + 1, b + 1 + S.inner), y: y0, h: y1 - y0};
     const fit = doorFit(s, L, y0, y1, opts.width ?? 2, opts.shift ?? 0);
@@ -237,7 +298,7 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnv
     const merge = opts.back === 'merge';
     const roomC: Rect = merge ? {...span(s, b - S.inner, b + 1 + S.inner), y: y0, h: y1 - y0} : inner;
     const type = use === 'shop' ? 'shop' : use === 'workshop' ? 'utility' : use === 'kitchen' || use === 'bunks' || use === 'home' ? 'crew-room' : 'storage';
-    const onto = walkOf(s, L, Math.floor((y0 + y1) / 2));
+    const onto = walkOf(s, L, P ? fit!.dy + (fit!.w >> 1) : Math.floor((y0 + y1) / 2));
     const a = k.addArea(M(roomC), 'room', type, cont(L), onto.id, lvl(L, opts.label ?? (use === 'home' ? 'Home' : 'Container')));
     if (use === 'workshop') a.purpose = 'workshop';
     c.area = a.id;
@@ -247,7 +308,9 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnv
     c.door = M({...span(s, b + S.pitch, b + S.pitch + 1), y: dy, h: w});
     const door = c.door;
     pendingDoors.push(() => { k.carveDoor(door, onto, a, S.doorH, false); });
-    if (opts.back === 'room') {
+    // (layout version 7: a back room the canvas has no rock for — a deep setback near its edge — is left out)
+    const backFits = !P || (() => { const r = M({...span(s, b - S.inner - 1, b), y: y0, h: 1}); return r.x >= 1 && r.x + r.w <= W - 1; })();
+    if (opts.back === 'room' && backFits) {
       // the backroom: the rock-cut room behind the back wall (under the next band's container), joined by a 2-cell door
       const bk = k.addArea(M({...span(s, b - S.inner, b), y: y0, h: y1 - y0}), 'room', type, cont(L), a.id, lvl(L, use === 'home' || use === 'bunks' ? 'Back room' : 'Store'));
       const by = y0 + Math.max(1, Math.min(len - 3, Math.floor(len / 2) - 1 + rng.int(-2, 2)));
@@ -294,6 +357,8 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnv
   // (layout version 6) the top terrace's alcoves: the container row gives way to a deep rock-cut setback (the first candidate row clear
   // of everything reserved, of the stair runs in front of the band and of the top bridges' mouths)
   const alcoveAt = new Map<string, AlcovePlan>();
+  /** (layout version 7) Does a section break of band L fall inside rows [y0, y1)? (a unit stands in one section) */
+  const broken = (s: 'W' | 'E', L: number, y0: number, y1: number) => !!plan && plan.bands[s][L].breaks.some(b => b >= y0 && b < y1);
   if (env) for (const al of env.alcoves) {
     const L = S.bands - 1, s = al.side;
     for (const y0 of al.rows) {
@@ -301,6 +366,7 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnv
       if (reserved[s][L].some(([a, b]) => y0 < b + 3 && y1 > a - 3)) continue;
       if (runRows(s, L).some(([a, b]) => y0 < b + 2 && y1 > a - 2)) continue;
       if (f.bridges.some(br => br.level === L && y0 < R.z0 + br.y + S.bridgeW + 3 && y1 > R.z0 + br.y - 3)) continue;
+      if (broken(s, L, y0, y1)) continue;
       reserved[s][L].push([y0, y1, 'alcove']);
       alcoveAt.set(`${s}:${y0}`, al);
       break;
@@ -313,6 +379,7 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnv
       const y0 = rng.int(R.chasm0 + 2, R.chasm1 - n - 2);
       if (reserved[s][L].some(([a, b]) => y0 < b + 3 && y0 + n > a - 3)) continue;
       if (runRows(s, L).some(([a, b]) => y0 < b && y0 + n > a)) continue; // (its mouth would open onto a stair run below)
+      if (broken(s, L, y0, y0 + n)) continue;
       reserved[s][L].push([y0, y0 + n, 'pocket']);
       break;
     }
@@ -323,7 +390,8 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnv
   // stays a pocket. Uses are assigned after (gen/market/v5/uses.ts rules here, inline)
   const fillers: {s: 'W' | 'E'; L: number; y0: number; y1: number}[] = [];
   for (const s of ['W', 'E'] as const) for (let L = 0; L < S.bands; L++) {
-    const res = reserved[s][L].slice().sort((p, q) => p[0] - q[0]);
+    // (layout version 7: a section break is a container end wall row — the runs split there, like at a special's wall)
+    const res = [...reserved[s][L], ...(plan ? plan.bands[s][L].breaks.map(b => [b + 1, b, 'special'] as [number, number, string]) : [])].sort((p, q) => p[0] - q[0]);
     let y = R.z0 + 1;
     const runs: [number, number][] = [];
     for (const [a, b, why] of res) {
@@ -334,7 +402,7 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnv
     }
     if (R.z1 - 1 > y) runs.push([y, R.z1 - 1]);
     for (const [a, b] of runs) {
-      const ws = b - a >= S.contLen[0] ? fillRun(a, b, S.contLen[0], S.contLen[1], S.contAvg, rng) : null;
+      const cMin = plan ? SETTLEMENT.contMin : S.contLen[0], ws = b - a >= cMin ? fillRun(a, b, cMin, S.contLen[1], plan ? SETTLEMENT.contAvg : S.contAvg, rng) : null;
       if (!ws) {
         // too short for a box: a pocket, when enough of its mouth (2 rows) opens onto the walk clear of the stair runs below
         let mouth = 0;
@@ -371,7 +439,8 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnv
   for (const s of ['W', 'E'] as const) for (let L = 0; L < S.bands; L++) for (const [a, b, why] of reserved[s][L]) {
     if (why !== 'pocket' && why !== 'alcove') continue;
     const al = why === 'alcove' ? alcoveAt.get(`${s}:${a}`) : undefined, deep = al?.deep ?? 0;
-    const r = M({...span(s, xb(L) + 1 - deep, xb(L) + S.pitch + 1), y: a, h: b - a});
+    const xp = xbAt(s, L, a);
+    const r = M({...span(s, xp + 1 - deep, xp + S.pitch + 1), y: a, h: b - a});
     const ceil = L < S.bands - 1 ? cont(L) : env ? al?.soffit ?? env.nooks[topNook++ % env.nooks.length] : top;
     const ar = k.addArea(r, 'concourse', 'concourse', ceil, walkOf(s, L, a).id, {...lvl(L, 'Terrace nook'), publicSpace: true});
     pockets.push({area: ar.id, rect: r, level: L, side: s, ...(deep ? {deep} : {})});
@@ -381,7 +450,7 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnv
   const spec = {...STAIR, headroom: OPEN_HEADROOM};
   const stairs: CrevStair[] = [];
   for (const st of f.stairs) {
-    const L = st.from, b = xb(L), y0 = R.z0 + st.y;
+    const L = st.from, y0 = R.z0 + st.y, b = xbAt(st.side, L, y0);
     // the foot (storey L): the bay's first rows across the band, then the strip beside the run (its ceiling the catwalk's slab)
     const footR = M({...span(st.side, b + 1, b + S.pitch + 1), y: y0, h: bayLen});
     const foot = k.addArea(footR, 'passage', 'passage', cont(L), -1, {...lvl(L, 'Stair foot'), publicSpace: true});
@@ -401,8 +470,10 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnv
   const bridges: CrevBridge[] = [];
   for (const br of f.bridges) {
     // the deck spans [a, the east storey-L walk's first column = sx('E', a - 1)) (symmetric about the centre line: mirror-invariant)
-    const L = br.level, a = xb(L - 1) + S.pitch + 1; // one past the west storey-L walk
-    const rw = M({x: a, y: R.z0 + br.y, w: sx('E', a - 1) - a, h: S.bridgeW});
+    const L = br.level, a = (P ? P.front('W', L - 1, R.z0 + br.y) : xb(L - 1) + S.pitch) + 1; // one past the west storey-L walk
+    // (layout version 7: to the east storey-L walk's own edge — the two sides' edges differ; straight over the deck's rows)
+    const e = P ? sx('E', P.front('E', L - 1, R.z0 + br.y)) : sx('E', a - 1);
+    const rw = M({x: a, y: R.z0 + br.y, w: e - a, h: S.bridgeW});
     if (rw.y < R.chasm0 || rw.y + rw.h > R.chasm1) return fail('bridge off the chasm');
     for (let y = rw.y; y < rw.y + rw.h; y++) for (let x = rw.x; x < rw.x + rw.w; x++) {
       for (let lo = 0; lo < L; lo++) {
@@ -422,9 +493,18 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnv
   const envelope = env ? {plan: env, stamp: stampEnvelope(env, g, top, f.mirror, chasm)} : undefined;
 
   const denSlot = containers.findIndex(c => c.use === 'den');
+  // (layout version 7) the floorplan's record: every walk's areas, the pit's runs, the walk columns per row
+  const settle: CreviceSettle | undefined = P && plan ? {
+    plan, parts, pit,
+    walkCols: (s, L, y) => {
+      const first = (L ? P.front(s, L, y) : P.front(s, 0, y)) + 1;
+      const last = L ? P.front(s, L - 1, y) : y >= R.chasm0 && y < R.chasm1 ? P.pit(s, y) - 1 : first + S.lowWalk - 1;
+      return [mx(sx(s, first)), mx(sx(s, last))];
+    },
+  } : undefined;
   return {
     f, rows: R, bases: B, bed, trench, platform, gates, square, weir, low, walks, bar, chasm, containers, stairs, bridges, pockets, denSlot,
-    eastSign: f.mirror ? -1 : 1, mx, M, ...(envelope ? {envelope} : {}),
+    eastSign: f.mirror ? -1 : 1, mx, M, ...(envelope ? {envelope} : {}), ...(settle ? {settle} : {}),
   };
 }
 

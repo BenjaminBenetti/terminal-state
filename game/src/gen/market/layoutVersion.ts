@@ -13,6 +13,9 @@
 //  - version 6 (task studio-market-irregular-envelope-20261116-210503-01) = version 5's crevice in an IRREGULAR ENVELOPE (gen/market/v6/
 //    envelope.ts: a stepped, zig-zag overhead instead of the flat lid, the top terrace's alcoves, the end clefts, the chasm's shelves) —
 //    a recorded version 5 stays version 5, byte for byte;
+//  - version 7 (task studio-market-irregular-settlement-20261117-003819-01) = version 6 on an IRREGULAR SETTLEMENT FLOORPLAN (gen/market/v7/
+//    settlement.ts: each storey's container row, terrace walk and the pit's edges in seeded sections — setbacks, bends, landings, plazas,
+//    lookouts) — a recorded version 6 stays version 6, byte for byte;
 //  - a station's section memory records the version it was first built with (lane `market.layout` = {v}); a memory with visits but no
 //    record was entered under the first market's build -> version 1, forever (its geometry, area ids, stalls and stock never reroll);
 //  - a station never entered (or a new campaign) -> the current version, recorded when it is first built.
@@ -22,8 +25,9 @@ export const MARKET_LAYOUT_LANE = 'market.layout';
 /** 1 = the first market (one salvaged shed); 2 = the dense container settlement (task studio-market-rework-20261108-074144-01); 3 = the
  *  settlement with the upper-level bar (task studio-market-bar-20261108-225231-01); 4 = + the corpse buyer's den (task
  *  studio-corpse-market-shop-20261114-031614-01); 5 = the crevice (task studio-survivor-market-crevice-20261116-074419); 6 = the crevice
- *  in its irregular envelope (task studio-market-irregular-envelope-20261116-210503-01). */
-export const MARKET_LAYOUT_VERSION = 6;
+ *  in its irregular envelope (task studio-market-irregular-envelope-20261116-210503-01); 7 = on its irregular settlement floorplan (task
+ *  studio-market-irregular-settlement-20261117-003819-01). */
+export const MARKET_LAYOUT_VERSION = 7;
 
 /** The layout version a market station regenerates with, from its section memory (undefined = never touched). */
 export function marketLayoutVersionFor(mem: {visits: number; lanes: Record<string, unknown>} | undefined): number {

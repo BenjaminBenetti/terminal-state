@@ -65,6 +65,8 @@ export const MARKET_PEOPLE = {
   stuckM: 0.25, stuckS: 2.5,
   /** Path search budget (cells expanded). */
   maxExpand: 20000,
+  /** A route leg shorter than this (m) is a single step between cell centres (squareSteps: a diagonal one is ~0.71 m). */
+  squareStep: 1,
   /** Traders turn toward a player within `notice` m in front of the counter, by at most `turnMax` rad off their post. */
   notice: 4.5, turnMax: 1.05,
   /** Keep-out round the parked train: car footprint + `body` m; platform-door aprons `apron` m deep, `apronSide` m past the jambs. */
@@ -533,14 +535,16 @@ export class MarketPeople {
   /**
    * (Lane PEOPLE) A route's diagonal steps that climb onto another floor (a stair's side onto the catwalk beside it, ~0.45 m between cell
    * centres) become two straight steps through the corner cell on the higher floor: the walker steps across at the ramp's own height,
-   * never down the ramp while stepping up (the 0.45 m step rule then refused it, and it stuck there).
+   * never down the ramp while stepping up (the 0.45 m step rule then refused it, and it stuck there). Only such single steps (under
+   * `MARKET_PEOPLE.squareStep` m): a long string-pulled leg up a whole flight and out past its head (a bent walk's route, layout
+   * version 7) is no step — its "corner" was the floor above beside the stair's foot, 2.5 m over the walker, who stood there for good.
    */
   squareSteps(path: Waypoint[], ay: number): Waypoint[] {
     const L = this.host.levels, out: Waypoint[] = [];
     let px = NaN, py = ay, pz = NaN;
     for (const w of path) {
       const wy = w[3] ?? py;
-      if (out.length && w[2] === undefined && Math.abs(wy - py) > 0.25 && Math.abs(w[0] - px) > 0.1 && Math.abs(w[1] - pz) > 0.1) {
+      if (out.length && w[2] === undefined && Math.abs(wy - py) > 0.25 && Math.abs(w[0] - px) > 0.1 && Math.abs(w[1] - pz) > 0.1 && Math.hypot(w[0] - px, w[1] - pz) < MARKET_PEOPLE.squareStep) {
         const hi = Math.max(wy, py);
         for (const [cx, cz] of [[w[0], pz], [px, w[1]]] as const) {
           const s = L.supportIn(cx, cz, hi + 0.05, 0.1);

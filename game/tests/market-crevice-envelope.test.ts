@@ -2,6 +2,9 @@
 // inside an IRREGULAR ENVELOPE (gen/market/v6/envelope.ts) over a seed sample, both mirror states:
 //  - the version policy: 6 for new / unvisited markets; a recorded 1-5 stays what it was — a recorded 5 regenerates byte for byte the
 //    shipped version 5 (fingerprints of origin/main aeec54a4's generator; the envelope draws on its own stream);
+//    (re-pinned by task studio-market-irregular-settlement-20261117-003819-01: new / unvisited markets build version 7 now — this envelope
+//    around an irregular settlement floorplan, market-crevice-settlement.test.ts; a recorded 6 regenerates byte for byte the shipped
+//    version 6: fingerprints of origin/main dc27a8d4's generator)
 //  - every layout validates (creviceIssues + the envelope's rules) within the generation budget; deterministic; the settlement kept
 //    (containers both sides on four storeys, bridges on every terrace, the stalls / bar / den);
 //  - NO FLAT LID: many overhead heights (none dominant), the high slot's line moving sideways down the crevice, the two sides' overhead
@@ -43,6 +46,13 @@ const runs = SEEDS.map(seed => {
   return {seed, L, ms: CREVICE_GEN_STATS.ms, attempts: CREVICE_GEN_STATS.attempts};
 });
 
+/** Version 6 fingerprints of origin/main dc27a8d4's generator (task studio-market-irregular-settlement-20261117-003819-01: computed on it
+ *  before that change and on its branch: identical). */
+const V6_SHIPPED: Record<number, string> = {
+  1: 'af7ac93a3e6f6c35', 2: '1d50e14a587812dc', 3: 'c70fafd688bc1431', 6: '76abe82e05fe3045', 7: '7a38172bb2e344d3', 16: 'bc406c2d97f01697',
+  42: '95f48d1cedf20ce4', 777: 'f3d95b73d37fb219', 4242: '6f79c5853a3b20e2', 9001: '1f07e5d21262b140', 31337: '4462e2950f2182d3',
+  20261116: '1891406ce66fc2d0',
+};
 /** Version 5 fingerprints of origin/main aeec54a4's generator (computed on it before this change and on this branch: identical). */
 const V5_SHIPPED: Record<number, string> = {
   1: 'e946af16c107f1da', 2: '3e7b8ddd81c598b9', 3: 'eff544739592b5ea', 6: '2211edd83cf39d40', 7: 'da986df4ae039cc9', 16: 'fbbe3127697223e4',
@@ -117,21 +127,28 @@ function triangles(group: THREE.Object3D): {c: THREE.Vector3; ny: number; m: THR
 }
 
 describe('Survivor Market layout version 6 (the crevice\'s irregular envelope)', () => {
-  it('the version policy: 6 for new / unvisited markets, a recorded 1-5 kept; a recorded 5 regenerates the shipped version 5 exactly', () => {
-    expect(MARKET_LAYOUT_VERSION).toBe(6);
-    expect(marketLayoutVersionFor(undefined)).toBe(6);
-    expect(marketLayoutVersionFor({visits: 0, lanes: {}})).toBe(6);
+  it('the version policy: 7 for new / unvisited markets, a recorded 1-6 kept; a recorded 5 / 6 regenerates the shipped version exactly', () => {
+    expect(MARKET_LAYOUT_VERSION).toBe(7);
+    expect(marketLayoutVersionFor(undefined)).toBe(7);
+    expect(marketLayoutVersionFor({visits: 0, lanes: {}})).toBe(7);
     expect(marketLayoutVersionFor({visits: 2, lanes: {}})).toBe(1);
-    for (const v of [1, 2, 3, 4, 5, 6]) expect(marketLayoutVersionFor({visits: 4, lanes: {[MARKET_LAYOUT_LANE]: {v}}})).toBe(v);
+    for (const v of [1, 2, 3, 4, 5, 6, 7]) expect(marketLayoutVersionFor({visits: 4, lanes: {[MARKET_LAYOUT_LANE]: {v}}})).toBe(v);
     for (const [s, want] of Object.entries(V5_SHIPPED)) {
       expect(fingerprint(generateMarketLevel({levelSeed: Number(s), layoutVersion: 5})), `seed ${s}`).toBe(want);
     }
     expect(fingerprint(LEVELS.market.generate('main', {levelSeed: 42, layoutVersion: 5}))).toBe(V5_SHIPPED[42]);
     expect(generateMarketLevel({levelSeed: 42, layoutVersion: 5}).market!.crevice!.envelope).toBeUndefined();
-    // the default (no recorded version) builds the enveloped crevice
+    for (const [s, want] of Object.entries(V6_SHIPPED)) {
+      expect(fingerprint(generateMarketLevel({levelSeed: Number(s), layoutVersion: 6})), `seed ${s} (version 6)`).toBe(want);
+    }
+    expect(fingerprint(LEVELS.market.generate('main', {levelSeed: 42, layoutVersion: 6}))).toBe(V6_SHIPPED[42]);
+    const L6 = generateMarketLevel({levelSeed: 42, layoutVersion: 6});
+    expect([L6.market!.v, !!L6.market!.crevice!.envelope, L6.market!.crevice!.settlement]).toEqual([6, true, undefined]);
+    // the default (no recorded version) builds the enveloped crevice, on its irregular settlement floorplan (version 7)
     const L = LEVELS.market.generate('main', {levelSeed: 42});
-    expect(L.market?.v).toBe(6);
+    expect(L.market?.v).toBe(7);
     expect(L.market!.crevice!.envelope).toBeTruthy();
+    expect(L.market!.crevice!.settlement).toBeTruthy();
   });
 
   it('every seed validates within the budget; deterministic; the settlement kept', () => {

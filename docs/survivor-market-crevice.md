@@ -1,4 +1,4 @@
-# The Survivor Market crevice (layout versions 5 and 6)
+# The Survivor Market crevice (layout versions 5, 6 and 7)
 
 Task `studio-survivor-market-crevice-20261116-074419`. Newly built Survivor Markets are an underground **concrete crevice** with a
 layered settlement of converted **shipping containers** terraced up both sides and bridged across. It is an environment redesign: the
@@ -48,6 +48,36 @@ concrete and rock around it are no longer one big box (`game/src/gen/market/v6/e
   the residents' ladder-free graph, and the same names, shops and trade. The extra wall faces are a few thousand triangles in the
   existing material chunks; the culler's atrium tiles are unchanged.
 
+## The irregular settlement floorplan (layout version 7)
+
+Task `studio-market-irregular-settlement-20261117-003819-01`, after version 6: the settlement itself was still square, with every
+terrace a 3 m ribbon, every band stepped back by the same amount and the pit one long rectangle. Version 7 keeps the architecture and the
+envelope, but plans the floorplan per side, per storey and per section of the crevice (`game/src/gen/market/v7/settlement.ts`, its
+own seeded stream):
+
+- **Bands in sections.** Each storey's container row runs in sections of about 5 to 13 m. Each section stands at its own setback toward
+  or away from the pit, so a row bends, jogs and bulges. Each side gives its three terraces a narrow, a middling and a wide character in a
+  seeded order, so some levels stand clearly further back than others, and differently on the two sides. The breaks between sections are
+  staggered from storey to storey, so no two levels share a line.
+- **Walks.** Each terrace walk is whatever lies between its own band and the roofs of the band below: 2.5 to 6.5 m wide, changing
+  section by section. Behind a bridge's mouth the band steps back into a landing. Now and then a section steps back further to make a
+  small plaza, and a wide plaza gets a camp table with chairs or a bench, keeping a 2 m lane clear by the railing.
+- **The pit.** Each side's edge runs in its own sections. A lookout bastion juts into the pit here, and the pit bites into the walk there.
+  The pit's outline steps along both sides, its width changing between 3.5 m and about 6.5 m. The low walks stay 2.5 m or wider.
+- **Kept by construction.** The Arrival Square, the bar's deck, the gates, the den and the square's heavy shops stay on version 5's
+  columns, so the flat carry route from the train is unchanged. Every container, stair bay and nook lies within one section. A stair bay
+  keeps one walk width along its whole run, with section breaks just outside it. Each run climbs beside rock or a walk, never under the
+  next band's boxes or a wide walk, and its head is kept clear across the walk above. Each bridge deck spans two straight walk edges.
+  Railings follow every step of every edge, and nothing is railed inside the pit.
+- **Residents.** Bent walks give routes long diagonal legs up a whole flight. People's route squaring (`squareSteps` in
+  `game/src/market/marketPeople.ts`) now turns only single steps between cells into two straight steps. Before, it turned such a leg into a
+  "step" onto the floor above the stair's foot, and fleeing residents stood there.
+- **Density.** Version 6's, with more props and lights. Over 20 seeds there are as many containers and open homes and shops, and as many
+  home hiding corners for fleeing residents. The short runs between section breaks take 3 m (10 ft) boxes. The usual box is a little
+  longer than version 5's, because a home much under 5 m has no corner away from its door once its bed and table are in.
+- **Look.** No new assets. The kit's cabled bridge bays stand only where the pit lies under them at that bridge, and lines and laundry
+  tie to their own storey's edge where they meet it. The chasm's finishes follow the pit's own runs, never the low walks.
+
 ## Where things are (by the train)
 
 | Place | Where |
@@ -62,9 +92,10 @@ concrete and rock around it are no longer one big box (`game/src/gen/market/v6/e
 ## Save compatibility
 
 - A Market station records the layout version it was first built with (`market.layout` lane, `gen/market/layoutVersion.ts`). A station
-  never entered, or any station in a new campaign, builds version 6 and records it.
-- A visited Market keeps its recorded version: version 5 regenerates byte for byte as shipped (pinned by fingerprints of the previous
-  `main` generator in `game/tests/market-crevice-envelope.test.ts`; version 4 likewise in `game/tests/market-crevice-layout.test.ts`),
+  never entered, or any station in a new campaign, builds version 7 and records it.
+- A visited Market keeps its recorded version: versions 5 and 6 regenerate byte for byte as shipped (pinned by fingerprints of the
+  previous `main` generators in `game/tests/market-crevice-envelope.test.ts`; version 4 likewise in
+  `game/tests/market-crevice-layout.test.ts`),
   with its residents, stock, claimed items and identities. Nothing is rerolled, refilled or duplicated, and campaigns are not reset.
   Markets entered before version records existed stay version 1.
 
@@ -81,7 +112,9 @@ concrete and rock around it are no longer one big box (`game/src/gen/market/v6/e
 
 - Generator: `game/src/gen/market/v5/` (`frame.ts` seeded frame, `carve.ts` the crevice, `dress.ts` / `record.ts` furnishing and the
   record, `den.ts` the den, `shape.ts` the crevice record for the look, `validate.ts`, `art.ts` lines / awnings / container art);
-  version 6 adds `game/src/gen/market/v6/envelope.ts` (the envelope's plan and its stamp onto the carved grids).
+  version 6 adds `game/src/gen/market/v6/envelope.ts` (the envelope's plan and its stamp onto the carved grids); version 7 adds
+  `game/src/gen/market/v7/settlement.ts` (the floorplan's plan: section breaks and setbacks per band, the pit's edge), which the carve,
+  dress, record and art read row by row.
 - Look: `game/src/world/marketArch.ts` (container paints, crevice concrete reusing the Reactor's existing concrete / rock / rusted steel
   textures, no floor or ceiling under a bridge deck, the chasm bed, the atrium tiles for the level culler) and
   `game/src/world/marketCrevice.ts` (container frames, ends, windows, the bridge kit, built with the Market's visuals before warm-up).
@@ -89,4 +122,4 @@ concrete and rock around it are no longer one big box (`game/src/gen/market/v6/e
   maps kept, provenance `game/public/assets/derivatives/market-bridge-kit.json`, credit in `game/public/assets/CREDITS.md`. The private
   master stays outside Git.
 - Tests: `market-crevice-layout`, `market-crevice-dress`, `market-crevice-arch`, `market-crevice-view`, `market-bridge-kit`,
-  `market-crevice-envelope` (version 6).
+  `market-crevice-envelope` (version 6), `market-crevice-settlement` (version 7).
