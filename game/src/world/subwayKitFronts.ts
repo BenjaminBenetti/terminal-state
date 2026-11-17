@@ -250,9 +250,22 @@ export class HallFrontsKit {
       }
     }
     if (any) this.stats.inlays++;
-    // a wall front: the header band over its span
+    // a wall front: the header band over its span — or, where the dresser hung the pocket's name plate on the wall (~2.75 m), a header
+    // just over the plate and a sill under it, framing it (the plate is never covered)
     if (!w) return;
-    const {plane, n} = w, out = (d: number) => plane + n * d, Y0 = floor + HEADER.y0, Y1 = floor + HEADER.y1;
+    const {plane, n} = w, out = (d: number) => plane + n * d;
+    const plate = this.layout.signs.find(s => {
+      if (s.hang) return false;
+      const off = ((al ? s.z : s.x) - plane) * n, c = al ? s.x : s.z;
+      return off > -0.05 && off < 0.15 && c > lo && c < hi && s.y - floor > 2.2 && s.y - floor < 3.3;
+    });
+    let Y0 = floor + HEADER.y0, Y1 = floor + HEADER.y1;
+    if (plate) {
+      const {w: pw, h: ph} = signDims(plate), pc = al ? plate.x : plate.z;
+      Y0 = plate.y + ph / 2 + 0.05; Y1 = Y0 + (HEADER.y1 - HEADER.y0);
+      const sy1 = plate.y - ph / 2 - 0.03;
+      for (const [s0, s1] of this.wallSpans(h.a, al, plane, n, pc - pw / 2 - 0.1, pc + pw / 2 + 0.1, sy1 - 0.05, sy1, 0.09, true, 0.5)) this.hb(this.sub.trimKey(), al, s0, s1, sy1 - 0.05, sy1, out(0), out(0.06));
+    }
     for (const [s0, s1] of this.wallSpans(h.a, al, plane, n, lo, hi, Y0, Y1 + 0.04, HEADER.proud + 0.03, true, 0.8)) {
       this.hb(key, al, s0, s1, Y0, Y1, out(0), out(HEADER.proud));
       this.hb(this.sub.trimKey(), al, s0, s1, Y1, Y1 + 0.04, out(0), out(HEADER.proud + 0.03));

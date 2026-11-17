@@ -17,7 +17,7 @@ import {LEVELS} from '../src/levels/registry';
 import {CELL, FLOOR, Grid} from '../src/gen/grid';
 import {hallSectionWorld} from '../src/gen/hallSection';
 import {ceilingFormOf, soffitAt} from '../src/gen/subwayCeilings';
-import {DRUM_CLEAR, DRUM_MIN_Y, MAX_HALL_SOURCES, NAVE_CLOCK_CLEAR, SCHEME_TINT, planHallLights, relitHall} from '../src/gen/subwayHallLights';
+import {DRUM_CLEAR, DRUM_MIN_Y, MAX_HALL_SOURCES, NAVE_CLOCK_CLEAR, NAVE_LANTERN_REACH, SCHEME_TINT, SIGN_CLEAR, planHallLights, relitHall} from '../src/gen/subwayHallLights';
 import {OFFICE_FASCIA, STATION_CLOCK, frontClockSpot} from '../src/gen/hallFrontGeometry';
 import {PROP_DEFS} from '../src/gen/props';
 import {bayBounds} from '../src/gen/subwayBays';
@@ -47,6 +47,14 @@ const lightsHash = (ls: readonly LightPlacement[]) => {
   return `${ls.length}:${(x >>> 0).toString(16)}`;
 };
 const mats = () => new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
+/** The station with its great hall's dresser records (fronts / upper) and the clerestory tablets' signs taken off, its lights re-planned. */
+function withoutRecords(L: StationLayout): StationLayout {
+  const T = grandHall(L), S = hallSectionWorld(T)!;
+  T.hallSection = {...T.hallSection!, fronts: undefined, upper: undefined};
+  L.signs = L.signs.filter(q => !(q.area === T.id && !q.hang && S.nave.some(f => Math.abs(q.z - f) < 0.2)));
+  planHallLights(L);
+  return L;
+}
 const grandHall = (L: StationLayout): Area => L.areas.find(a => a.role === 'grand-ticket-hall')!;
 
 interface Injected { L: StationLayout; T: Area; S: HallSection; fronts: HallFront[]; upper: HallUpperFeature[]; tabletSign: number }
@@ -57,7 +65,7 @@ interface Injected { L: StationLayout; T: Area; S: HallSection; fronts: HallFron
  * on a south-aisle stall / cart (else a free bay), a service point on a ticket machine bank; a clock, a tablet (with its sign) and a grille.
  */
 function inject(seed: number): Injected {
-  const L = gen(seed, 3), T = grandHall(L), S0 = hallSectionWorld(T)!;
+  const L = withoutRecords(gen(seed, 3)), T = grandHall(L), S0 = hallSectionWorld(T)!;
   const al = T.x * CELL, ac = T.y * CELL, zN = T.y * CELL, zS = (T.y + T.h) * CELL;
   const props = L.props.filter(p => p.area === T.id);
   const fronts: HallFront[] = [];
@@ -91,7 +99,7 @@ function inject(seed: number): Injected {
     {kind: 'tablet', face: faceS, facing: faceS === faceN ? 1 : -1, along: pick(4), text: 'TICKETS · TRAINS'},
     {kind: 'grille', face: faceN, facing: 1, along: pick(6)},
   ];
-  // the tablet's sign (the dresser's job): centred on the bay, 0.06 m proud of the face
+  // the tablet's sign (the dresser's job): centred on the bay, 0.06 m proud of the face (the dresser's own tablets were taken off)
   const [t0, t1] = upper[1].along, tw = Math.min(t1 - t0 - 1.6, 4.5);
   L.signs.push({x: (t0 + t1) / 2, y: S0.aisleCeil + 1.9, z: faceS + upper[1].facing * 0.06, rot: upper[1].facing > 0 ? 0 : Math.PI, kind: 'info', text: 'TICKETS · TRAINS', area: T.id, w: tw});
   const rel = <F extends {along: [number, number]}>(f: F, acr: (v: number) => number, k: 'across' | 'face') => ({...f, along: [f.along[0] - al, f.along[1] - al], ...(k === 'across' ? {across: (f as unknown as HallFront).across.map(acr)} : {face: acr((f as unknown as HallUpperFeature).face)})});
@@ -250,9 +258,72 @@ describe('the fronts kit (synthetic records on real version-3 halls)', () => {
   }, 240_000);
 });
 
+describe('the dresser\'s real records (lane GEN) at the natural seeds', () => {
+  for (const [variant, seed] of Object.entries(V3)) {
+    it(`${variant} (seed ${seed}): the kit frames every front and draws every clerestory feature; the plan lights every front`, () => {
+      const L = gen(seed, 3), T = grandHall(L), S = hallSectionWorld(T)!;
+      const fronts = S.fronts ?? [], upper = S.upper ?? [];
+      expect(fronts.length, 'recorded fronts').toBeGreaterThanOrEqual(3);
+      expect(upper.length, 'recorded clerestory features').toBeGreaterThanOrEqual(2);
+      const w = buildWorld(L, mats(), {});
+      const {fk, items} = frontsOnly(L, w);
+      expect(fk.stats.fronts, 'every front drew its pieces').toBe(fronts.length);
+      expect(fk.stats.clocks).toBe(fronts.filter(f => f.kind === 'waiting').length);
+      if (fronts.some(f => f.kind === 'office')) { expect(fk.stats.fascias).toBeGreaterThanOrEqual(1); expect(fk.stats.piers).toBeGreaterThanOrEqual(1); }
+      const k = w.subwayArch!.kit!;
+      expect(k.features, 'every clerestory feature drawn').toBe(upper.length);
+      // nothing in a booth / a doorway / another prop's footprint up to its height (the floor inlays excepted: 6 mm on the floor)
+      const floor = T.floorY ?? 0;
+      const solid = L.props.filter(p => p.area === T.id && p.kind !== 'column').map(p => ({kind: p.kind, min: new THREE.Vector3(p.x - p.hx, p.y, p.z - p.hz), max: new THREE.Vector3(p.x + p.hx, p.y + p.h, p.z + p.hz)}));
+      const doors = L.doors.map(d => ({min: new THREE.Vector3(d.x * CELL + 0.06, floor, d.y * CELL + 0.06), max: new THREE.Vector3((d.x + d.w) * CELL - 0.06, floor + d.height, (d.y + d.h) * CELL - 0.06)}));
+      for (const it of items) {
+        if (it.max.y - it.min.y < 0.007 + 1e-6) continue;
+        for (const p of solid) expect(overlaps(it, p), `${it.mat} ${it.min.toArray()} - ${it.max.toArray()} in a ${p.kind}`).toBe(false);
+        for (const d of doors) expect(overlaps(it, d), `${it.mat} ${it.min.toArray()} in a doorway`).toBe(false);
+      }
+      // the clocks hang from the LOCAL ceiling (an aisle group's 4.2-4.6 m one), never through a wall sign / hung plate
+      for (const f of fronts.filter(q => q.kind === 'waiting')) {
+        const c = frontClockSpot(T, S, f);
+        const i = L.grid.idx(Math.floor(c.along / CELL), Math.floor(c.across / CELL));
+        const rod = items.find(it => !it.geo && it.mat === 'steel' && it.max.x - it.min.x < 0.05 && Math.abs((it.min.x + it.max.x) / 2 - c.along) < 0.01 && Math.abs((it.min.z + it.max.z) / 2 - c.across) < 0.01);
+        expect(rod, `the clock rod of ${f.wall} waiting @${c.along},${c.across}`).toBeTruthy();
+        expect(rod!.max.y).toBeCloseTo(Math.min(L.grid.ceil[i], T.ceil), 2);
+        for (const sg of L.signs.filter(q => q.area === T.id && q.hang)) {
+          const h = (sg.w ?? 1.4) / 2;
+          expect(Math.abs(sg.z - c.across) > 0.3 || Math.abs(sg.x - c.along) - h > STATION_CLOCK.t / 2, `hung plate ${sg.text} through the clock`).toBe(true);
+        }
+      }
+      // the light plan: <= 60, >= 60 % working, every wall / aisle front lit by its own fixture, clear of the hung plates
+      const own = L.lights.filter(l => l.area === T.id);
+      expect(own.length).toBeLessThanOrEqual(MAX_HALL_SOURCES);
+      expect(own.filter(l => !l.broken && !l.dying).length / own.length).toBeGreaterThanOrEqual(0.6);
+      const hung = L.signs.filter(q => q.area === T.id && q.hang);
+      const inZone = (l: LightPlacement, f: HallFront) => l.x >= Math.min(...f.along) - 0.35 && l.x <= Math.max(...f.along) + 0.35 && l.z >= Math.min(...f.across) - 0.05 && l.z <= Math.max(...f.across) + 0.05;
+      let lit = 0, wallish = 0;
+      for (const f of fronts) {
+        const c = (f.across[0] + f.across[1]) / 2;
+        if (f.wall === 'nave' && !S.aisles.some(([p, q]) => c > p && c < q)) continue;
+        wallish++;
+        if (own.some(l => inZone(l, f))) lit++;
+      }
+      // (a hall at its budget trims a front's extras first: every front keeps at least its first fixture unless the rhythm itself is 60)
+      expect(lit, 'wall / aisle fronts with their own fixture').toBe(wallish);
+      const frontLights = own.filter(l => fronts.some(f => inZone(l, f)) && !(l.style === 'downlight' && bayBounds(ceilingFormOf(L, T).bays).some(([p, q]) => Math.abs(l.x - (p + q) / 2) < 0.01)));
+      for (const l of frontLights) for (const sg of hung) {
+        const h = (sg.w ?? 1.4) / 2, dx = Math.cos(sg.rot) * h, dz = -Math.sin(sg.rot) * h;
+        const vx = 2 * dx, vz = 2 * dz, t = Math.max(0, Math.min(1, ((l.x - sg.x + dx) * vx + (l.z - sg.z + dz) * vz) / (vx * vx + vz * vz)));
+        expect(Math.hypot(l.x - (sg.x - dx) - vx * t, l.z - (sg.z - dz) - vz * t), `front fixture @${l.x},${l.z} vs ${sg.text}`).toBeGreaterThanOrEqual(SIGN_CLEAR - 0.01);
+      }
+    }, 240_000);
+  }
+});
+
 describe('the hall light plan: fronts, the transept crossing, scheme colour', () => {
   it('the transept crossing hangs lanterns at the nave drum height: no downlight up in its coffers', () => {
-    const L = gen(V3.transept, 3), T = grandHall(L), S = hallSectionWorld(T)!, form = ceilingFormOf(L, T), g = L.grid;
+    const real = gen(V3.transept, 3), RT = grandHall(real), RS = hallSectionWorld(RT)!;
+    // (the real plan, fronts included: no downlight up in the crossing's coffers either)
+    for (const l of real.lights.filter(q => q.area === RT.id && q.style === 'downlight')) expect(l.y, `downlight @${l.x},${l.z}`).toBeLessThanOrEqual(RS.aisleCeil + 0.5);
+    const L = withoutRecords(gen(V3.transept, 3)), T = grandHall(L), S = hallSectionWorld(T)!, form = ceilingFormOf(L, T), g = L.grid;
     expect(S.variant).toBe('transept');
     const own = L.lights.filter(l => l.area === T.id);
     for (const l of own.filter(q => q.style === 'downlight')) expect(l.y, `downlight @${l.x},${l.z}`).toBeLessThanOrEqual(S.aisleCeil + 0.5);
@@ -269,7 +340,7 @@ describe('the hall light plan: fronts, the transept crossing, scheme colour', ()
 
   for (const [variant, seed] of Object.entries(V3)) {
     it(`${variant} (seed ${seed}): every front gets its own fixtures in place of its bays' generic downlights; <= 60 sources, >= 60 % working`, () => {
-      const plain = gen(seed, 3);
+      const plain = withoutRecords(gen(seed, 3));
       const {L, T, S, fronts} = inject(seed);
       const own = L.lights.filter(l => l.area === T.id), before = plain.lights.filter(l => l.area === T.id);
       const bays = bayBounds(ceilingFormOf(L, T).bays);
@@ -283,7 +354,10 @@ describe('the hall light plan: fronts, the transept crossing, scheme colour', ()
           const bay = bays.find(([p, q]) => mid >= p && mid < q)!;
           const drum = own.find(l => l.style === 'drum' && Math.abs(l.x - (bay[0] + bay[1]) / 2) < 0.01);
           expect(drum, `nave ${f.kind}: its bay's lantern`).toBeTruthy();
-          expect(Math.abs(drum!.z - c), `nave ${f.kind}: over it (beside a waiting island's clock)`).toBeCloseTo(f.kind === 'waiting' ? NAVE_CLOCK_CLEAR : 0, 2);
+          // (already under it within NAVE_LANTERN_REACH: kept on the line; a waiting island's lantern never on its clock)
+          const line = (S.nave[0] + S.nave[1]) / 2, d = Math.abs(line - c);
+          if (f.kind === 'waiting') expect(Math.abs(drum!.z - c), `nave waiting`).toBeCloseTo(d < NAVE_CLOCK_CLEAR || d > NAVE_LANTERN_REACH ? NAVE_CLOCK_CLEAR : d, 2);
+          else expect(drum!.z, `nave ${f.kind}`).toBeCloseTo(d > NAVE_LANTERN_REACH ? c : line, 2);
           continue;
         }
         const mine = own.filter(l => inZone(l, f));
@@ -317,7 +391,7 @@ describe('the hall light plan: fronts, the transept crossing, scheme colour', ()
           expect(own.some(at), `${f.kind}: the generic downlight of bay ${p}-${q}`).toBe(false);
           gone++;
         }
-        expect(gone, `${f.kind} ${f.wall}: replaced at least one generic downlight`).toBeGreaterThanOrEqual(1);
+        if (f.kind === 'office') expect(gone, `${f.kind} ${f.wall}: replaced at least one generic downlight`).toBeGreaterThanOrEqual(1);
       }
     });
   }

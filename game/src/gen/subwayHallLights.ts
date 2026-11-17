@@ -28,7 +28,7 @@ import {ceilingFormOf, coveY, soffitAt, springCoves, type CeilingForm} from './s
 import {hallSectionWorld} from './hallSection';
 import {CLOCK_LIGHT_OFFSET, frontAcross, frontClockSpot} from './hallFrontGeometry';
 import {PROP_DEFS} from './props';
-import {SPAWN_LIT_RADIUS, type Area, type HallFront, type HallSection, type LightPlacement, type StationLayout, type SubwayLightStyle} from './stationTypes';
+import {SPAWN_LIT_RADIUS, type Area, type HallFront, type HallSection, type LightPlacement, type SignPlacement, type StationLayout, type SubwayLightStyle} from './stationTypes';
 
 /** Hall roles relit by the plan (any hall of type 'fare-hall' >= RELIT_FARE_M2 too). */
 export const RELIT_ROLES: ReadonlySet<string> = new Set(['grand-ticket-hall', 'waiting-hall', 'interchange-hall', 'end-hall']);
@@ -83,6 +83,10 @@ const OFFICE_PITCH = 3.0, OFFICE_MAX = 4;
 const FRONT_BAY_SHARE = 0.35;
 /** A nave island's lantern hangs this far across from a waiting island's centre (clear of its hung clock). */
 export const NAVE_CLOCK_CLEAR = 1.5;
+/** A nave island is already under its bay's lantern when that hangs within this far across of its centre (m). */
+export const NAVE_LANTERN_REACH = 3.5;
+/** A front's own fixture keeps this far (plan, m) from every hung plate of the hall (its drop rods, its edge). */
+export const SIGN_CLEAR = 0.5;
 const BROKEN = 0.05, FLICKER = 0.08, DYING = 0.012;
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -113,7 +117,7 @@ export function planHallLights(layout: StationLayout): HallLightReport[] {
   for (const a of halls) {
     const g = gridOf(layout, a);
     const form = ceilingFormOf(layout, a);
-    const spots = hallSpots(a, form, g);
+    const spots = hallSpots(a, form, g, layout.signs.filter(s => s.area === a.id && s.hang));
     const lights = spots.map((s, i) => stateOf(layout, a, s, i));
     settle(layout, a, lights);
     added.push(...lights);
@@ -154,7 +158,7 @@ function bandsOf(a: Area, b: HallBays, form: CeilingForm): {nave: [number, numbe
 }
 
 /** The fixtures of one hall in the bay rhythm (drums, then coves, then downlights; each along the hall; then the fronts' own). */
-export function hallSpots(a: Area, form: CeilingForm, g: Grid): Spot[] {
+export function hallSpots(a: Area, form: CeilingForm, g: Grid, signs: readonly SignPlacement[] = []): Spot[] {
   const b = form.bays;
   const bays = bayBounds(b);
   const at = (along: number, across: number): [number, number] => (b.alongX ? [along, across] : [across, along]);
@@ -179,7 +183,7 @@ export function hallSpots(a: Area, form: CeilingForm, g: Grid): Spot[] {
   };
   // (lane FRONTS) a version-3 hall's fronts: the side-band bays their own fixtures replace, the nave islands' lanterns
   const S = hallSectionWorld(a);
-  const fp = S && !low && !vaulted ? frontPlan(a, S, bays, sides, drumLine) : null;
+  const fp = S && !low && !vaulted ? frontPlan(a, S, bays, sides, drumLine, signs) : null;
   if (drumLine !== null && (!low || vaulted)) {
     bays.forEach(([p, q], bi) => {
       const line = fp?.drumAcross.get(bi) ?? drumLine;
@@ -253,22 +257,42 @@ export function hallSpots(a: Area, form: CeilingForm, g: Grid): Spot[] {
  * band's generic downlight of every bay the front covers (the hall keeps its count and its >= 60 % working rule); a NAVE island takes its
  * bay's lantern across over it (a waiting island's beside its clock), so the drum count and the bay rhythm along the hall stay.
  */
-function frontPlan(a: Area, S: HallSection, bays: [number, number][], sides: [number, number][], drumLine: number | null):
+function frontPlan(a: Area, S: HallSection, bays: [number, number][], sides: [number, number][], drumLine: number | null, signs: readonly SignPlacement[]):
   {spots: {along: number; across: number; rank: number}[]; replaced: Set<string>; drumAcross: Map<number, number>} {
   const spots: {along: number; across: number; rank: number}[] = [], replaced = new Set<string>(), drumAcross = new Map<number, number>();
+  // a point in the hall frame (along, across) -> world (x, z); the hung plates' plan segments (a fixture keeps clear of their rods)
+  const W = (along: number, across: number): [number, number] => (S.alongX ? [along, across] : [across, along]);
+  const hung = signs.filter(s => s.hang).map(s => { const h = (s.w ?? 1.4) / 2, dx = Math.cos(s.rot) * h, dz = -Math.sin(s.rot) * h; return [s.x - dx, s.z - dz, s.x + dx, s.z + dz]; });
+  const segDist = (x: number, z: number, [x0, z0, x1, z1]: number[]) => {
+    const vx = x1 - x0, vz = z1 - z0, t = Math.max(0, Math.min(1, ((x - x0) * vx + (z - z0) * vz) / Math.max(1e-9, vx * vx + vz * vz)));
+    return Math.hypot(x - x0 - vx * t, z - z0 - vz * t);
+  };
   for (const f of S.fronts ?? []) {
     const lo = Math.min(f.along[0], f.along[1]), hi = Math.max(f.along[0], f.along[1]), mid = (lo + hi) / 2;
     const c = (f.across[0] + f.across[1]) / 2;
-    if (f.wall === 'nave') {
+    const li = sides.findIndex(([p, q]) => c > p && c < q);
+    if (f.wall === 'nave' && li < 0) {
+      // a nave island: under its bay's lantern already when that hangs within NAVE_LANTERN_REACH across of it (kept on its line), else
+      // the lantern hangs over it — a waiting island's NAVE_CLOCK_CLEAR beside its hung clock, never on it
       const bi = bays.findIndex(([p, q]) => mid >= p && mid < q);
       if (bi < 0 || drumLine === null || drumAcross.has(bi)) continue;
-      const d = drumLine - c;
-      // (a waiting island's hung clock is at its centre: the lantern hangs NAVE_CLOCK_CLEAR beside it, on the nave's centre-line side)
-      drumAcross.set(bi, r3(f.kind === 'waiting' ? c + (d < 0 ? -1 : 1) * NAVE_CLOCK_CLEAR : c));
+      const d = drumLine - c, side = d < 0 ? -1 : 1;
+      if (f.kind === 'waiting') { if (Math.abs(d) < NAVE_CLOCK_CLEAR || Math.abs(d) > NAVE_LANTERN_REACH) drumAcross.set(bi, r3(c + side * NAVE_CLOCK_CLEAR)); }
+      else if (Math.abs(d) > NAVE_LANTERN_REACH) drumAcross.set(bi, r3(c));
       continue;
     }
-    frontFixtures(a, S, f, lo, hi).forEach((o, k) => spots.push({...o, rank: k}));
-    const li = sides.findIndex(([p, q]) => c > p && c < q);
+    // a wall front, or a group standing in an aisle beside its arcade: its own fixtures (clear of the hung plates and of its clock),
+    // in place of the aisle's generic downlight of every bay it covers
+    const clock = f.kind === 'waiting' ? frontClockSpot(a, S, f) : null;
+    frontFixtures(a, S, f, lo, hi).forEach((o, k) => {
+      const ok = (along: number) => {
+        const [x, z] = W(along, o.across);
+        if (clock && Math.hypot(along - clock.along, o.across - clock.across) < 1.0) return false;
+        return hung.every(s => segDist(x, z, s) >= SIGN_CLEAR);
+      };
+      const along = [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8].map(d => o.along + d).find(v => v >= lo - 0.3 && v <= hi + 0.3 && ok(v)) ?? o.along;
+      spots.push({along: r3(along), across: o.across, rank: k});
+    });
     if (li < 0) continue;
     bays.forEach(([p, q], bi) => { if (Math.min(hi, q) - Math.max(lo, p) >= FRONT_BAY_SHARE * (q - p)) replaced.add(`${li}:${bi}`); });
   }
