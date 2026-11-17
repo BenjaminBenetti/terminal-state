@@ -52,6 +52,10 @@ export async function liftHostRide(host: 'office' | 'mall'): Promise<void> {
     const {installQaHooks} = await import('../../src/qa');
     const {surfaceLiftOf} = await import('../../src/world/surface/liftRuntime');
     const game = new Game(h.canvas, false);
+    // (CI runtime) the ride's PACED build of the destination: Node's frame (update + submit on the validating device) costs ~45 ms
+    // against the product's 6 ms build slice, so a district build took ~2600 frames (~140 s); Game.buildPacing (the build's own test /
+    // QA knob) runs 40 ms slices instead. Frames are still drawn between slices; SURFACE_LIFT_FULL=1 keeps the product's pacing.
+    if (!process.env.SURFACE_LIFT_FULL) game.buildPacing = {sliceMs: 40};
     const G = game as unknown as Priv;
     installQaHooks(game);
     const qa = (globalThis as unknown as {__LL: {surface: {go(): boolean; access(): {prompt: string | null}; lift(): unknown}}}).__LL;
