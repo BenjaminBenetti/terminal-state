@@ -162,15 +162,19 @@ export function crateWood(seed: number): THREE.CanvasTexture {
   });
 }
 
-/** Text plate for exit/service signs (charcoal field, cream lettering, mustard rule). */
-export function signPlate(text: string, kind: 'exit' | 'service' | 'station', seed: number): THREE.CanvasTexture {
+/** Wayfinding plate colours (a version-2 Subway station's identity: world/subwayArch.ts subwayPlate); absent = the classic plate. */
+export interface PlatePalette { bg: string; fg: string; accent: string }
+
+/** Text plate for exit/service signs (charcoal field, cream lettering, mustard rule; `pal`: a station identity's public plate). */
+export function signPlate(text: string, kind: 'exit' | 'service' | 'station', seed: number, pal?: PlatePalette | null): THREE.CanvasTexture {
   const w = 1024, h = 220;
+  const p = kind !== 'service' && pal ? pal : null;
   return canvasTexture(w, h, seed, (ctx, W, H, rnd) => {
-    ctx.fillStyle = kind === 'service' ? '#d8cfb6' : '#1f2225';
+    ctx.fillStyle = kind === 'service' ? '#d8cfb6' : p?.bg ?? '#1f2225';
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = kind === 'service' ? '#b53a2c' : '#d9a520';
+    ctx.fillStyle = kind === 'service' ? '#b53a2c' : p?.accent ?? '#d9a520';
     ctx.fillRect(0, H - 22, W, 10);
-    ctx.fillStyle = kind === 'service' ? '#1f2225' : '#ece4cf';
+    ctx.fillStyle = kind === 'service' ? '#1f2225' : p?.fg ?? '#ece4cf';
     let size = 104;
     ctx.font = `bold ${size}px "Helvetica Neue", Arial, sans-serif`;
     while (ctx.measureText(text).width > W - 80 && size > 40) { size -= 4; ctx.font = `bold ${size}px "Helvetica Neue", Arial, sans-serif`; }

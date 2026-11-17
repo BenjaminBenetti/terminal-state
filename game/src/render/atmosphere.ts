@@ -207,6 +207,10 @@ export const ATMOSPHERE_ITER12 = {density: 0.03, fixtureScatter: 0.95, flashligh
 export const ATMOSPHERE_BY_ARCHETYPE: Partial<Record<Archetype, Partial<AtmosphereParams>>> = {
   deep: {density: 0.023, coverage: 0.36},
   express: {density: 0.019},
+  // task studio-subway-station-variety-20261117-043926-01: the version-2 plan families — the damp rock cavern a little hazier, the grand
+  // hall's big volume a little clearer (ordinary neutral haze: never the green toxic gas)
+  cavern: {density: 0.022, coverage: 0.35},
+  'grand-hall': {density: 0.018},
 };
 
 /** The Reactor's outdoor haze cap over its surface deck (m above the deck): full haze below `from`, none above `to`. */

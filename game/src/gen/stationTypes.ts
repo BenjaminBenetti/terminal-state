@@ -48,8 +48,18 @@ export type RoomType =
  * - split: side platforms with separate fare controls and ticket halls on both sides of the tracks
  * - deep: deep-level station, long escalator passages up to a remote ticket hall and a PATH-style mall
  */
-export type Archetype = 'side-mezzanine' | 'island-ends' | 'express' | 'interchange' | 'split' | 'deep';
+export type Archetype = 'side-mezzanine' | 'island-ends' | 'express' | 'interchange' | 'split' | 'deep'
+  // Task studio-subway-station-variety-20261117-043926-01: the version-2 PLAN FAMILIES (gen/stationPlans.ts; never rolled at layout version 1):
+  // - grand-hall: side platforms under a long paid gate gallery, one great double-height ticket hall with gate banks, a ticket office,
+  //   a waiting hall and a bank of street exits
+  // - cavern: one rock cavern over both side platforms and the column-free bed; grotto waiting niches off the platform, an inclined
+  //   passage up to a cavern ticket hall
+  // - hub: two lines on both sides of one paid interchange hall (line 2 a single-track platform), ticket halls at both ends of it
+  | 'grand-hall' | 'cavern' | 'hub';
+/** The six CLASSIC archetypes (layout version 1; still eligible at version 2 through its 'classic' share). */
 export const ARCHETYPES: readonly Archetype[] = ['side-mezzanine', 'island-ends', 'express', 'interchange', 'split', 'deep'];
+/** Task studio-subway-station-variety-20261117-043926-01: the version-2 plan families (gen/stationPlans.ts). */
+export const PLAN_FAMILIES: readonly Archetype[] = ['grand-hall', 'cavern', 'hub'];
 
 export type Side = 'N' | 'S' | 'E' | 'W';
 
@@ -57,6 +67,9 @@ export type Side = 'N' | 'S' | 'E' | 'W';
 export type AreaRole =
   | 'mezzanine' | 'end-hall' | 'transfer' | 'escalator' | 'stair' | 'end-stair' | 'crossunder'
   | 'ticket-hall' | 'great-hall' | 'exit-hall' | 'mall' | 'food-hall' | 'line-2'
+  // Task studio-subway-station-variety-20261117-043926-01 (Subway plan families, gen/stationPlans.ts): the grand hall's paid gate gallery, the
+  // great ticket hall itself, its waiting hall; the hub's paid interchange hall; the cavern's grotto niches
+  | 'gate-gallery' | 'grand-ticket-hall' | 'waiting-hall' | 'interchange-hall' | 'grotto'
   // Iteration 08 (Lane A): multi-level program — stair cores (lobby / landing), upper decks over the
   // platforms, crossover bridges and catwalks over the track beds, lower service crossing + gallery.
   | 'stair-core' | 'landing' | 'upper-concourse' | 'crossover' | 'catwalk' | 'overlook' | 'service-crossing' | 'service-gallery'
@@ -417,6 +430,31 @@ export interface StationLayout {
    * 'main' layout of a station whose surface roll and version allow it: gen/surface/access.ts). Absent on every other layout.
    */
   surfaceAccess?: SurfaceAccessInfo;
+  /**
+   * Task studio-subway-station-variety-20261117-043926-01: a version-2 Subway station's VISUAL IDENTITY (gen/stationPlans.ts stationIdentityOf;
+   * drawn by world/subwayArch.ts). Absent on every version-1 station and on every other level (their look is exactly as before).
+   */
+  identity?: StationIdentity;
+}
+
+/**
+ * Task studio-subway-station-variety-20261117-043926-01: the station-wide look of a version-2 Subway station — pure style data (no
+ * coordinates: world/trackExt/core.ts reframe has nothing to move). Wall finish family of the public spaces and its linear tint, the
+ * station's accent (line) colour and its wayfinding plate colours (world/subwayArch.ts draws it).
+ */
+export interface StationIdentity {
+  /** Theme id (gen/stationPlans.ts STATION_THEMES). */
+  theme: string;
+  /** Public wall finish: the station tile (tinted), painted blasted rock (the cavern), or board-formed cast concrete. */
+  walls: 'tile' | 'rock' | 'concrete';
+  /** Linear tint of the public wall finish (multiplies its texture), 0xRRGGBB. */
+  wallTint: number;
+  /** Public ceilings take the wall finish too (a rock cavern's roof, a cast-concrete hall's soffit; tile stations: never). */
+  finishCeiling: boolean;
+  /** Station accent / line colour (tile bands, pilasters, friezes), 0xRRGGBB. */
+  accent: number;
+  /** Wayfinding plate colours (exit / info plates), 0xRRGGBB. */
+  plate: {bg: number; fg: number};
 }
 
 // ---------------------------------------------------------------------------------------

@@ -36,9 +36,9 @@ export class Plan {
   notes: string[] = [];
 }
 
-type Pattern = 'row' | 'tee' | 'mall' | 'wing';
-const r1 = (v: number) => Math.round(v * 10) / 10;
-const awaySign = (s: Side) => (s === 'S' || s === 'E' ? 1 : -1);
+export type Pattern = 'row' | 'tee' | 'mall' | 'wing';
+export const r1 = (v: number) => Math.round(v * 10) / 10;
+export const awaySign = (s: Side) => (s === 'S' || s === 'E' ? 1 : -1);
 
 export function buildSkeleton(k: Kit, arch: Archetype, terms: string[]): Plan | null {
   const plan = new Plan();
@@ -50,6 +50,7 @@ export function buildSkeleton(k: Kit, arch: Archetype, terms: string[]): Plan | 
       case 'interchange': return interchange(k, plan, terms);
       case 'split': return split(k, plan, terms);
       case 'deep': return deep(k, plan, terms);
+      default: return false; // (the version-2 plan families: gen/stationPlans.ts buildPlanFamily)
     }
   })();
   return ok && plan.foods.length ? plan : null;
@@ -58,11 +59,11 @@ export function buildSkeleton(k: Kit, arch: Archetype, terms: string[]): Plan | 
 // ---------------------------------------------------------------------------------------
 // Shared pieces
 
-function hall(k: Kit, parent: Area, side: Side, along: number, deep: number, off: number, type: 'fare-hall' | 'food-court' | 'retail-arcade' | 'concourse', ceil: number, opts: {role?: Area['role']; label?: string; paid?: boolean} = {}): Area | null {
+export function hall(k: Kit, parent: Area, side: Side, along: number, deep: number, off: number, type: 'fare-hall' | 'food-court' | 'retail-arcade' | 'concourse', ceil: number, opts: {role?: Area['role']; label?: string; paid?: boolean} = {}): Area | null {
   return k.attach(parent, side, along, deep, off, 'concourse', type, ceil, parent.id, opts);
 }
 
-function foodCourt(k: Kit, plan: Plan, parent: Area, side: Side, off: number): Area | null {
+export function foodCourt(k: Kit, plan: Plan, parent: Area, side: Side, off: number): Area | null {
   const rng = k.rng;
   // Big station hall (high ceiling) or a basement food court under a low grid ceiling.
   const ceil = rng.chance(0.55) ? r1(rng.range(4.8, 5.4)) : r1(rng.range(3.8, 4.3));
@@ -81,7 +82,7 @@ function foodCourt(k: Kit, plan: Plan, parent: Area, side: Side, off: number): A
   return F;
 }
 
-function arcade(k: Kit, plan: Plan, parent: Area, side: Side, len: number, off: number, label?: string): Area | null {
+export function arcade(k: Kit, plan: Plan, parent: Area, side: Side, len: number, off: number, label?: string): Area | null {
   const rng = k.rng;
   const RD = rng.int(12, 16);
   const R = hall(k, parent, side, RD, len, off, 'retail-arcade', r1(rng.range(3.4, 3.8)), {role: 'mall', label: label ?? (len > 70 ? 'Underground concourse' : 'Retail arcade')});
@@ -93,7 +94,7 @@ function arcade(k: Kit, plan: Plan, parent: Area, side: Side, len: number, off: 
   return R;
 }
 
-function exitHall(k: Kit, plan: Plan, parent: Area, side: Side, off: number): Area | null {
+export function exitHall(k: Kit, plan: Plan, parent: Area, side: Side, off: number): Area | null {
   const rng = k.rng;
   const E = hall(k, parent, side, rng.int(26, 34), rng.int(26, 38), off, 'concourse', r1(rng.range(4.2, 4.8)), {role: 'exit-hall', label: 'Exit concourse'});
   if (!E) return null;
@@ -107,7 +108,7 @@ function exitHall(k: Kit, plan: Plan, parent: Area, side: Side, off: number): Ar
   return E;
 }
 
-function ticketHall(k: Kit, plan: Plan, paid: Area, side: Side, along: number, deep: number, off: number, gates: number, label?: string): Area | null {
+export function ticketHall(k: Kit, plan: Plan, paid: Area, side: Side, along: number, deep: number, off: number, gates: number, label?: string): Area | null {
   const rng = k.rng;
   const T = hall(k, paid, side, along, deep, off, 'fare-hall', r1(rng.range(5.0, 6.0)), {role: 'ticket-hall', label});
   if (!T) return null;
@@ -118,7 +119,7 @@ function ticketHall(k: Kit, plan: Plan, paid: Area, side: Side, along: number, d
 }
 
 /** Unpaid district beyond a ticket hall: food court, retail arcade, exit hall in one of four patterns. */
-function district(k: Kit, plan: Plan, T: Area, away: Side, laterals: Side[], pattern: Pattern): boolean {
+export function district(k: Kit, plan: Plan, T: Area, away: Side, laterals: Side[], pattern: Pattern): boolean {
   const rng = k.rng;
   const sgn = awaySign(away);
   const lats = rng.shuffle(laterals.slice());
@@ -166,10 +167,10 @@ function district(k: Kit, plan: Plan, T: Area, away: Side, laterals: Side[], pat
   return true;
 }
 
-const PATTERNS: [Pattern, number][] = [['row', 1], ['tee', 1], ['mall', 1.1], ['wing', 1]];
+export const PATTERNS: [Pattern, number][] = [['row', 1], ['tee', 1], ['mall', 1.1], ['wing', 1]];
 
 /** Arcade joining two halls that sit side by side (west hall's east wall to east hall's west wall). */
-function linkArcade(k: Kit, plan: Plan, west: Area, east: Area, label: string, minY = 0): Area | null {
+export function linkArcade(k: Kit, plan: Plan, west: Area, east: Area, label: string, minY = 0): Area | null {
   const rng = k.rng;
   const h = rng.int(12, 16);
   const lo = Math.max(west.y, east.y) + 1, hi = Math.min(west.y + west.h, east.y + east.h) - 1 - h;
@@ -186,7 +187,7 @@ function linkArcade(k: Kit, plan: Plan, west: Area, east: Area, label: string, m
   return R;
 }
 
-function setP1(plan: Plan, P1: Area, others: Area[]): void {
+export function setP1(plan: Plan, P1: Area, others: Area[]): void {
   plan.P1 = P1;
   plan.platforms = [P1, ...others];
 }

@@ -1,6 +1,8 @@
 // Top-down debug maps of generated stations (no browser): loads the TypeScript generator through
 // Vite's SSR module loader and rasterises the grid with sharp. One PNG per seed + a JSON summary.
-// Usage: node tools/qa/station-maps.mjs OUT_DIR [seed ...]   (default: one seed per archetype)
+// Usage: node tools/qa/station-maps.mjs OUT_DIR [--layout-version=N] [seed ...]   (default: one seed per archetype, version 1)
+// (task studio-subway-station-variety-20261117-043926-01: --layout-version=2 builds the version-2 roll: the plan families and the
+// station identity, whose wall / accent / plate colours are drawn as swatches in the title bar)
 // Also writes a front elevation of each station's food-court counter wall (storefront building
 // blocks + unit furniture, from gen/storefronts.ts) to check the facade composition without a browser.
 import fs from 'node:fs';
@@ -10,7 +12,9 @@ import {createServer} from 'vite';
 import sharp from 'sharp';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const [outDir = path.join(root, 'qa-artifacts/maps'), ...seedArgs] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const layoutVersion = Number((argv.find(a => a.startsWith('--layout-version=')) ?? '--layout-version=1').split('=')[1]);
+const [outDir = path.join(root, 'qa-artifacts/maps'), ...seedArgs] = argv.filter(a => !a.startsWith('--'));
 fs.mkdirSync(outDir, {recursive: true});
 
 function pickPerArchetype(gen) {
@@ -70,8 +74,11 @@ async function render(l, file) {
     const vertical = sf.side === 'E' || sf.side === 'W';
     texts.push(`<text x="${cx}" y="${cy}" font-size="9" text-anchor="middle" fill="${sf.unit < 0 ? '#bbb' : '#102030'}" font-family="sans-serif"${vertical ? ` transform="rotate(-90 ${cx} ${cy})"` : ''}>${esc(tag)}</text>`);
   }
-  const title = `${l.name} · ${l.archetype} · seed ${l.seed} · ${l.areas.length} areas · ${l.storefronts.length} storefronts · ${l.zombies.length} zombies`;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H + 22}"><rect x="0" y="${H}" width="${W}" height="22" fill="#16181a"/>${texts.join('')}<text x="6" y="${H + 16}" font-size="14" fill="#ece4cf" font-family="sans-serif">${esc(title)}</text></svg>`;
+  const id = l.identity;
+  const title = `${l.name} · ${l.archetype}${id ? ` · ${id.theme}` : ''} · seed ${l.seed} · ${l.areas.length} areas · ${l.storefronts.length} storefronts · ${l.zombies.length} zombies`;
+  const hex = n => `#${n.toString(16).padStart(6, '0')}`;
+  const swatches = id ? [id.wallTint, id.accent, id.plate.bg, id.plate.fg].map((c, k) => `<rect x="${W - 4 - (4 - k) * 26}" y="${H + 3}" width="22" height="16" fill="${hex(c)}" stroke="#777"/>`).join('') : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H + 22}"><rect x="0" y="${H}" width="${W}" height="22" fill="#16181a"/>${texts.join('')}<text x="6" y="${H + 16}" font-size="14" fill="#ece4cf" font-family="sans-serif">${esc(title)}</text>${swatches}</svg>`;
   await sharp(px, {raw: {width: W, height: H, channels: 3}})
     .extend({bottom: 22, background: '#16181a'})
     .composite([{input: Buffer.from(svg), top: 0, left: 0}])
@@ -87,14 +94,14 @@ try {
   const summary = [];
   for (const seed of seeds) {
     const t0 = performance.now();
-    const l = gen.generateStation(seed);
+    const l = gen.generateStation(seed, layoutVersion > 1 ? {layoutVersion} : {});
     const ms = performance.now() - t0;
-    const file = path.join(outDir, `map-${String(seed).padStart(10, '0')}-${l.archetype}.png`);
+    const file = path.join(outDir, `map-${layoutVersion > 1 ? `v${layoutVersion}-` : ''}${String(seed).padStart(10, '0')}-${l.archetype}.png`);
     await render(l, file);
     await elevation(l, gen.storefrontParts, file.replace('.png', '-foodcourt-elevation.png'));
     const m = gen.layoutMetrics(l);
     summary.push({seed, file: path.basename(file), genMs: Math.round(ms), issues: gen.validateLayout(l), ...m});
-    console.log(seed, l.archetype, `${Math.round(ms)} ms`, path.basename(file));
+    console.log(seed, l.archetype, l.identity?.theme ?? '', `${Math.round(ms)} ms`, path.basename(file));
   }
   fs.writeFileSync(path.join(outDir, 'maps.json'), JSON.stringify(summary, null, 2));
 } finally {
