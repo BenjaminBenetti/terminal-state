@@ -167,6 +167,41 @@ export interface HallSection {
   transept?: [number, number];
   /** The clear circulation spine (across span), kept free end to end. */
   spine: [number, number];
+  /**
+   * Task studio-subway-rework-m2-finishing-20261117-111246-01: the hall's functional DESTINATIONS (the v3 dresser's furnished fronts), each
+   * framed / signed by the render kit and given its own fixtures by the hall light plan. Absent on a hall dressed before the finishing pass.
+   */
+  fronts?: HallFront[];
+  /** ... and the purposeful features of selected clerestory bays (the rest keep the kit's framed blind panels). */
+  upper?: HallUpperFeature[];
+}
+
+/**
+ * A version-3 hall's functional front: a destination the dresser furnished (relative metres, as HallSection). `along` / `across` bound the
+ * front's floor zone — the furniture plus its counter / queue / seating apron — on the side of `wall`.
+ */
+export interface HallFront {
+  /** 'office': the ticket office (booths, queue lanes); 'waiting': a bench group; 'kiosk': a retail / news / food pocket; 'service':
+   *  an information / ticket-machine / cash point. */
+  kind: 'office' | 'waiting' | 'kiosk' | 'service';
+  /** The aisle wall it backs onto ('N' gate side, 'S' exit side), or 'nave' for a free-standing island beside the spine. */
+  wall: 'N' | 'S' | 'nave';
+  along: [number, number];
+  across: [number, number];
+  /** Its fascia / hung sign's text (the dresser placed the sign itself in layout.signs). */
+  label?: string;
+}
+
+/** A purposeful clerestory bay: a station clock, a framed sign tablet or a ventilation grille (relative metres, as HallSection). */
+export interface HallUpperFeature {
+  kind: 'clock' | 'tablet' | 'grille';
+  /** The clerestory face's across position (S.nave[0] or S.nave[1]) and the direction it faces into the nave (+1: towards +across). */
+  face: number;
+  facing: 1 | -1;
+  /** The bay's along span between its piers. */
+  along: [number, number];
+  /** A tablet's text (the dresser placed its sign in layout.signs, centred on the bay). */
+  text?: string;
 }
 
 export interface Door extends Rect {

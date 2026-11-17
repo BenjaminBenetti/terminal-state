@@ -202,6 +202,13 @@ export class SubwayArch {
   baseKey(): string { return zoneKey(this.scheme.plinth, 'base'); }
   /** A cavern's rock vault (the rock ceiling finish). */
   rockCeilKey(): string { return zoneKey(this.scheme.rock?.ceil ?? this.scheme.ceil, 'ceil'); }
+  /**
+   * Task studio-subway-rework-m2-finishing-20261117-111246-01: the kit's PIER finish of an area (pilasters, clerestory piers, the arcade
+   * beam's face) and its ACCENT finish (fascias, clock bezels, tablet surrounds, portal frames) — the scheme's own structural / trim
+   * language. (Defaults: the structure / trim finishes.)
+   */
+  pierKey(a: Area | undefined): string { return this.structKey(a); }
+  accentKey(): string { return this.trimKey(); }
 
   scale(key: string): {u: number; v: number} | undefined {
     return isSubwayKey(key) ? {u: 1, v: 1} : undefined; // world-mapped at each set's own span (UVs unused)

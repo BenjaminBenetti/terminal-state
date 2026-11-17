@@ -16,5 +16,8 @@ export function hallSectionWorld(a: Area): HallSection | null {
   return {
     ...S, nave: span(S.nave, C), aisles: S.aisles.map(s => span(s, C)), arcades: S.arcades.map(C), lines: S.lines.map(A),
     ...(S.transept ? {transept: span(S.transept, A)} : {}), spine: span(S.spine, C),
+    // (task studio-subway-rework-m2-finishing-20261117-111246-01) the fronts and clerestory features
+    ...(S.fronts ? {fronts: S.fronts.map(f => ({...f, along: span(f.along, A), across: span(f.across, C)}))} : {}),
+    ...(S.upper ? {upper: S.upper.map(u => ({...u, face: C(u.face), along: span(u.along, A)}))} : {}),
   };
 }
