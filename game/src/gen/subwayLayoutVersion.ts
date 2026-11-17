@@ -7,16 +7,26 @@
 //    its version-1 station) next to the new families, each with its own overall plan and a station-wide visual identity;
 //  - a station's section memory records the version it was first built with (lane `subway.layout` = {v}, stamped by Game.generateSection on
 //    the first build of a Subway 'main' section); a memory with visits but no record was entered under an older build -> version 1, forever;
-//  - a station never entered (or a new campaign) -> the current version, recorded when it is first built.
+//  - a station never entered (or a new campaign) -> the current version, recorded when it is first built;
+//  - version 3 (task studio-subway-architecture-materials-rework-20261117-072826-01) = version 2 with the grand-hall family's GREAT HALL
+//    rebuilt as a sectioned "basilica concourse" (gen/stationHallV3.ts: a tall nave, low arcaded aisles, furnished subdivisions). The
+//    family / identity rolls are version 2's (a seed keeps its family and theme); every other family and the classic share are version 2's
+//    layouts exactly. A recorded version 2 stays version 2 (its hall lights follow the architectural light plan, gen/subwayHallLights.ts,
+//    like every plan-family station's: lights are regenerated, never saved).
 // Like SectionGenContext.rosterVersion / surfaceVersion, an ABSENT version on a direct generator call (generateStation / LEVELS.subway.generate
 // without ctx.layoutVersion) is version 1: every pinned Subway fingerprint and census was taken with it, and the game always passes the
 // station's version explicitly (Game.sectionGenInputs).
 
 export const SUBWAY_LAYOUT_LANE = 'subway.layout';
-/** 1 = the six classic archetypes only (every Subway station before this task); 2 = the plan families + station identities (this task). */
-export const SUBWAY_LAYOUT_VERSION = 2;
+/**
+ * 1 = the six classic archetypes only (every Subway station before the plan families); 2 = the plan families + station identities;
+ * 3 = version 2 with the sectioned grand hall (task studio-subway-architecture-materials-rework-20261117-072826-01).
+ */
+export const SUBWAY_LAYOUT_VERSION = 3;
 /** The first version with the plan-family roll. */
 export const SUBWAY_PLANS_MIN_VERSION = 2;
+/** The first version whose grand-hall family builds the sectioned great hall (gen/stationHallV3.ts). */
+export const SUBWAY_HALL_V3_MIN_VERSION = 3;
 
 /** The layout version a Subway station regenerates with, from its section memory (undefined = never touched). */
 export function subwayLayoutVersionFor(mem: {visits: number; lanes: Record<string, unknown>} | undefined): number {

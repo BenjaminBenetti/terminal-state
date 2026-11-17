@@ -102,6 +102,20 @@ export interface FieldParams {
 
 export const DEFAULT_FIELD: FieldParams = {gain: 21, range: 9, uplight: 0.16, lobe: 2, scatter: 0.17, bounce: 0.1};
 
+/**
+ * Task studio-subway-architecture-materials-rework-20261117-072826-01: the photometry of a styled Subway hall fixture
+ * (LightPlacement.style) in place of the tube's. `output` scales its power (gain and reach), `uplight` / `lobe` replace the
+ * field's, `fall` scales the downward lobe, `rise` adds an upper hemisphere (full from ~15 deg above the horizontal). A glass
+ * lantern hung in a 9 m hall puts out about what a platform tube's pool gets at 3 m and glows all round; a cove strip in its
+ * trough washes the soffit above it and sends little straight down; a recessed downlight keeps the tube's tight pool. Unstyled
+ * fixtures never read this (their bake is unchanged, byte for byte). The enhanced cache's input digest covers the direct light.
+ */
+export const STYLE_EMISSION: Readonly<Record<NonNullable<LightPlacement['style']>, {output: number; uplight: number; lobe: 1 | 2; fall: number; rise: number}>> = {
+  drum: {output: 1.7, uplight: 0.4, lobe: 1, fall: 1, rise: 0},
+  cove: {output: 1.2, uplight: 0.1, lobe: 1, fall: 0.15, rise: 0.9},
+  downlight: {output: 1.1, uplight: 0.05, lobe: 2, fall: 1, rise: 0},
+};
+
 // ---------------------------------------------------------------------------------------------
 // Flicker circuits: fixture state is layout data; time-varying fixtures share one of three circuits so
 // the baked field can follow them (the shader scales each circuit's share by its current level).
@@ -494,9 +508,12 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
     const geoF = geos[F];
     const [tr, tg, tb] = fixtureTint(l);
     const tl = lum(tr, tg, tb);
-    const R = Math.max(4, p.range * Math.sqrt(Math.min(1.5, l.power)));
+    // (subway rework) a styled hall fixture's own photometry (STYLE_EMISSION); an unstyled fixture bakes exactly as before
+    const sty = l.style ? STYLE_EMISSION[l.style] : undefined;
+    const pw = l.power * (sty?.output ?? 1), up0 = sty?.uplight ?? p.uplight, lobe = sty?.lobe ?? p.lobe, fall = sty?.fall ?? 1, rise = sty?.rise ?? 0;
+    const R = Math.max(4, p.range * Math.sqrt(Math.min(1.5, pw)));
     const R2 = R * R;
-    const k0 = p.gain * l.power * 0.5; // two sub-points along the tube
+    const k0 = p.gain * pw * 0.5; // two sub-points along the tube
     // Tube ends (the fixture is a ~1.2 m strip): elongated pools along the fixture axis.
     const ax = Math.cos(l.rot) * 0.35, az = -Math.sin(l.rot) * 0.35;
     const [fcx, fcy] = g.cellOf(l.x, l.z);
@@ -545,7 +562,7 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
               if (d2 >= R2) continue;
               const d = Math.sqrt(d2);
               const down = ly > 0 ? ly / d : 0;
-              const emit = p.uplight + (1 - p.uplight) * (p.lobe === 2 ? down * down : down);
+              const emit = up0 + fall * (1 - up0) * (lobe === 2 ? down * down : down) + (rise && ly < 0 ? rise * Math.min(1, -4 * ly / d) : 0);
               const q = d2 / R2, win = (1 - q * q) * (1 - q * q);
               const v = kw * emit * win / (d2 + 0.3);
               e += v;

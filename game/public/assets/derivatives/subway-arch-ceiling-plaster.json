@@ -1,0 +1,209 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "subway-arch-ceiling-plaster",
+ "task": "studio-subway-architecture-materials-rework-20261117-072826-01",
+ "lane": "TEX",
+ "status": "runtime PBR derivative (period crop / seam feather / resize / derived normal + ORM / JPEG; deterministic processing only) of an ORIGINAL tileable surface texture generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization for the Subway architecture + materials rework; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Subway ceilings: painted render soffit",
+ "subject": "painted cement-render ceiling soffit, off-white",
+ "cls": "plaster",
+ "rebuild": "node tools/asset-pipeline/props/build-subway-arch-textures.mjs",
+ "rawStorage": "reference/tasks/subway-architecture-materials-rework-20261117-072826/gen/{LEDGER.jsonl, raw/codex-<n>-<id>-exec-<uuid>.png, prompts/frozen/<id>-c<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 3,
+  "session": "01a1e876-eb2b-7113-b190-7a386306322e",
+  "requested": "2026-11-17T07:44:29.262672Z",
+  "finished": "2026-11-17T07:45:03.377481Z",
+  "seconds": 34.1,
+  "imageGenGenerations": 1
+ },
+ "prompt": {
+  "file": "frozen/ceiling-plaster-c3.txt",
+  "sha256": "0d8be3aa3b6d93073b7999dc0f198044e5b024d2465a4aafda663614496bc55c"
+ },
+ "source": {
+  "file": "codex-3-ceiling-plaster-exec-d857d291-f27d-4ad3-b3a1-f63d649eb069.png",
+  "sha256": "c1954d96e4a8ec3c14ddf92c8fb6fddcdf650da1a16e703370f9079ca12f6f33",
+  "bytes": 2379844,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "jointPolarity": "dark",
+  "profileHighPassPx": 31,
+  "crop": {
+   "x": 0,
+   "y": 0,
+   "w": 1254,
+   "h": 1254,
+   "u": {
+    "mode": "none",
+    "module": null,
+    "cropStart": 0,
+    "cropSize": 1254,
+    "periods": 1,
+    "periodPx": 1254,
+    "mmPerPx": 1.5949,
+    "featherPx": 0,
+    "why": "jointless: the full frame"
+   },
+   "v": {
+    "mode": "none",
+    "module": null,
+    "cropStart": 0,
+    "cropSize": 1254,
+    "periods": 1,
+    "periodPx": 1254,
+    "mmPerPx": 1.5949,
+    "featherPx": 0,
+    "why": "jointless: the full frame"
+   }
+  },
+  "seam": {
+   "feather": "cropped axes: the last featherPx columns / rows cross-fade (cosine) into the source pixels just before the crop start (the true wrap neighbours)",
+   "fullFramePatch": {
+    "u": {
+     "seam": 3.1,
+     "meanNeighbour": 2.5,
+     "ratio": 1.258,
+     "applied": true,
+     "bandAt": 627,
+     "band": 48
+    },
+    "v": {
+     "seam": 3.8,
+     "meanNeighbour": 3.5,
+     "ratio": 1.1,
+     "applied": false
+    },
+    "method": "seam ratio > 1.25: a 48 px cosine-feathered band from the interior strip at patchAt (joint-free) laid across the wrap"
+   }
+  },
+  "lighting": {
+   "threshold": {
+    "cornerToCentre": 0.04,
+    "lowRange": 0.08
+   },
+   "eligible": true,
+   "before": {
+    "cornerToCentre": 0,
+    "spread": 0.003,
+    "lowRange": 0.002
+   },
+   "applied": false,
+   "after": {
+    "cornerToCentre": 0,
+    "spread": 0.003,
+    "lowRange": 0.003
+   }
+  },
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill",
+   "wrap": "3 x 3 tiled, centre extract"
+  },
+  "height": {
+   "jointDepthM": 0,
+   "bevelM": 0,
+   "detailSlope": 0.05,
+   "jointHalfWidthPx": 0,
+   "rowJoints": 0,
+   "courses": 1,
+   "runningBond": null
+  },
+  "normal": {
+   "convention": "tangent space, R = -dh/dx, G = +dh/dy (image y down), B = z (build-reactor-kit.mjs)",
+   "slopes": "metres per metre from the height (m) and the span per texel"
+  },
+  "orm": {
+   "r": "ambient occlusion from cavity",
+   "g": "roughness 0.85-0.95 faces, 0.95 joints / gaps",
+   "b": "metalness 0",
+   "aoGainPerM": 120,
+   "aoBlurPx": 8,
+   "aoFloor": 0.35
+  },
+  "encode": {
+   "color": {
+    "quality": 85,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:2:0"
+   },
+   "normal": {
+    "quality": 90,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "orm": {
+    "quality": 88,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) + plain JS via tools/asset-pipeline/props/build-subway-arch-textures.mjs"
+ },
+ "tileCheck": {
+  "before": {
+   "seamLR": 2.7,
+   "interiorLR": 2.2,
+   "meanLR": 2.3,
+   "ratioLR": 1.151,
+   "seamTB": 3.4,
+   "interiorTB": 3.8,
+   "meanTB": 3.3,
+   "ratioTB": 1.028
+  },
+  "after": {
+   "seamLR": 2.2,
+   "interiorLR": 2.2,
+   "meanLR": 2.3,
+   "ratioLR": 0.956,
+   "seamTB": 3.4,
+   "interiorTB": 3.8,
+   "meanTB": 3.3,
+   "ratioTB": 1.036
+  },
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs interior neighbour rows / columns (pre-JPEG 1024 buffers); phase = the same position in every other whole period; ratio = seam / phase (else / mean); before = the plain crop"
+ },
+ "spanM": {
+  "u": 2,
+  "v": 2
+ },
+ "meanLinearAlbedo": [
+  0.5648,
+  0.5045,
+  0.4338
+ ],
+ "meanRoughness": 0.901,
+ "outputs": {
+  "color": {
+   "url": "assets/textures/subway/arch/subway-arch-ceiling-plaster-color.jpg",
+   "bytes": 61732,
+   "sha256": "5d9c1dbd1410603ad7ad6ef3ad0fe11470922b315944f627d50e9bbd0cdfe0f8",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "normal": {
+   "url": "assets/textures/subway/arch/subway-arch-ceiling-plaster-normal.jpg",
+   "bytes": 68439,
+   "sha256": "8f78ce98c414505e247a2b4d6f5ad4055d2b0740c9eaefba24aa06f3edea4be9",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "orm": {
+   "url": "assets/textures/subway/arch/subway-arch-ceiling-plaster-orm.jpg",
+   "bytes": 122015,
+   "sha256": "216db9d38f841fad51bae97fe357e1bdc9cd4280a2c27a6ba636b611bdb9a3d6",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  }
+ }
+}

@@ -1,0 +1,211 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "subway-arch-floor-terrazzo",
+ "task": "studio-subway-architecture-materials-rework-20261117-072826-01",
+ "lane": "TEX",
+ "status": "runtime PBR derivative (period crop / seam feather / resize / derived normal + ORM / JPEG; deterministic processing only) of an ORIGINAL tileable surface texture generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization for the Subway architecture + materials rework; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Subway public floors: terrazzo",
+ "subject": "polished grey terrazzo 600 x 600 mm with brass divider strips",
+ "cls": "terrazzo",
+ "rebuild": "node tools/asset-pipeline/props/build-subway-arch-textures.mjs",
+ "rawStorage": "reference/tasks/subway-architecture-materials-rework-20261117-072826/gen/{LEDGER.jsonl, raw/codex-<n>-<id>-exec-<uuid>.png, prompts/frozen/<id>-c<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 5,
+  "session": "01a1e877-6e57-7b60-bfa1-7dc85bc750fb",
+  "requested": "2026-11-17T07:45:03.450177Z",
+  "finished": "2026-11-17T07:45:58.550210Z",
+  "seconds": 55.1,
+  "imageGenGenerations": 1
+ },
+ "prompt": {
+  "file": "frozen/floor-terrazzo-c5.txt",
+  "sha256": "f004fbd70bbb2e54b999fccc217831b01548f76d2cd4b24353e058199249f471"
+ },
+ "source": {
+  "file": "codex-5-floor-terrazzo-exec-c06cc2cb-a21c-4491-8320-f15b389f93ad.png",
+  "sha256": "53e3c209427b7dd19da961b63411ea7d43a8bd3a75c2ac4d3873832fb4fe201e",
+  "bytes": 3685324,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "jointPolarity": "brass",
+  "profileHighPassPx": 31,
+  "crop": {
+   "x": 0,
+   "y": 0,
+   "w": 1254,
+   "h": 1254,
+   "u": {
+    "mode": "single",
+    "module": 0.6,
+    "cropStart": 0,
+    "cropSize": 1254,
+    "periods": 1,
+    "periodPx": 1254,
+    "mmPerPx": 0.4785,
+    "featherPx": 0,
+    "why": "one joint per frame at 626.379: the frame is one 0.6 m period"
+   },
+   "v": {
+    "mode": "single",
+    "module": 0.6,
+    "cropStart": 0,
+    "cropSize": 1254,
+    "periods": 1,
+    "periodPx": 1254,
+    "mmPerPx": 0.4785,
+    "featherPx": 0,
+    "why": "one joint per frame at 626.521: the frame is one 0.6 m period"
+   }
+  },
+  "seam": {
+   "feather": "cropped axes: the last featherPx columns / rows cross-fade (cosine) into the source pixels just before the crop start (the true wrap neighbours)",
+   "fullFramePatch": {
+    "u": {
+     "seam": 16.6,
+     "meanNeighbour": 11.1,
+     "ratio": 1.498,
+     "applied": true,
+     "bandAt": 314,
+     "band": 48
+    },
+    "v": {
+     "seam": 16.3,
+     "meanNeighbour": 11.4,
+     "ratio": 1.43,
+     "applied": true,
+     "bandAt": 314,
+     "band": 48
+    },
+    "method": "seam ratio > 1.25: a 48 px cosine-feathered band from the interior strip at patchAt (joint-free) laid across the wrap"
+   }
+  },
+  "lighting": {
+   "threshold": {
+    "cornerToCentre": 0.04,
+    "lowRange": 0.08
+   },
+   "eligible": true,
+   "before": {
+    "cornerToCentre": -0.004,
+    "spread": 0.012,
+    "lowRange": 0.009
+   },
+   "applied": false,
+   "after": {
+    "cornerToCentre": -0.011,
+    "spread": 0.017,
+    "lowRange": 0.009
+   }
+  },
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill",
+   "wrap": "3 x 3 tiled, centre extract"
+  },
+  "height": {
+   "jointDepthM": 0,
+   "bevelM": 0,
+   "detailSlope": 0.015,
+   "jointHalfWidthPx": 4,
+   "rowJoints": 1,
+   "courses": 1,
+   "runningBond": null
+  },
+  "normal": {
+   "convention": "tangent space, R = -dh/dx, G = +dh/dy (image y down), B = z (build-reactor-kit.mjs)",
+   "slopes": "metres per metre from the height (m) and the span per texel"
+  },
+  "orm": {
+   "r": "ambient occlusion from cavity",
+   "g": "roughness 0.3-0.45 faces, 0.35 brass strips",
+   "b": "metalness 0.9 on brass strip pixels (14217 px), else 0",
+   "aoGainPerM": 200,
+   "aoBlurPx": 6,
+   "aoFloor": 0.35
+  },
+  "encode": {
+   "color": {
+    "quality": 85,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:2:0"
+   },
+   "normal": {
+    "quality": 90,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "orm": {
+    "quality": 88,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) + plain JS via tools/asset-pipeline/props/build-subway-arch-textures.mjs"
+ },
+ "tileCheck": {
+  "before": {
+   "seamLR": 15.9,
+   "interiorLR": 8.9,
+   "meanLR": 12.3,
+   "ratioLR": 1.301,
+   "seamTB": 16.1,
+   "interiorTB": 8.7,
+   "meanTB": 12.8,
+   "ratioTB": 1.255
+  },
+  "after": {
+   "seamLR": 12.2,
+   "interiorLR": 8.6,
+   "meanLR": 12.1,
+   "ratioLR": 1.007,
+   "seamTB": 12.8,
+   "interiorTB": 8,
+   "meanTB": 12.6,
+   "ratioTB": 1.013
+  },
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs interior neighbour rows / columns (pre-JPEG 1024 buffers); phase = the same position in every other whole period; ratio = seam / phase (else / mean); before = the plain crop"
+ },
+ "spanM": {
+  "u": 0.6,
+  "v": 0.6
+ },
+ "meanLinearAlbedo": [
+  0.3017,
+  0.2876,
+  0.2749
+ ],
+ "meanRoughness": 0.377,
+ "outputs": {
+  "color": {
+   "url": "assets/textures/subway/arch/subway-arch-floor-terrazzo-color.jpg",
+   "bytes": 274933,
+   "sha256": "e8bda0be99576ecc1014e8ece58941e94795c9cb4b07b321912f230fdf30ae7b",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "normal": {
+   "url": "assets/textures/subway/arch/subway-arch-floor-terrazzo-normal.jpg",
+   "bytes": 23410,
+   "sha256": "ec7b969c1cbb8ff294b16a8a9515da80a193feb4c30d44147119c2edc52cb67d",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "orm": {
+   "url": "assets/textures/subway/arch/subway-arch-floor-terrazzo-orm.jpg",
+   "bytes": 165703,
+   "sha256": "ee546a0784621cdc2f7cc5a5b205cf43e536add58aa874210eb609c84a6864f7",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  }
+ }
+}

@@ -1,0 +1,208 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "subway-arch-rock-painted",
+ "task": "studio-subway-architecture-materials-rework-20261117-072826-01",
+ "lane": "TEX",
+ "status": "runtime PBR derivative (period crop / seam feather / resize / derived normal + ORM / JPEG; deterministic processing only) of an ORIGINAL tileable surface texture generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization for the Subway architecture + materials rework; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Subway cavern stations: painted rock walls / vaults",
+ "subject": "off-white painted shotcrete over blasted rock (tinted at runtime)",
+ "cls": "rock",
+ "rebuild": "node tools/asset-pipeline/props/build-subway-arch-textures.mjs",
+ "rawStorage": "reference/tasks/subway-architecture-materials-rework-20261117-072826/gen/{LEDGER.jsonl, raw/codex-<n>-<id>-exec-<uuid>.png, prompts/frozen/<id>-c<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 8,
+  "session": "01a1e877-b0c8-7a60-8e64-c5724ed72aaa",
+  "requested": "2026-11-17T07:45:20.433022Z",
+  "finished": "2026-11-17T07:45:54.937168Z",
+  "seconds": 34.5,
+  "imageGenGenerations": 1
+ },
+ "prompt": {
+  "file": "frozen/rock-painted-c8.txt",
+  "sha256": "ff9cb872f1f059f7f28e905389f6e6971305c472e8657c99786a21f26653e148"
+ },
+ "source": {
+  "file": "codex-8-rock-painted-exec-8507fb31-2a25-497e-b039-0e5dcc5642ba.png",
+  "sha256": "c0699cbefee15154c50de7e873d8faaf7b069b8a2c3134c625eaadaa95881501",
+  "bytes": 3192383,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "jointPolarity": "dark",
+  "profileHighPassPx": 31,
+  "crop": {
+   "x": 0,
+   "y": 0,
+   "w": 1254,
+   "h": 1254,
+   "u": {
+    "mode": "none",
+    "module": null,
+    "cropStart": 0,
+    "cropSize": 1254,
+    "periods": 1,
+    "periodPx": 1254,
+    "mmPerPx": 2.3923,
+    "featherPx": 0,
+    "why": "jointless: the full frame"
+   },
+   "v": {
+    "mode": "none",
+    "module": null,
+    "cropStart": 0,
+    "cropSize": 1254,
+    "periods": 1,
+    "periodPx": 1254,
+    "mmPerPx": 2.3923,
+    "featherPx": 0,
+    "why": "jointless: the full frame"
+   }
+  },
+  "seam": {
+   "feather": "cropped axes: the last featherPx columns / rows cross-fade (cosine) into the source pixels just before the crop start (the true wrap neighbours)",
+   "fullFramePatch": {
+    "u": {
+     "seam": 6.2,
+     "meanNeighbour": 5.5,
+     "ratio": 1.135,
+     "applied": false
+    },
+    "v": {
+     "seam": 7.5,
+     "meanNeighbour": 7.1,
+     "ratio": 1.053,
+     "applied": false
+    },
+    "method": "seam ratio > 1.25: a 48 px cosine-feathered band from the interior strip at patchAt (joint-free) laid across the wrap"
+   }
+  },
+  "lighting": {
+   "threshold": {
+    "cornerToCentre": 0.04,
+    "lowRange": 0.08
+   },
+   "eligible": true,
+   "before": {
+    "cornerToCentre": 0.004,
+    "spread": 0.006,
+    "lowRange": 0.005
+   },
+   "applied": false,
+   "after": {
+    "cornerToCentre": 0.006,
+    "spread": 0.007,
+    "lowRange": 0.005
+   }
+  },
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill",
+   "wrap": "3 x 3 tiled, centre extract"
+  },
+  "height": {
+   "jointDepthM": 0,
+   "bevelM": 0,
+   "detailSlope": 0.08,
+   "jointHalfWidthPx": 0,
+   "rowJoints": 0,
+   "courses": 1,
+   "runningBond": null,
+   "rockRelief": "multi-scale luminance band-pass (12 / 35 / 90 mm blur over 60 / 180 / 450 mm bases, 1.5 / 4 / 8 mm per standard deviation)"
+  },
+  "normal": {
+   "convention": "tangent space, R = -dh/dx, G = +dh/dy (image y down), B = z (build-reactor-kit.mjs)",
+   "slopes": "metres per metre from the height (m) and the span per texel"
+  },
+  "orm": {
+   "r": "ambient occlusion from cavity",
+   "g": "roughness 0.8-0.95 faces, 0.95 joints / gaps",
+   "b": "metalness 0",
+   "aoGainPerM": 9,
+   "aoBlurPx": 24,
+   "aoFloor": 0.55
+  },
+  "encode": {
+   "color": {
+    "quality": 85,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:2:0"
+   },
+   "normal": {
+    "quality": 90,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "orm": {
+    "quality": 88,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) + plain JS via tools/asset-pipeline/props/build-subway-arch-textures.mjs"
+ },
+ "tileCheck": {
+  "before": {
+   "seamLR": 6,
+   "interiorLR": 5.2,
+   "meanLR": 5.5,
+   "ratioLR": 1.095,
+   "seamTB": 6.8,
+   "interiorTB": 7.6,
+   "meanTB": 7.1,
+   "ratioTB": 0.969
+  },
+  "after": {
+   "seamLR": 6,
+   "interiorLR": 5.2,
+   "meanLR": 5.5,
+   "ratioLR": 1.095,
+   "seamTB": 6.8,
+   "interiorTB": 7.6,
+   "meanTB": 7.1,
+   "ratioTB": 0.969
+  },
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs interior neighbour rows / columns (pre-JPEG 1024 buffers); phase = the same position in every other whole period; ratio = seam / phase (else / mean); before = the plain crop"
+ },
+ "spanM": {
+  "u": 3,
+  "v": 3
+ },
+ "meanLinearAlbedo": [
+  0.6894,
+  0.6591,
+  0.5977
+ ],
+ "meanRoughness": 0.873,
+ "outputs": {
+  "color": {
+   "url": "assets/textures/subway/arch/subway-arch-rock-painted-color.jpg",
+   "bytes": 157639,
+   "sha256": "8b88faa8052ad81e09eac752efe5f68c96715bfc36e5196f7a5fb7b1b88869b1",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "normal": {
+   "url": "assets/textures/subway/arch/subway-arch-rock-painted-normal.jpg",
+   "bytes": 284654,
+   "sha256": "a08324e8737ec8dfe6cc33cd3f34b3884008107752a1082123d4983997509d65",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "orm": {
+   "url": "assets/textures/subway/arch/subway-arch-rock-painted-orm.jpg",
+   "bytes": 147262,
+   "sha256": "836b7ba5a35a362333e5c01efdc31012e006d732693d32024b32cef0a9240060",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  }
+ }
+}

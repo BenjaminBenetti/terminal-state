@@ -1,0 +1,206 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "subway-arch-band-oxblood",
+ "task": "studio-subway-architecture-materials-rework-20261117-072826-01",
+ "lane": "TEX",
+ "status": "runtime PBR derivative (period crop / seam feather / resize / derived normal + ORM / JPEG; deterministic processing only) of an ORIGINAL tileable surface texture generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization for the Subway architecture + materials rework; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Subway wall accent bands / friezes",
+ "subject": "oxblood glazed 150 x 75 mm accent tile, running bond",
+ "cls": "tile",
+ "rebuild": "node tools/asset-pipeline/props/build-subway-arch-textures.mjs",
+ "rawStorage": "reference/tasks/subway-architecture-materials-rework-20261117-072826/gen/{LEDGER.jsonl, raw/codex-<n>-<id>-exec-<uuid>.png, prompts/frozen/<id>-c<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 17,
+  "session": "01a1e87a-2cb1-7873-af25-66cc205d92c6",
+  "requested": "2026-11-17T07:48:03.265152Z",
+  "finished": "2026-11-17T07:48:39.314202Z",
+  "seconds": 36,
+  "imageGenGenerations": 1
+ },
+ "prompt": {
+  "file": "frozen/band-oxblood-c17.txt",
+  "sha256": "2ac0f00a45fe8067be010745db0a8f2b66ff770e3f9be14c84559ea9f28195b3"
+ },
+ "source": {
+  "file": "codex-17-band-oxblood-exec-933e34d2-0cdc-4c38-84d9-e95ce4ae92c2.png",
+  "sha256": "1fe2c41060fce705adf04434cab8f2e467e984cd3eee7b26cae3c7bf08160bc0",
+  "bytes": 2079259,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "jointPolarity": "light",
+  "profileHighPassPx": 31,
+  "crop": {
+   "x": 77,
+   "y": 78,
+   "w": 1098,
+   "h": 1097,
+   "u": {
+    "mode": "joints",
+    "module": 0.15,
+    "cropStart": 77,
+    "cropSize": 1098,
+    "periods": 7,
+    "periodPx": 156.792,
+    "mmPerPx": 0.9567,
+    "featherPx": 27,
+    "jointStepPx": 78.42,
+    "jointLines": 15,
+    "why": "from joint centre 76.999 to joint centre 1174.542: 7 whole periods of 156.792 px (2 joint lines per period)"
+   },
+   "v": {
+    "mode": "joints",
+    "module": 0.15,
+    "cropStart": 78,
+    "cropSize": 1097,
+    "periods": 7,
+    "periodPx": 156.732,
+    "mmPerPx": 0.957,
+    "featherPx": 27,
+    "jointStepPx": 78.42,
+    "jointLines": 15,
+    "why": "from joint centre 78.12 to joint centre 1175.243: 7 whole periods of 156.732 px (2 joint lines per period)"
+   }
+  },
+  "seam": {
+   "feather": "cropped axes: the last featherPx columns / rows cross-fade (cosine) into the source pixels just before the crop start (the true wrap neighbours)",
+   "fullFramePatch": null
+  },
+  "lighting": {
+   "threshold": {
+    "cornerToCentre": 0.04,
+    "lowRange": 0.08
+   },
+   "eligible": true,
+   "before": {
+    "cornerToCentre": 0.015,
+    "spread": 0.082,
+    "lowRange": 0.019
+   },
+   "applied": false,
+   "after": {
+    "cornerToCentre": 0.021,
+    "spread": 0.085,
+    "lowRange": 0.018
+   }
+  },
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill",
+   "wrap": "3 x 3 tiled, centre extract"
+  },
+  "height": {
+   "jointDepthM": 0.002,
+   "bevelM": 0.003,
+   "detailSlope": 0.03,
+   "jointHalfWidthPx": 1.5,
+   "rowJoints": 14,
+   "courses": 14,
+   "runningBond": {
+    "courses": 14,
+    "score": 12861.621,
+    "stackAlternative": 7775.096,
+    "ok": true
+   }
+  },
+  "normal": {
+   "convention": "tangent space, R = -dh/dx, G = +dh/dy (image y down), B = z (build-reactor-kit.mjs)",
+   "slopes": "metres per metre from the height (m) and the span per texel"
+  },
+  "orm": {
+   "r": "ambient occlusion from cavity",
+   "g": "roughness 0.18-0.32 faces, 0.9 joints / gaps",
+   "b": "metalness 0",
+   "aoGainPerM": 260,
+   "aoBlurPx": 6,
+   "aoFloor": 0.35
+  },
+  "encode": {
+   "color": {
+    "quality": 85,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:2:0"
+   },
+   "normal": {
+    "quality": 90,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "orm": {
+    "quality": 88,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) + plain JS via tools/asset-pipeline/props/build-subway-arch-textures.mjs"
+ },
+ "tileCheck": {
+  "before": {
+   "seamLR": 9.6,
+   "interiorLR": 44.4,
+   "meanLR": 4,
+   "phaseLR": 17,
+   "ratioLR": 0.567,
+   "seamTB": 16.7,
+   "interiorTB": 25.9,
+   "meanTB": 6.8,
+   "phaseTB": 38.3,
+   "ratioTB": 0.436
+  },
+  "after": {
+   "seamLR": 17.9,
+   "interiorLR": 44.5,
+   "meanLR": 4,
+   "phaseLR": 17,
+   "ratioLR": 1.052,
+   "seamTB": 15.4,
+   "interiorTB": 25.8,
+   "meanTB": 6.8,
+   "phaseTB": 38.4,
+   "ratioTB": 0.401
+  },
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs interior neighbour rows / columns (pre-JPEG 1024 buffers); phase = the same position in every other whole period; ratio = seam / phase (else / mean); before = the plain crop"
+ },
+ "spanM": {
+  "u": 1.0504,
+  "v": 1.0499
+ },
+ "meanLinearAlbedo": [
+  0.1282,
+  0.0261,
+  0.0216
+ ],
+ "meanRoughness": 0.305,
+ "outputs": {
+  "color": {
+   "url": "assets/textures/subway/arch/subway-arch-band-oxblood-color.jpg",
+   "bytes": 108064,
+   "sha256": "a7844edd8d68d055038cc0f382f95f8bfe35c61918710e8e8d44b5792947b788",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "normal": {
+   "url": "assets/textures/subway/arch/subway-arch-band-oxblood-normal.jpg",
+   "bytes": 98477,
+   "sha256": "dbdff4025b4b88482234fabd97ccea0189b54708bb727a8640d510b27a8e48c4",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "orm": {
+   "url": "assets/textures/subway/arch/subway-arch-band-oxblood-orm.jpg",
+   "bytes": 164354,
+   "sha256": "db86b0c7a68536437fc3ba353fd5e4a71f929f9266df963e68448722f9b5e0c8",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  }
+ }
+}

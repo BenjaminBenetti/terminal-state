@@ -84,6 +84,11 @@ export const LEVEL_ONLY_RULES: readonly LevelOnlyRule[] = [
   // reuses the mall's store fixtures / textures, the Reactor's industrial kit (the rail depot) and the Skyways street wrecks (the rules'
   // `also` lists above); it fetches only the keys its own layout places
   {level: 'surface', path: /^(?:\.\/)?assets\/(?:models\/surface-[A-Za-z0-9_-]+\.glb|textures\/surface\/[A-Za-z0-9_/-]+\.(?:png|jpg|jpeg|webp|ktx2))$/},
+  // task studio-subway-architecture-materials-rework-20261117-072826-01 (lane TEX): the Subway's own surface sets — textures/subway/**
+  // (the architecture rework's Codex tile / stone / concrete / enamel / slat / terrazzo / plaster / painted-rock PBR sets,
+  // assets/subwayArchTextures.generated.ts, loaded by world/subwayArchTextures.ts behind the loading screen). The Subway's existing
+  // allowance for the Reactor family's mine-rock / pit-concrete sets (above) is unchanged.
+  {level: 'subway', path: /^(?:\.\/)?assets\/textures\/subway\/[A-Za-z0-9_/-]+\.(?:png|jpg|jpeg|webp|ktx2)$/},
 ];
 
 /** The level that alone may load `url`, or null when it is shared. */

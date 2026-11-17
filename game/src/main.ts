@@ -195,6 +195,9 @@ async function boot(): Promise<void> {
   // (task studio-rt-flashlight-toggle-hitch-20261116-052336-01) session-only ?rtstandby=off (QA / comparisons): the torch-off frames
   // trace nothing, as before the standby (Game.rtStandby)
   if (params.get('rtstandby') === 'off') game.rtStandby = false;
+  // (task studio-subway-architecture-materials-rework-20261117-072826-01) QA-only ?subwayLayout=N: the QA scratch run's Subway station builds
+  // with layout version N (an older saved station's look, e.g. 2, next to the current one); never a campaign, never persisted
+  if (qa && params.has('subwayLayout')) game.qaSubwayLayout = Number(params.get('subwayLayout'));
   copySettingsInto(game.settings, settings.get());
   game.applySettings();
   settings.subscribe((s, changed) => {

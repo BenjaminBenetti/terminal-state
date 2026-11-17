@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 96109,
-      "sha256": "59d2fe40b30cde88106e14cc371bf7045ab17352afa8de1f12b0d626e4ed4452"
+      "bytes": 100373,
+      "sha256": "f8ac52c8e774ece22103ab6f0df04d4427223fa87979a7c4f76f2bac8566e9d3"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -3054,6 +3054,106 @@
       "sha256": "50abde035753fad48aab8779a12817435178c1a5d720eecf4105c22a4d3dbdf9"
     },
     {
+      "path": "assets/derivatives/subway-arch-band-bottle.json",
+      "bytes": 5911,
+      "sha256": "4224a1770b9f17f8e04e173da9dee8961dd02a34f3def9778192660c1331d06d"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-band-navy.json",
+      "bytes": 5889,
+      "sha256": "354d5284d74d4b37795b496c76734bece901057d261cc4c406e3846a9687b215"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-band-ochre.json",
+      "bytes": 5897,
+      "sha256": "5205236237ff96a438946f6b50878f035cfd116359003fdb2249e33acbcda312"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-band-orange.json",
+      "bytes": 5899,
+      "sha256": "5752f69d44db48fac5a07e71dff4582bff46885a55a81ea73bde5b375fc43138"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-band-oxblood.json",
+      "bytes": 5907,
+      "sha256": "42e02c53029d388dc11d7fbdfccdc624489f1d8e53c4fdfdd70133aa0fe88b6b"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-band-signal.json",
+      "bytes": 5904,
+      "sha256": "7b95b603e2d3265f68de500144ad629c6a5bcda9d1e81144a63aacb669b12bff"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-ceiling-plaster.json",
+      "bytes": 5830,
+      "sha256": "e5fca52eeb869cc55d624e02e2692376178ffb14224723fa241c825a0f6aa7dd"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-concrete-precast.json",
+      "bytes": 5630,
+      "sha256": "4e08e25bece54afa0ff12660b97a2a189283f25edc3c26499aa402693fabc383"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-enamel-panel.json",
+      "bytes": 5692,
+      "sha256": "f867c7b7012f35c63894568ee6624ea26f6676b4156807ac871f1c9ef5b9350f"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-floor-granite.json",
+      "bytes": 5631,
+      "sha256": "916b6bf8004b1a39f9336540489c67bf4cda355d0ff0725a1fd2ac55de63ad1e"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-floor-terrazzo.json",
+      "bytes": 6010,
+      "sha256": "f461206d4dc9df717adafc5fc51391c4b3e5b2425794f0ef327f16f73aac08bf"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-metal-slat-ceiling.json",
+      "bytes": 5949,
+      "sha256": "f0b8c37b49b277bc75ee3650ebf7d2cfc7a0ade9ec8e4d1aa5ab6a5f38759258"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-plinth-granite.json",
+      "bytes": 5738,
+      "sha256": "a08f56e66c73d0dca7428257d2b1ac57a58782feb4bc8287b4e229196b9bfe50"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-rock-painted.json",
+      "bytes": 5953,
+      "sha256": "b85f4d214975a014b1e336d380fa79f4cc69bbf22faf599a8ef5ebde69c96219"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-stone-limestone.json",
+      "bytes": 5893,
+      "sha256": "a87b1189adbf4dc09daf8b14c91380f4bc5d16ca5b8b20cf6319dc8630b1412f"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-tile-blue-square.json",
+      "bytes": 5862,
+      "sha256": "2fedb732250fc1fb4e6deb8a8d69cc5a0267f3ac1e9df11ffb77bce5c2d1215c"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-tile-cream.json",
+      "bytes": 5920,
+      "sha256": "1faa829d0e432d8caef977fd1b02dd230d2c54ffb220c3cdde0efdd741a6087f"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-tile-green-brick.json",
+      "bytes": 5941,
+      "sha256": "a96cb82d18e4e12e0b82bfafe25ff5928dbb40e78755285b4c77cf045bc255d0"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-tile-terracotta.json",
+      "bytes": 5934,
+      "sha256": "870b19b47ecc56091f5524e79f397497eb15ec30fcb8c76ec483d2260759d503"
+    },
+    {
+      "path": "assets/derivatives/subway-arch-tile-white-large.json",
+      "bytes": 5851,
+      "sha256": "f4afbcc0bdf057e4ba76dd7a1886a00273470db91370a5552fda286ff9a01e61"
+    },
+    {
       "path": "assets/derivatives/surface-military-truck.json",
       "bytes": 30184,
       "sha256": "7a368e16e106fc732340aa5ed0804105ffdb9ed4386d49430435eae4a61fcbcd"
@@ -6097,6 +6197,306 @@
       "path": "assets/textures/skyways/stores/science/science-art.jpg",
       "bytes": 1072718,
       "sha256": "b99893617b40127d854ee4f03039532805fd1f55a93ae04108d20c1ea0cf9ca5"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-bottle-color.jpg",
+      "bytes": 145134,
+      "sha256": "35ed2c4748125af049ce90a293474a800d8962f394d79991ba89134d5d7d5455"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-bottle-normal.jpg",
+      "bytes": 88030,
+      "sha256": "da5ffd2e5c6cd422bb636f63f4000e8f6ffc3adf6accc84c57a76f20fded9b87"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-bottle-orm.jpg",
+      "bytes": 142114,
+      "sha256": "9b368e35cce0a6e60dd73c7d69930f37a076279a0f7822127cc4c0200729b45a"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-navy-color.jpg",
+      "bytes": 141130,
+      "sha256": "9362ec1da4cf68d21d107e10437c202a45e23fdb3633f87a039f41893519f016"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-navy-normal.jpg",
+      "bytes": 99450,
+      "sha256": "87f7727bad1f4a7faec00cfd5c69186195809f9af2004d1f42271e9069ca1cad"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-navy-orm.jpg",
+      "bytes": 160065,
+      "sha256": "fa26ea40667ff2a11bfedb2fc3e0ace41bb582f73f95a16eb52de01284498ea1"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-ochre-color.jpg",
+      "bytes": 152073,
+      "sha256": "b55d44ea426c1526dab06fb6e2a3b51650a7f96d6474b686aca3d0d2fc3b36be"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-ochre-normal.jpg",
+      "bytes": 96894,
+      "sha256": "a162c95e3ef09a756448b4a55ccf860e7b20b459e4b68d0cbd0a2fc15aa444fd"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-ochre-orm.jpg",
+      "bytes": 166096,
+      "sha256": "096760df021a4a8e07a800a89f0014499082c89ae40398b38d7857291fc0a088"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-orange-color.jpg",
+      "bytes": 152430,
+      "sha256": "cd0debc1f78b6fad082e9b0f7d858c2a7ae3b64f54d8a7dcdc749e944678deec"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-orange-normal.jpg",
+      "bytes": 101775,
+      "sha256": "6a6f3b37dca1fd5c5f327fb9f061bc900467315574219e5ecada6517d09cc57b"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-orange-orm.jpg",
+      "bytes": 178106,
+      "sha256": "7ed28ee2b16f9d68202f405686c0a9573619bcbc90a33ca57880e1c3893cfe54"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-oxblood-color.jpg",
+      "bytes": 108064,
+      "sha256": "a7844edd8d68d055038cc0f382f95f8bfe35c61918710e8e8d44b5792947b788"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-oxblood-normal.jpg",
+      "bytes": 98477,
+      "sha256": "dbdff4025b4b88482234fabd97ccea0189b54708bb727a8640d510b27a8e48c4"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-oxblood-orm.jpg",
+      "bytes": 164354,
+      "sha256": "db86b0c7a68536437fc3ba353fd5e4a71f929f9266df963e68448722f9b5e0c8"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-signal-color.jpg",
+      "bytes": 144415,
+      "sha256": "a82e3ba4db99b1408310d6f54292b35a8640a23a1df831379f7d0ecaa1b1acee"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-signal-normal.jpg",
+      "bytes": 95985,
+      "sha256": "63a88edc84eed7184a43c9ce90e7e9072217a58917aa533912a742f9c26742d2"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-band-signal-orm.jpg",
+      "bytes": 160405,
+      "sha256": "f00c6cff28f2ce3526f65d16087a90edabe994e1cb72f8c770743ebe43f78659"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-ceiling-plaster-color.jpg",
+      "bytes": 61732,
+      "sha256": "5d9c1dbd1410603ad7ad6ef3ad0fe11470922b315944f627d50e9bbd0cdfe0f8"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-ceiling-plaster-normal.jpg",
+      "bytes": 68439,
+      "sha256": "8f78ce98c414505e247a2b4d6f5ad4055d2b0740c9eaefba24aa06f3edea4be9"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-ceiling-plaster-orm.jpg",
+      "bytes": 122015,
+      "sha256": "216db9d38f841fad51bae97fe357e1bdc9cd4280a2c27a6ba636b611bdb9a3d6"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-concrete-precast-color.jpg",
+      "bytes": 107696,
+      "sha256": "9b14db88232f82f71ab08578d62b83ed21a70b2ff002ba0e6d6cf08beeb16aeb"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-concrete-precast-normal.jpg",
+      "bytes": 101550,
+      "sha256": "f6a90f39f714f8d65d5fca5d2f6b6d53ab6a8531917d86239d0954c8ab767211"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-concrete-precast-orm.jpg",
+      "bytes": 104221,
+      "sha256": "0efc205a8d96a120cab8e1594f8d0f9c9b06f40f291488af0ba6d2f807a91d62"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-enamel-panel-color.jpg",
+      "bytes": 57519,
+      "sha256": "a9f26ffaf40043fec1b8bca1756939c7c5a1d31be56b50a069b35aa8c4ca9435"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-enamel-panel-normal.jpg",
+      "bytes": 32717,
+      "sha256": "d613c4ccaa66053dee6eeb21283b180491eb88bff332ded23cd7d258eafd1f01"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-enamel-panel-orm.jpg",
+      "bytes": 30560,
+      "sha256": "c9429602cbd8b1d3e9b3df4cf256c1c0fd61da546701d10d2f6ba22ef5db0485"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-floor-granite-color.jpg",
+      "bytes": 203550,
+      "sha256": "1c9f8b78fa2b5a90e3144d9b37d7be4e8350fe87a7a5ee224b178f13516d1e37"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-floor-granite-normal.jpg",
+      "bytes": 63428,
+      "sha256": "3edbbb3110a6f178ec3b98e7c2753918c0d22eb3bba9a96423ced93ab5a6563b"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-floor-granite-orm.jpg",
+      "bytes": 174006,
+      "sha256": "ccb42a87bfb3be05cfec51dfd8e6bb1f170f2a0c0dc82554f95ec02e7d439923"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-floor-terrazzo-color.jpg",
+      "bytes": 274933,
+      "sha256": "e8bda0be99576ecc1014e8ece58941e94795c9cb4b07b321912f230fdf30ae7b"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-floor-terrazzo-normal.jpg",
+      "bytes": 23410,
+      "sha256": "ec7b969c1cbb8ff294b16a8a9515da80a193feb4c30d44147119c2edc52cb67d"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-floor-terrazzo-orm.jpg",
+      "bytes": 165703,
+      "sha256": "ee546a0784621cdc2f7cc5a5b205cf43e536add58aa874210eb609c84a6864f7"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-metal-slat-ceiling-color.jpg",
+      "bytes": 59856,
+      "sha256": "b3ac4ccde2ae31388f3e46ce70c30cdb53b2597651992709afc346c1496544aa"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-metal-slat-ceiling-normal.jpg",
+      "bytes": 84559,
+      "sha256": "85c67a86b1f712ec1f5f363911096cdd5dd5943dad28f7cf04b2f1e6e835213c"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-metal-slat-ceiling-orm.jpg",
+      "bytes": 81628,
+      "sha256": "448401b2fed558eaeda1e59fb22be24eae8037d39f9e8ce1fa43d3d8e0ac5d68"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-plinth-granite-color.jpg",
+      "bytes": 152331,
+      "sha256": "71f03e490214c2c1b692ab11dd3f31b291feba6c9b1baf0ad52ceb4b1e651368"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-plinth-granite-normal.jpg",
+      "bytes": 63293,
+      "sha256": "6f4a8763fb47b628b4419eb0fc6d2a47e9fde66776db55d7af6747854359dca1"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-plinth-granite-orm.jpg",
+      "bytes": 171931,
+      "sha256": "ebb8600182c98ea5330df34de1e02bc11e55539365cdd751f250f818ff31b62e"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-rock-painted-color.jpg",
+      "bytes": 157639,
+      "sha256": "8b88faa8052ad81e09eac752efe5f68c96715bfc36e5196f7a5fb7b1b88869b1"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-rock-painted-normal.jpg",
+      "bytes": 284654,
+      "sha256": "a08324e8737ec8dfe6cc33cd3f34b3884008107752a1082123d4983997509d65"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-rock-painted-orm.jpg",
+      "bytes": 147262,
+      "sha256": "836b7ba5a35a362333e5c01efdc31012e006d732693d32024b32cef0a9240060"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-stone-limestone-color.jpg",
+      "bytes": 137324,
+      "sha256": "a5a5af1e7b8e7341b87fdcb128d1d626cd4c0de9506016a988f716f7ef962bd3"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-stone-limestone-normal.jpg",
+      "bytes": 43492,
+      "sha256": "841ec1281855fb4a83055fa33a8b48df81dab847f31abfd39bc6df1a75123ce3"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-stone-limestone-orm.jpg",
+      "bytes": 146629,
+      "sha256": "260c7bf7b62bad9867ad7e149da946020d40d45365d25422a689d4841f06abcf"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-tile-blue-square-color.jpg",
+      "bytes": 87727,
+      "sha256": "a14ff8320a5d9170cea41dc4af33b3816ef9f64005ec7c5b1ca2b72a5b137820"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-tile-blue-square-normal.jpg",
+      "bytes": 65716,
+      "sha256": "38e5995a330ff8fab864c6be8b668009804bb64cf0ec1e080b8995f694bde63e"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-tile-blue-square-orm.jpg",
+      "bytes": 138387,
+      "sha256": "c2d8d2461778df6c62dddb24a8602782b1059beeea5c4ea18aac7d1f44f9af55"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-tile-cream-color.jpg",
+      "bytes": 81458,
+      "sha256": "61f1f3bb644271135cb289b6e8661e02ff9041edd4aee91277f25d8caaa6580d"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-tile-cream-normal.jpg",
+      "bytes": 100389,
+      "sha256": "18e4a43ff76f0ef97a591a29892cdadc2bbd4763fdb8c668a8b9e90e5e81bf95"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-tile-cream-orm.jpg",
+      "bytes": 159277,
+      "sha256": "b73b12709495201d0c459af143878e60c596e86c2e247e1958ece39fabdafb66"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-tile-green-brick-color.jpg",
+      "bytes": 130172,
+      "sha256": "1945d86422d87c40ddace4e28be4742db500db0c4cc61883369f422fbeff6b53"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-tile-green-brick-normal.jpg",
+      "bytes": 82810,
+      "sha256": "c75eac2aac2210e4f0bc0b4be1d57cb4e6f0f559ef416480da417dcaa78c92ca"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-tile-green-brick-orm.jpg",
+      "bytes": 140254,
+      "sha256": "638ad9630e4e5dc0bef8b510f14c98c417f716295449c5d0f4eba0466e063af5"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-tile-terracotta-color.jpg",
+      "bytes": 179106,
+      "sha256": "281978157d5e67822dfbeb3ca01ed979059b076d5e8c4a5a1e7d1ea0d9898a5c"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-tile-terracotta-normal.jpg",
+      "bytes": 77542,
+      "sha256": "8106cd6d02e45e3251923c434ad490faa988562338f8f54591d89b98d101df84"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-tile-terracotta-orm.jpg",
+      "bytes": 165355,
+      "sha256": "89402317f28426d4126f2f21afa8d46b1b7315a6094db97be7d61e115700b603"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-tile-white-large-color.jpg",
+      "bytes": 32279,
+      "sha256": "0e8d39ed1ec71bf911ca49e4c8299a5d9bde6b20745e14b7485a576367679808"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-tile-white-large-normal.jpg",
+      "bytes": 53684,
+      "sha256": "038a66ab248aaf89d3b973f93a94f626135985b38a60f4e45de54ef813bdddba"
+    },
+    {
+      "path": "assets/textures/subway/arch/subway-arch-tile-white-large-orm.jpg",
+      "bytes": 81049,
+      "sha256": "40c998a128f367fa896a741b771f5b56b13a94ea4c70c0799ebd53476fc33b29"
     },
     {
       "path": "assets/textures/train/train-int-bulkhead.jpg",

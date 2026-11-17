@@ -136,6 +136,72 @@ export interface Area extends Rect {
    * shelves / counters / in its containers.
    */
   noFloorLoot?: true;
+  /**
+   * Task studio-subway-architecture-materials-rework-20261117-072826-01: the SECTION of a layout-version-3 grand hall (gen/stationHallV3.ts):
+   * a tall nave between low side aisles (their cells' grid.ceil lowered), arcade column lines on the nave / aisle boundaries, the clear
+   * circulation spine. Absent on every other area (and on every version-1 / version-2 station).
+   */
+  hallSection?: HallSection;
+}
+
+/**
+ * Task studio-subway-architecture-materials-rework-20261117-072826-01: a version-3 grand hall's section. Metres RELATIVE to the area's corner
+ * (area.x / area.y * CELL), so the record survives the generator's crop and the track extensions' re-framing: `across` values run across the
+ * hall's long axis (z of a hall along X), `along` values along it. gen/hallSection.ts hallSectionWorld(area) gives world coordinates.
+ */
+export interface HallSection {
+  /** 'basilica' = nave + two aisles; 'transept' = the same with a full-height crossing at the hall centre; 'gate-aisle' = one aisle (gate side). */
+  variant: 'basilica' | 'transept' | 'gate-aisle';
+  alongX: boolean;
+  /** The full-height nave (across span) and its ceiling (= the area ceiling, absolute). */
+  nave: [number, number];
+  naveCeil: number;
+  /** The low side aisles (across spans; gate side first) and their ceiling (absolute). */
+  aisles: [number, number][];
+  aisleCeil: number;
+  /** Across positions of the arcade column rows (one per aisle, in the aisle's cell row next to the nave). */
+  arcades: number[];
+  /** Along positions of the arcade columns (the bay lines; transept: the crossing's inner line omitted). */
+  lines: number[];
+  /** 'transept': the crossing's along span (its aisle cells keep the nave ceiling). */
+  transept?: [number, number];
+  /** The clear circulation spine (across span), kept free end to end. */
+  spine: [number, number];
+  /**
+   * Task studio-subway-rework-m2-finishing-20261117-111246-01: the hall's functional DESTINATIONS (the v3 dresser's furnished fronts), each
+   * framed / signed by the render kit and given its own fixtures by the hall light plan. Absent on a hall dressed before the finishing pass.
+   */
+  fronts?: HallFront[];
+  /** ... and the purposeful features of selected clerestory bays (the rest keep the kit's framed blind panels). */
+  upper?: HallUpperFeature[];
+}
+
+/**
+ * A version-3 hall's functional front: a destination the dresser furnished (relative metres, as HallSection). `along` / `across` bound the
+ * front's floor zone — the furniture plus its counter / queue / seating apron — on the side of `wall`.
+ */
+export interface HallFront {
+  /** 'office': the ticket office (booths, queue lanes); 'waiting': a bench group; 'kiosk': a retail / news / food pocket; 'service':
+   *  an information / ticket-machine / cash point. */
+  kind: 'office' | 'waiting' | 'kiosk' | 'service';
+  /** The aisle wall it backs onto ('N' gate side, 'S' exit side), or 'nave' for a free-standing island beside the spine. */
+  wall: 'N' | 'S' | 'nave';
+  along: [number, number];
+  across: [number, number];
+  /** Its fascia / hung sign's text (the dresser placed the sign itself in layout.signs). */
+  label?: string;
+}
+
+/** A purposeful clerestory bay: a station clock, a framed sign tablet or a ventilation grille (relative metres, as HallSection). */
+export interface HallUpperFeature {
+  kind: 'clock' | 'tablet' | 'grille';
+  /** The clerestory face's across position (S.nave[0] or S.nave[1]) and the direction it faces into the nave (+1: towards +across). */
+  face: number;
+  facing: 1 | -1;
+  /** The bay's along span between its piers. */
+  along: [number, number];
+  /** A tablet's text (the dresser placed its sign in layout.signs, centred on the bay). */
+  text?: string;
 }
 
 export interface Door extends Rect {
@@ -173,7 +239,20 @@ export interface LightPlacement {
   tint?: readonly [number, number, number];
   /** Task reactor-expansion-20261101 (lane GASLIGHT): where the fixture is MOUNTED (the Reactor pit's caged lamps); absent = ceiling. */
   mount?: LightMount;
+  /**
+   * Task studio-subway-architecture-materials-rework-20261117-072826-01: the architectural fixture of a Subway plan-family hall light
+   * (gen/subwayHallLights.ts; drawn by world/subwayKit.ts). Absent = the station's standard fluorescent fixture.
+   */
+  style?: SubwayLightStyle;
 }
+/**
+ * Task studio-subway-architecture-materials-rework-20261117-072826-01: hall fixture styles in the architectural rhythm (gen/subwayBays.ts):
+ *  - 'drum': a large drum pendant on one stem, hung at the bay centre of a tall nave / hall (y = the drum's underside);
+ *  - 'downlight': a recessed round downlight flush in a low soffit (an aisle, a gallery underside; y = just below the soffit);
+ *  - 'cove': a concealed linear uplight on top of a transverse beam / cornice (no visible fixture body; the kit draws the lit strip;
+ *    y = the strip, just below the ceiling it washes).
+ */
+export type SubwayLightStyle = 'drum' | 'downlight' | 'cove';
 /**
  * Task reactor-expansion-20261101 (lane GASLIGHT): a wall-bracket or post-mounted lamp. `x / y / z` = the mount point (the wall face at
  * the lamp's height, or the post's FOOT on the deck), `nx / nz` = the unit direction the head reaches out along (out of the wall into
@@ -191,6 +270,11 @@ export interface SignPlacement {
   hang?: boolean;
   /** Plate width override (m). */
   w?: number;
+  /** Task studio-subway-rework-m2-finishing-20261117-111246-01: plate height override (m; a v3 hall's clerestory tablet). Absent = signDims. */
+  h?: number;
+  /** Task studio-subway-rework-m2-finishing-20261117-111246-01: a BACKLIT plate's glow (0..1: an illuminated destination sign of a v3 hall;
+   *  world/builder.ts draws its face emissive). Absent = an ordinary plate. */
+  lit?: number;
   /** Iteration 08: level the sign is mounted on (default 0; hang rods reach that level's ceiling); y is absolute. */
   level?: number;
   /** Task office-overhaul-20261030 (lane TENANTS): company-styled plate (world/builder.ts signTexture); absent = the default plate. */

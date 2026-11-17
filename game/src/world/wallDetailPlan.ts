@@ -68,6 +68,10 @@ export function finishFamily(finish: string): Finish {
   if (/^skyways-boh/.test(finish)) return 'paint';
   if (/^skyways-/.test(finish)) return 'office';
   if (/^market-/.test(finish)) return 'office'; // task studio-survivor-market-20261108-005807-01: corrugated / plywood, never cut by the station grid
+  // task studio-subway-architecture-materials-rework-20261117-072826-01: the Subway scheme's zone keys (world/subwayFinish.ts) — glazed tile,
+  // stone, plaster and slats on their own module (never the station tile grid: no lost-tile cuts out of course); precast concrete spalls
+  const sub = /^subway-(tile|stone|concrete|plaster|metal|terrazzo)-/.exec(finish);
+  if (sub) return sub[1] === 'concrete' ? 'concrete' : 'office';
   if (/shop/i.test(finish)) return 'shopTile';
   if (/tile/i.test(finish)) return 'tile';
   if (/paint|plaster|block/i.test(finish)) return 'paint';
@@ -681,7 +685,9 @@ function planFace(ctx: PlanCtx, pf: PlannedFace, idx: number, station: {bayPhase
   for (let i = n(pf.finish === 'paint' || pf.finish === 'concrete' ? R.spall : 0); i > 0; i--) finishDamage(st, ctx, st.rng.range(0.4, pf.len - 0.4), f.y0 + st.rng.range(0.25, Math.min(2.4, H - 0.2)), 0.7);
   for (let i = n(R.crack); i > 0; i--) crackAt(st, ctx, st.rng.range(0.4, pf.len - 0.4), f.y0 + st.rng.range(0.3, Math.min(2.6, H - 0.3)));
   for (let i = n(R.patch); i > 0; i--) patchAt(st, ctx, st.rng.range(0.4, pf.len - 0.4), f.y0 + st.rng.range(0.3, Math.min(2.2, H - 0.3)));
-  for (let i = n(R.streak, 0.6); i > 0; i--) streakAt(st, ctx, st.rng.range(0.5, pf.len - 0.5), st.rng.range(0.25, 0.45), 'grime');
+  // (task studio-subway-architecture-materials-rework-20261117-072826-01, user: "not the same dramatic streaks on every wall": a station with
+  // an identity keeps its leak hotspots but half the random grime runs)
+  for (let i = n(R.streak, ctx.layout.identity ? 0.3 : 0.6); i > 0; i--) streakAt(st, ctx, st.rng.range(0.5, pf.len - 0.5), st.rng.range(0.25, 0.45), 'grime');
   // Lower edges chipped where traffic is: wall segments next to openings first.
   if (R.edgeChips > 0 && H > 1 && pf.atFloor) {
     for (const [a, b] of segments(pf)) {

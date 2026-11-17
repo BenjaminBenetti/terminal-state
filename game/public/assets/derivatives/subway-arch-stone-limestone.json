@@ -1,0 +1,203 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "subway-arch-stone-limestone",
+ "task": "studio-subway-architecture-materials-rework-20261117-072826-01",
+ "lane": "TEX",
+ "status": "runtime PBR derivative (period crop / seam feather / resize / derived normal + ORM / JPEG; deterministic processing only) of an ORIGINAL tileable surface texture generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization for the Subway architecture + materials rework; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Subway grand halls: limestone wall cladding",
+ "subject": "honed pale limestone 1200 x 600 mm cladding panels",
+ "cls": "stone",
+ "rebuild": "node tools/asset-pipeline/props/build-subway-arch-textures.mjs",
+ "rawStorage": "reference/tasks/subway-architecture-materials-rework-20261117-072826/gen/{LEDGER.jsonl, raw/codex-<n>-<id>-exec-<uuid>.png, prompts/frozen/<id>-c<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 20,
+  "session": "01a1e87a-f5d2-7fe2-b566-356856be133f",
+  "requested": "2026-11-17T07:48:54.740062Z",
+  "finished": "2026-11-17T07:49:42.680431Z",
+  "seconds": 47.9,
+  "imageGenGenerations": 1
+ },
+ "prompt": {
+  "file": "frozen/stone-limestone-c20.txt",
+  "sha256": "36a7f5e474fabbfc5ff9eb72c8497365df3e6237b5f79fcf0966cd591a1e7074"
+ },
+ "source": {
+  "file": "codex-20-stone-limestone-exec-6d4ecbc6-8b40-4ff3-905e-fe1745a11bbb.png",
+  "sha256": "595266249793470d82ea5b1bac9bfd3dc8e2f78a8f6e8cca97430f437407ebc6",
+  "bytes": 3119949,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "jointPolarity": "dark",
+  "profileHighPassPx": 31,
+  "crop": {
+   "x": 0,
+   "y": 626,
+   "w": 1254,
+   "h": 627,
+   "u": {
+    "mode": "single",
+    "module": 1.2,
+    "cropStart": 0,
+    "cropSize": 1254,
+    "periods": 1,
+    "periodPx": 1254,
+    "mmPerPx": 0.9569,
+    "featherPx": 0,
+    "why": "one joint per frame at 626.482: the frame is one 1.2 m period"
+   },
+   "v": {
+    "mode": "single",
+    "module": 0.6,
+    "cropStart": 626,
+    "cropSize": 627,
+    "periods": 1,
+    "periodPx": 627,
+    "mmPerPx": 0.9569,
+    "featherPx": 6,
+    "why": "one period (627 px = 0.6 m) starting on the joint at 626.374: one whole source panel (inferred scale 0.9569 mm/px)"
+   }
+  },
+  "seam": {
+   "feather": "cropped axes: the last featherPx columns / rows cross-fade (cosine) into the source pixels just before the crop start (the true wrap neighbours)",
+   "fullFramePatch": {
+    "u": {
+     "seam": 8.7,
+     "meanNeighbour": 5.9,
+     "ratio": 1.459,
+     "applied": true,
+     "bandAt": 314,
+     "band": 128
+    },
+    "method": "seam ratio > 1.25: a 128 px cosine-feathered band from the interior strip at patchAt (joint-free) laid across the wrap"
+   }
+  },
+  "lighting": {
+   "threshold": {
+    "cornerToCentre": 0.04,
+    "lowRange": 0.08
+   },
+   "eligible": false,
+   "before": {
+    "cornerToCentre": 0.005,
+    "spread": 0.041,
+    "lowRange": 0.049
+   },
+   "applied": false,
+   "after": {
+    "cornerToCentre": 0.004,
+    "spread": 0.044,
+    "lowRange": 0.037
+   }
+  },
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill",
+   "wrap": "3 x 3 tiled, centre extract"
+  },
+  "height": {
+   "jointDepthM": 0.002,
+   "bevelM": 0.0008,
+   "detailSlope": 0.04,
+   "jointHalfWidthPx": 1,
+   "rowJoints": 1,
+   "courses": 1,
+   "runningBond": null
+  },
+  "normal": {
+   "convention": "tangent space, R = -dh/dx, G = +dh/dy (image y down), B = z (build-reactor-kit.mjs)",
+   "slopes": "metres per metre from the height (m) and the span per texel"
+  },
+  "orm": {
+   "r": "ambient occlusion from cavity",
+   "g": "roughness 0.65-0.8 faces, 0.85 joints / gaps",
+   "b": "metalness 0",
+   "aoGainPerM": 260,
+   "aoBlurPx": 6,
+   "aoFloor": 0.35
+  },
+  "encode": {
+   "color": {
+    "quality": 85,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:2:0"
+   },
+   "normal": {
+    "quality": 90,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "orm": {
+    "quality": 88,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) + plain JS via tools/asset-pipeline/props/build-subway-arch-textures.mjs"
+ },
+ "tileCheck": {
+  "before": {
+   "seamLR": 5.3,
+   "interiorLR": 26.7,
+   "meanLR": 4.8,
+   "ratioLR": 1.112,
+   "seamTB": 62,
+   "interiorTB": 14.9,
+   "meanTB": 3.6,
+   "ratioTB": 17.413
+  },
+  "after": {
+   "seamLR": 4.6,
+   "interiorLR": 26.7,
+   "meanLR": 4.6,
+   "ratioLR": 1.001,
+   "seamTB": 66.1,
+   "interiorTB": 14.8,
+   "meanTB": 3.5,
+   "ratioTB": 18.918
+  },
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs interior neighbour rows / columns (pre-JPEG 1024 buffers); phase = the same position in every other whole period; ratio = seam / phase (else / mean); before = the plain crop"
+ },
+ "spanM": {
+  "u": 1.2,
+  "v": 0.6
+ },
+ "meanLinearAlbedo": [
+  0.6949,
+  0.5615,
+  0.4033
+ ],
+ "meanRoughness": 0.722,
+ "outputs": {
+  "color": {
+   "url": "assets/textures/subway/arch/subway-arch-stone-limestone-color.jpg",
+   "bytes": 137324,
+   "sha256": "a5a5af1e7b8e7341b87fdcb128d1d626cd4c0de9506016a988f716f7ef962bd3",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "normal": {
+   "url": "assets/textures/subway/arch/subway-arch-stone-limestone-normal.jpg",
+   "bytes": 43492,
+   "sha256": "841ec1281855fb4a83055fa33a8b48df81dab847f31abfd39bc6df1a75123ce3",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "orm": {
+   "url": "assets/textures/subway/arch/subway-arch-stone-limestone-orm.jpg",
+   "bytes": 146629,
+   "sha256": "260c7bf7b62bad9867ad7e149da946020d40d45365d25422a689d4841f06abcf",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  }
+ }
+}

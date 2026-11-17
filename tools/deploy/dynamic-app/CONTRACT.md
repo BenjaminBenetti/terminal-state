@@ -143,7 +143,7 @@ runs a container or deploys anything.
 | Previous artificial total cap (removed) | 157,286,400 B |
 | Existing static host hard limit (unchanged; a delivery constraint, not a CI limit) | 209,715,200 B |
 | Remaining per-file guard (`package-ci.mjs`) | 25 MiB |
-| Remaining file-count guard (`package-ci.mjs`) | 1,000 files |
+| Remaining file-count guard (`package-ci.mjs`; raised from 1,000 on 2026-11-17 for the Subway architecture maps) | 1,200 shipped files |
 
 - **What the packager reports.** It prints totals by type and by path family (mall / office / shared models and
   textures). It also prints whether the site fits the static host. That line is an advisory, not a limit.

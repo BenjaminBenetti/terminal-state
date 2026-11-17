@@ -1,0 +1,207 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "subway-arch-metal-slat-ceiling",
+ "task": "studio-subway-architecture-materials-rework-20261117-072826-01",
+ "lane": "TEX",
+ "status": "runtime PBR derivative (period crop / seam feather / resize / derived normal + ORM / JPEG; deterministic processing only) of an ORIGINAL tileable surface texture generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization for the Subway architecture + materials rework; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Subway modern stations: linear slat ceiling",
+ "subject": "powder-coated 100 mm metal slats with 15 mm dark gaps",
+ "cls": "metal",
+ "rebuild": "node tools/asset-pipeline/props/build-subway-arch-textures.mjs",
+ "rawStorage": "reference/tasks/subway-architecture-materials-rework-20261117-072826/gen/{LEDGER.jsonl, raw/codex-<n>-<id>-exec-<uuid>.png, prompts/frozen/<id>-c<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 6,
+  "session": "01a1e877-7866-71e3-aad8-24f42021c037",
+  "requested": "2026-11-17T07:45:06.019236Z",
+  "finished": "2026-11-17T07:45:41.530749Z",
+  "seconds": 35.5,
+  "imageGenGenerations": 1
+ },
+ "prompt": {
+  "file": "frozen/metal-slat-ceiling-c6.txt",
+  "sha256": "5a3850aeb9790626a3d4489ef84e97bcfe32febfbe6d469b1ef64b01f5b71dc1"
+ },
+ "source": {
+  "file": "codex-6-metal-slat-ceiling-exec-7e8d9923-2dc6-46b6-a6bf-703949904f25.png",
+  "sha256": "e4dc8ab82cb4d88d205aa6a0e1c3cf2f702f62bcf063da55ff04a9efb10c8637",
+  "bytes": 1743098,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "jointPolarity": "dark",
+  "profileHighPassPx": 81,
+  "crop": {
+   "x": 161,
+   "y": 0,
+   "w": 942,
+   "h": 1254,
+   "u": {
+    "mode": "joints",
+    "module": 0.115,
+    "cropStart": 161,
+    "cropSize": 942,
+    "periods": 6,
+    "periodPx": 156.978,
+    "mmPerPx": 0.7326,
+    "featherPx": 40,
+    "jointStepPx": 157.74,
+    "jointLines": 7,
+    "why": "from joint centre 161.02 to joint centre 1102.89: 6 whole periods of 156.978 px (1 joint line per period)"
+   },
+   "v": {
+    "mode": "none",
+    "module": null,
+    "cropStart": 0,
+    "cropSize": 1254,
+    "periods": 1,
+    "periodPx": 1254,
+    "mmPerPx": 0.7326,
+    "featherPx": 0,
+    "why": "jointless: the full frame"
+   }
+  },
+  "seam": {
+   "feather": "cropped axes: the last featherPx columns / rows cross-fade (cosine) into the source pixels just before the crop start (the true wrap neighbours)",
+   "fullFramePatch": {
+    "v": {
+     "seam": 2.4,
+     "meanNeighbour": 0.9,
+     "ratio": 2.527,
+     "applied": true,
+     "bandAt": 627,
+     "band": 48
+    },
+    "method": "seam ratio > 1.25: a 48 px cosine-feathered band from the interior strip at patchAt (joint-free) laid across the wrap"
+   }
+  },
+  "lighting": {
+   "threshold": {
+    "cornerToCentre": 0.04,
+    "lowRange": 0.08
+   },
+   "eligible": true,
+   "before": {
+    "cornerToCentre": 0.006,
+    "spread": 0.013,
+    "lowRange": 0.007
+   },
+   "applied": false,
+   "after": {
+    "cornerToCentre": 0.005,
+    "spread": 0.012,
+    "lowRange": 0.006
+   }
+  },
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill",
+   "wrap": "3 x 3 tiled, centre extract"
+  },
+  "height": {
+   "jointDepthM": 0.02,
+   "bevelM": 0.002,
+   "detailSlope": 0.02,
+   "jointHalfWidthPx": 9,
+   "rowJoints": 0,
+   "courses": 1,
+   "runningBond": null
+  },
+  "normal": {
+   "convention": "tangent space, R = -dh/dx, G = +dh/dy (image y down), B = z (build-reactor-kit.mjs)",
+   "slopes": "metres per metre from the height (m) and the span per texel"
+  },
+  "orm": {
+   "r": "ambient occlusion from cavity",
+   "g": "roughness 0.38-0.5 faces, 0.9 joints / gaps",
+   "b": "metalness 0",
+   "aoGainPerM": 60,
+   "aoBlurPx": 10,
+   "aoFloor": 0.35
+  },
+  "encode": {
+   "color": {
+    "quality": 85,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:2:0"
+   },
+   "normal": {
+    "quality": 90,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "orm": {
+    "quality": 88,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) + plain JS via tools/asset-pipeline/props/build-subway-arch-textures.mjs"
+ },
+ "tileCheck": {
+  "before": {
+   "seamLR": 1.1,
+   "interiorLR": 2.6,
+   "meanLR": 4.2,
+   "phaseLR": 1.4,
+   "ratioLR": 0.779,
+   "seamTB": 1.4,
+   "interiorTB": 0.8,
+   "meanTB": 0.8,
+   "ratioTB": 1.695
+  },
+  "after": {
+   "seamLR": 0.6,
+   "interiorLR": 2.6,
+   "meanLR": 4.1,
+   "phaseLR": 1.4,
+   "ratioLR": 0.404,
+   "seamTB": 0.8,
+   "interiorTB": 0.7,
+   "meanTB": 0.8,
+   "ratioTB": 0.963
+  },
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs interior neighbour rows / columns (pre-JPEG 1024 buffers); phase = the same position in every other whole period; ratio = seam / phase (else / mean); before = the plain crop"
+ },
+ "spanM": {
+  "u": 0.6901,
+  "v": 0.9187
+ },
+ "meanLinearAlbedo": [
+  0.368,
+  0.3457,
+  0.3238
+ ],
+ "meanRoughness": 0.481,
+ "outputs": {
+  "color": {
+   "url": "assets/textures/subway/arch/subway-arch-metal-slat-ceiling-color.jpg",
+   "bytes": 59856,
+   "sha256": "b3ac4ccde2ae31388f3e46ce70c30cdb53b2597651992709afc346c1496544aa",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "normal": {
+   "url": "assets/textures/subway/arch/subway-arch-metal-slat-ceiling-normal.jpg",
+   "bytes": 84559,
+   "sha256": "85c67a86b1f712ec1f5f363911096cdd5dd5943dad28f7cf04b2f1e6e835213c",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "orm": {
+   "url": "assets/textures/subway/arch/subway-arch-metal-slat-ceiling-orm.jpg",
+   "bytes": 81628,
+   "sha256": "448401b2fed558eaeda1e59fb22be24eae8037d39f9e8ce1fa43d3d8e0ac5d68",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  }
+ }
+}

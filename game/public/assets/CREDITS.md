@@ -868,3 +868,30 @@ repository. No generation.
 - `assets/models/surface-military-truck.glb` — the truck (body, glass, wheel-0 … wheel-7); runtime derivative by
   `tools/asset-pipeline/props/build-surface-truck.mjs` (provenance: `assets/derivatives/surface-military-truck.json`).
 <!-- END surface-military-truck-20261116 -->
+
+<!-- BEGIN subway-arch-20261117 (build-subway-arch-textures.mjs) -->
+## Subway architecture: tileable surface sets (tile, stone, concrete, enamel, slats, terrazzo, granite, plaster, painted rock)
+
+Original tileable surface textures generated for this project with Codex native image generation (the owned Codex CLI's built-in image_gen tool), one ledgered call per texture (20 accepted calls, each accepted at its first call), under the user's explicit authorization for the Subway architecture + materials rework (task studio-subway-architecture-materials-rework-20261117-072826-01). Runtime derivatives by `tools/asset-pipeline/props/build-subway-arch-textures.mjs` (deterministic processing only: a crop to whole measured joint periods, a seam feather from the source's own pixels, resize, and normal / ORM maps derived locally from the colour source; provenance: `assets/derivatives/subway-arch-<name>.json`). Provider terms apply; unapproved prototypes, no licence or commercial clearance implied. Raw masters, prompts and the generation ledger are kept outside Git.
+
+- `assets/textures/subway/arch/subway-arch-tile-cream-{color,normal,orm}.jpg` — cream glazed 150 x 75 mm bevelled subway tile, running bond (Codex call 10)
+- `assets/textures/subway/arch/subway-arch-tile-blue-square-{color,normal,orm}.jpg` — pale grey-blue glazed 150 x 150 mm square tile, stack bond (Codex call 9)
+- `assets/textures/subway/arch/subway-arch-tile-green-brick-{color,normal,orm}.jpg` — sage green glazed 200 x 75 mm brick slips, running bond (Codex call 11)
+- `assets/textures/subway/arch/subway-arch-tile-terracotta-{color,normal,orm}.jpg` — honey-amber glazed terracotta faience 200 x 100 mm, running bond (Codex call 12)
+- `assets/textures/subway/arch/subway-arch-tile-white-large-{color,normal,orm}.jpg` — white gloss 300 x 150 mm large-format tile, stack bond (Codex call 13)
+- `assets/textures/subway/arch/subway-arch-band-oxblood-{color,normal,orm}.jpg` — oxblood glazed 150 x 75 mm accent tile, running bond (Codex call 17)
+- `assets/textures/subway/arch/subway-arch-band-navy-{color,normal,orm}.jpg` — navy glazed 150 x 75 mm accent tile, running bond (Codex call 16)
+- `assets/textures/subway/arch/subway-arch-band-bottle-{color,normal,orm}.jpg` — bottle green glazed 150 x 75 mm accent tile, running bond (Codex call 15)
+- `assets/textures/subway/arch/subway-arch-band-ochre-{color,normal,orm}.jpg` — ochre glazed 150 x 75 mm accent tile, running bond (Codex call 14)
+- `assets/textures/subway/arch/subway-arch-band-signal-{color,normal,orm}.jpg` — signal red glazed 150 x 75 mm accent tile, running bond (Codex call 18)
+- `assets/textures/subway/arch/subway-arch-band-orange-{color,normal,orm}.jpg` — orange glazed 150 x 75 mm accent tile, running bond (Codex call 19)
+- `assets/textures/subway/arch/subway-arch-plinth-granite-{color,normal,orm}.jpg` — dark honed granite 600 x 300 mm cladding panels, stack bond (Codex call 7)
+- `assets/textures/subway/arch/subway-arch-stone-limestone-{color,normal,orm}.jpg` — honed pale limestone 1200 x 600 mm cladding panels (Codex call 20)
+- `assets/textures/subway/arch/subway-arch-concrete-precast-{color,normal,orm}.jpg` — fair-faced precast concrete 1.2 x 1.2 m panels with tie holes (Codex call 4)
+- `assets/textures/subway/arch/subway-arch-enamel-panel-{color,normal,orm}.jpg` — warm white vitreous enamel 1200 x 600 mm panels with shadow-gap joints (Codex call 1)
+- `assets/textures/subway/arch/subway-arch-metal-slat-ceiling-{color,normal,orm}.jpg` — powder-coated 100 mm metal slats with 15 mm dark gaps (Codex call 6)
+- `assets/textures/subway/arch/subway-arch-floor-terrazzo-{color,normal,orm}.jpg` — polished grey terrazzo 600 x 600 mm with brass divider strips (Codex call 5)
+- `assets/textures/subway/arch/subway-arch-floor-granite-{color,normal,orm}.jpg` — honed light grey granite 600 x 600 mm floor slabs (Codex call 2)
+- `assets/textures/subway/arch/subway-arch-ceiling-plaster-{color,normal,orm}.jpg` — painted cement-render ceiling soffit, off-white (Codex call 3)
+- `assets/textures/subway/arch/subway-arch-rock-painted-{color,normal,orm}.jpg` — off-white painted shotcrete over blasted rock (tinted at runtime) (Codex call 8)
+<!-- END subway-arch-20261117 -->

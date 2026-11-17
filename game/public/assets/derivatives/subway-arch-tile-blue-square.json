@@ -1,0 +1,201 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "subway-arch-tile-blue-square",
+ "task": "studio-subway-architecture-materials-rework-20261117-072826-01",
+ "lane": "TEX",
+ "status": "runtime PBR derivative (period crop / seam feather / resize / derived normal + ORM / JPEG; deterministic processing only) of an ORIGINAL tileable surface texture generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization for the Subway architecture + materials rework; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Subway public walls: mid-century civic tile field",
+ "subject": "pale grey-blue glazed 150 x 150 mm square tile, stack bond",
+ "cls": "tile",
+ "rebuild": "node tools/asset-pipeline/props/build-subway-arch-textures.mjs",
+ "rawStorage": "reference/tasks/subway-architecture-materials-rework-20261117-072826/gen/{LEDGER.jsonl, raw/codex-<n>-<id>-exec-<uuid>.png, prompts/frozen/<id>-c<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 9,
+  "session": "01a1e878-0372-7671-a56c-33a9ac55ccd7",
+  "requested": "2026-11-17T07:45:41.621561Z",
+  "finished": "2026-11-17T07:46:24.845509Z",
+  "seconds": 43.2,
+  "imageGenGenerations": 1
+ },
+ "prompt": {
+  "file": "frozen/tile-blue-square-c9.txt",
+  "sha256": "4ecc59ea12605bdceb12ceaf6ca7ffdba1848614f4fd30c0254f1b6500b58099"
+ },
+ "source": {
+  "file": "codex-9-tile-blue-square-exec-aa8bde97-e383-4432-a02c-c471bfbf8983.png",
+  "sha256": "b17e8ccac2072d30df320e41ae2da7cd18b6125ddba6379964bda223ccd9e255",
+  "bytes": 2500808,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "jointPolarity": "dark",
+  "profileHighPassPx": 31,
+  "crop": {
+   "x": 156,
+   "y": 157,
+   "w": 941,
+   "h": 940,
+   "u": {
+    "mode": "joints",
+    "module": 0.15,
+    "cropStart": 156,
+    "cropSize": 941,
+    "periods": 6,
+    "periodPx": 156.771,
+    "mmPerPx": 0.9568,
+    "featherPx": 40,
+    "jointStepPx": 156.78,
+    "jointLines": 7,
+    "why": "from joint centre 156.354 to joint centre 1096.981: 6 whole periods of 156.771 px (1 joint line per period)"
+   },
+   "v": {
+    "mode": "joints",
+    "module": 0.15,
+    "cropStart": 157,
+    "cropSize": 940,
+    "periods": 6,
+    "periodPx": 156.535,
+    "mmPerPx": 0.9583,
+    "featherPx": 40,
+    "jointStepPx": 156.74,
+    "jointLines": 7,
+    "why": "from joint centre 157.349 to joint centre 1096.559: 6 whole periods of 156.535 px (1 joint line per period)"
+   }
+  },
+  "seam": {
+   "feather": "cropped axes: the last featherPx columns / rows cross-fade (cosine) into the source pixels just before the crop start (the true wrap neighbours)",
+   "fullFramePatch": null
+  },
+  "lighting": {
+   "threshold": {
+    "cornerToCentre": 0.04,
+    "lowRange": 0.08
+   },
+   "eligible": true,
+   "before": {
+    "cornerToCentre": -0.008,
+    "spread": 0.017,
+    "lowRange": 0.01
+   },
+   "applied": false,
+   "after": {
+    "cornerToCentre": -0.006,
+    "spread": 0.014,
+    "lowRange": 0.01
+   }
+  },
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill",
+   "wrap": "3 x 3 tiled, centre extract"
+  },
+  "height": {
+   "jointDepthM": 0.002,
+   "bevelM": 0.003,
+   "detailSlope": 0.03,
+   "jointHalfWidthPx": 1,
+   "rowJoints": 6,
+   "courses": 6,
+   "runningBond": null
+  },
+  "normal": {
+   "convention": "tangent space, R = -dh/dx, G = +dh/dy (image y down), B = z (build-reactor-kit.mjs)",
+   "slopes": "metres per metre from the height (m) and the span per texel"
+  },
+  "orm": {
+   "r": "ambient occlusion from cavity",
+   "g": "roughness 0.18-0.32 faces, 0.9 joints / gaps",
+   "b": "metalness 0",
+   "aoGainPerM": 260,
+   "aoBlurPx": 6,
+   "aoFloor": 0.35
+  },
+  "encode": {
+   "color": {
+    "quality": 85,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:2:0"
+   },
+   "normal": {
+    "quality": 90,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "orm": {
+    "quality": 88,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) + plain JS via tools/asset-pipeline/props/build-subway-arch-textures.mjs"
+ },
+ "tileCheck": {
+  "before": {
+   "seamLR": 51.7,
+   "interiorLR": 41.6,
+   "meanLR": 3.2,
+   "phaseLR": 45.6,
+   "ratioLR": 1.133,
+   "seamTB": 42.8,
+   "interiorTB": 50.2,
+   "meanTB": 3.7,
+   "phaseTB": 54.2,
+   "ratioTB": 0.791
+  },
+  "after": {
+   "seamLR": 49.7,
+   "interiorLR": 42.1,
+   "meanLR": 3.2,
+   "phaseLR": 45.8,
+   "ratioLR": 1.087,
+   "seamTB": 47.7,
+   "interiorTB": 52.1,
+   "meanTB": 3.7,
+   "phaseTB": 54.2,
+   "ratioTB": 0.879
+  },
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs interior neighbour rows / columns (pre-JPEG 1024 buffers); phase = the same position in every other whole period; ratio = seam / phase (else / mean); before = the plain crop"
+ },
+ "spanM": {
+  "u": 0.9004,
+  "v": 0.9008
+ },
+ "meanLinearAlbedo": [
+  0.3521,
+  0.3965,
+  0.4047
+ ],
+ "meanRoughness": 0.256,
+ "outputs": {
+  "color": {
+   "url": "assets/textures/subway/arch/subway-arch-tile-blue-square-color.jpg",
+   "bytes": 87727,
+   "sha256": "a14ff8320a5d9170cea41dc4af33b3816ef9f64005ec7c5b1ca2b72a5b137820",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "normal": {
+   "url": "assets/textures/subway/arch/subway-arch-tile-blue-square-normal.jpg",
+   "bytes": 65716,
+   "sha256": "38e5995a330ff8fab864c6be8b668009804bb64cf0ec1e080b8995f694bde63e",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "orm": {
+   "url": "assets/textures/subway/arch/subway-arch-tile-blue-square-orm.jpg",
+   "bytes": 138387,
+   "sha256": "c2d8d2461778df6c62dddb24a8602782b1059beeea5c4ea18aac7d1f44f9af55",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  }
+ }
+}

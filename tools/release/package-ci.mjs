@@ -18,7 +18,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 // local dist folder, which also holds the tracked-but-never-shipped inputs this packager already drops (unreferenced models /
 // provenance JSON: 177 files at the time, all still allowlisted + hash-checked). Counting those let tracked provenance alone block a new
 // legitimate runtime asset (dist sat at exactly 1000 while 823 files shipped).
-export const MAX_FILE = 25 * 1024 * 1024, MAX_FILES = 1000;
+// Task studio-subway-architecture-materials-rework-20261117-072826-01 (lead, 2026-11-17): the cap was raised from 1000 to 1200 for the
+// Subway architecture kit's 60 maps (20 sets x colour / normal / ORM; the shipped artifact is about 1047 files). It still bounds the
+// artifact. This is a release-policy change, flagged for user / Main review in the PR.
+export const MAX_FILE = 25 * 1024 * 1024, MAX_FILES = 1200;
 const digest = b => crypto.createHash('sha256').update(b).digest('hex');
 const fail = m => { throw new Error(m); };
 const safePath = p => typeof p === 'string' && /^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/.test(p)

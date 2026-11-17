@@ -34,7 +34,8 @@ import {planCohorts, trianglesOf} from './staticCohorts'; // task static-batchin
 import type {WallFace} from './wallFaces';
 import {LEGACY_STACK, LevelCuller} from './levelCulling';
 import {MeshBasicNodeMaterial, MeshStandardNodeMaterial} from 'three/webgpu'; // Iteration 13 (MAT-A)
-import {SIGN_ATLAS_CONTEXT} from './surfaceNodes';
+import {SIGN_ATLAS_CONTEXT, SIGN_ATLAS_UV} from './surfaceNodes';
+import {attribute, texture as tslTexture} from 'three/tsl'; // (task studio-subway-rework-m2-finishing-20261117-111246-01: lit sign faces)
 import {buildWallDetailSteps} from './wallDetail';
 import {applyStationDecaySteps, archShopMaterial} from './decay';
 import {buildOfficeProp, cutOfficeWindows, isOfficeBuilt} from './officeProps'; // Iteration 16 (WORLD-GEN)
@@ -71,6 +72,7 @@ import {SkywaysArch} from './skywaysArch'; // task studio-skyways-level-20261106
 import {MarketArch} from './marketArch'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL): the Survivor Market's corrugated / salvaged finishes
 import {SurfaceArch} from './surface/arch'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): the Surface Run district's streets, facades and interiors
 import {SubwayArch, subwayPlate} from './subwayArch'; // task studio-subway-station-variety-20261117-043926-01: a version-2 Subway station's identity finishes
+import {buildSubwayKit, coveLengths, styledTubeMatrix} from './subwayKit'; // task studio-subway-architecture-materials-rework-20261117-072826-01: the station's architectural relief
 import {surfaceLookPlanSteps} from './surface/archPlan';
 import {surfaceOcclusionSee} from './surface/lookOcclusion'; // (lane LOOK, follow-up 2: the district culler's see-through structure)
 import {surfaceSkyVolumes} from './surface/roofAccessView'; // (task studio-surface-run-field-followup-20261116-211729-01, lane INTERIOR: v2 roofs' open air)
@@ -159,6 +161,8 @@ export interface Fixture {
   level: number;
   /** Task mall-round3-20261031 (lane LIGHT, R7): off-colour tube tint (LightPlacement.tint of a real fixture; absent elsewhere). */
   tint?: readonly [number, number, number];
+  /** Task studio-subway-architecture-materials-rework-20261117-072826-01: no glow card (a concealed Subway cove strip). */
+  noGlow?: boolean;
 }
 
 /**
@@ -497,7 +501,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
       const f = g.floorOf(i);
       for (let k = 0; k < cols.count(i); k++) { const M = cols.level(i, k); if (M !== L && Math.abs(cellCeilAt(levels[M].grid, i) - f) < 0.02) return null; }
       // Task office-overhaul-20261030 (lane ARCH): office storey floors (carpet tiles, vinyl, tile, stone, concrete, roof deck ...).
-      const of = office ? office.floorKey(L, i) : mall ? mall.floorKey(L, i) : (reactor ?? sky ?? mkt ?? bunk ?? surf)?.floorKey(L, i); // task track3 (lane ARCH): + the mall's floors (reactor-build: + the Reactor's; skyways lane VIEW: + the Skyways')
+      const of = office ? office.floorKey(L, i) : mall ? mall.floorKey(L, i) : (reactor ?? sky ?? mkt ?? bunk ?? surf ?? sub)?.floorKey(L, i); // task track3 (lane ARCH): + the mall's floors (reactor-build: + the Reactor's; skyways lane VIEW: + the Skyways')
       if (of) return of;
       const dm = doorFloor.get(L * n0 + i);
       if (dm) return dm;
@@ -668,7 +672,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     const fm = office?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a])
       ?? mall?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a])
       ?? reactor?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a])
-      ?? sky?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? mkt?.doorTrimKey() ?? bunk?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? surf?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? 'steel'; // task track3 (lane ARCH) (+ reactor-build: lane ARCH; + sky: lane VIEW)
+      ?? sky?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? mkt?.doorTrimKey() ?? bunk?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? surf?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? sub?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? 'steel'; // task track3 (lane ARCH) (+ reactor-build: lane ARCH; + sky: lane VIEW)
     // Task studio-bunker-rework-20261109-205115-01: a THICK opening (both spans > 1 cell: the 2-row vault / Reactor bulkhead lanes) runs
     // along the wall its two areas share — areas apart in Z = a wall along X — and its jambs / head span its whole depth. (Before, it
     // was framed as a wall along Z through its first column: two steel slabs and a bar standing across the lane, walked through.)
@@ -741,6 +745,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   for (const l of layout.lights) {
     if (l.virtual) continue; // Iteration 16 (WORLD-GEN): fixture-less daylight sources have no rods
     if (reactor?.isLamp(l)) continue; // task reactor-build-20261101 (lane ARCH): pit lamps hang on their own bracket (ReactorArch.buildLamps)
+    if (l.style) continue; // task studio-subway-architecture-materials-rework-20261117-072826-01: a hall light's body / stem is the Subway kit's (world/subwayKit.ts)
     // Lane T: the local ceiling (follows flights / landings / the underpass), not the area's top.
     const local = gridOf(levelOf(l)).ceilAt(l.x, l.z);
     const ceil = Math.min(layout.areas[l.area]?.ceil ?? l.y, Number.isFinite(local) ? local : Infinity);
@@ -823,7 +828,8 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
       // Task studio-subway-platform-pillars-20261116-214939-01: the station columns (gen/stationDress.ts: platform rows, between two
       // tracks, concourses — each level's station storey) are riveted built-up steel H-columns in 'columnPaint' (world/stationColumns.ts)
       const own = list.filter(p => isLevelOwnColumn(layout, p));
-      instances += buildStationColumns(group, own.length ? list.filter(p => !own.includes(p)) : list, mats.get('columnPaint'));
+      // (task studio-subway-rework-m2-finishing-20261117-111246-01: a version-2+ station's columns in its scheme's paint, world/subwayArch.ts)
+      instances += buildStationColumns(group, own.length ? list.filter(p => !own.includes(p)) : list, sub?.columnMaterial(mats.get('columnPaint')) ?? mats.get('columnPaint'));
       if (own.length) {
         // A level's own colonnade (the Bunker vault hall, under its own capitals and beams): the unit-height box scaled per instance in
         // the brushed-steel cladding, as before (task studio-graphics-gpu-materials-toggle-20261114-212239-01, 'pillar')
@@ -859,16 +865,21 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   // Task track3-eaton-centre-20261031 (lane ARCH): mall ring fixtures are square downlight cans (their tube = the can's lens).
   const down = (i: number) => !!mall && mall.isDownlight(layout.lights[i]);
   const lamp = (i: number) => !!reactor && reactor.isLamp(layout.lights[i]); // task reactor-build-20261101 (lane ARCH): pit fixtures = caged industrial lamps
-  if (models.light) instances += instanceModel(group, models.light, mall || reactor ? lightMats.filter((_, i) => !down(i) && !lamp(i)) : lightMats, {w: mats.fixture.w, h: mats.fixture.h, d: mats.fixture.d, anchor: 'top'}, 'light');
+  // Task studio-subway-architecture-materials-rework-20261117-072826-01: a Subway hall light with a style (lantern, downlight, cove) has no
+  // tube fixture model; its tube instance is the lantern glass / lens / cove strip (world/subwayKit.ts styledTubeMatrix), its body the kit's.
+  const styled = (i: number) => !!layout.lights[i].style;
+  const coves = sub ? coveLengths(layout.lights) : null;
+  if (models.light) instances += instanceModel(group, models.light, mall || reactor || sub ? lightMats.filter((_, i) => !down(i) && !lamp(i) && !styled(i)) : lightMats, {w: mats.fixture.w, h: mats.fixture.h, d: mats.fixture.d, anchor: 'top'}, 'light');
   if (mall) instances += mall.buildDownlights(group, lightMats, layout.lights, mats.fixture);
   if (reactor) instances += reactor.buildLamps(group, lightMats, layout.lights); // (reactor-build, lane ARCH)
   {
     const geo = new THREE.BoxGeometry(mats.fixture.w * 0.82, 0.025, mats.fixture.d * 0.42);
     geo.translate(0, -mats.fixture.h - 0.004, 0);
     tubes = new THREE.InstancedMesh(geo, mats.get('tube'), layout.lights.length);
-    lightMats.forEach((m, i) => tubes!.setMatrixAt(i, down(i) ? downlightLensMatrix(m, mats.fixture) : lamp(i) ? reactor!.lampLensMatrix(m, mats.fixture) : m)); // (reactor-build, lane ARCH: + the pit lamps' lens)
+    lightMats.forEach((m, i) => tubes!.setMatrixAt(i, down(i) ? downlightLensMatrix(m, mats.fixture) : lamp(i) ? reactor!.lampLensMatrix(m, mats.fixture) : (sub && !layout.lights[i].virtual && styledTubeMatrix(layout.lights[i], mats.fixture, coves?.get(i))) || m)); // (reactor-build, lane ARCH: + the pit lamps' lens; subway rework: + the hall lights' glass / lens / strip)
     const c = new THREE.Color();
     fixtures.forEach((f, i) => tubes!.setColorAt(i, f.broken ? c.setRGB(0.05, 0.05, 0.05) : c.setRGB(1, 1, 1)));
+    if (sub) fixtures.forEach((f, i) => { if (layout.lights[i].style === 'cove') f.noGlow = true; }); // (subway rework: a concealed cove strip has no glow card)
     tubes.name = 'light-tubes';
     tubes.computeBoundingSphere();
     group.add(tubes);
@@ -901,6 +912,18 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   if (bunk) bunk.build(group, models); // task studio-bunker-level-20261109-072224-01: the shelter's hero props (REACTOR_X_KIT models)
   yield 'world.levelKit.surface';
   if (surf) yield* surf.buildSteps(group); // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): facades, shopfronts, roofs, the tent
+
+  yield 'world.levelKit.subway';
+  // Task studio-subway-architecture-materials-rework-20261117-072826-01: a version-2+ station's architectural relief — bases, caps, band
+  // fillets, cornices, pilasters, beams, coffers, jack arches, vaults and the hall lights' bodies (world/subwayKit.ts), in the trim chunks.
+  if (sub) {
+    try {
+      sub.kit = buildSubwayKit({
+        box: (k, cx, cy, cz, sx, sy, sz) => addBox(k, cx, cy, cz, sx, sy, sz),
+        geo: (k, geo, cx, cy, cz) => { trimList(k, cx, cz, levelAt(cx, cy, cz)).push(geo); },
+      }, {layout, gridOf, faces, sub});
+    } catch (e) { console.warn('subway kit skipped', e); }
+  }
 
   yield 'world.trimMerge';
   for (const [key, e] of boxes) {
@@ -1015,7 +1038,10 @@ const inkOn = (hex: string): string => {
  */
 function signTexture(s: SignPlacement, w: number, h: number, pal: PlatePalette | null = null): THREE.Texture {
   const p = s.style || s.kind === 'service' ? null : pal;
-  const key = `${s.kind}|${s.text}|${s.arrow ?? ''}|${w.toFixed(2)}${signStyleKey(s)}${p ? `|${p.bg}${p.fg}${p.accent}` : ''}`;
+  // (task studio-subway-rework-m2-finishing-20261117-111246-01) a backlit plate (SignPlacement.lit) is a LIGHT BOX: the plate's own colours
+  // swapped — a light field with dark lettering, as an illuminated concourse sign — so the whole face glows, not only its letters
+  const box = !!s.lit && !s.style && s.kind !== 'service' && s.kind !== 'station';
+  const key = `${s.kind}|${s.text}|${s.arrow ?? ''}|${w.toFixed(2)}${s.h ? `x${h.toFixed(2)}` : ''}${box ? '|box' : ''}${signStyleKey(s)}${p ? `|${p.bg}${p.fg}${p.accent}` : ''}`;
   let tex = signTexCache.get(key);
   if (tex) return tex;
   if (s.style) tex = companySignTexture(s, w, h); // Task office-overhaul-20261030 (lane TENANTS): company / directory plates
@@ -1024,7 +1050,8 @@ function signTexture(s: SignPlacement, w: number, h: number, pal: PlatePalette |
     const W = 1024, H = Math.max(160, Math.round(1024 * h / w));
     tex = canvasTexture(W, H, s.text.length * 17 + s.kind.length, (ctx, cw, ch) => {
       const light = s.kind === 'service';
-      ctx.fillStyle = light ? '#d8cfb6' : p?.bg ?? '#1f2225';
+      const field = box ? p?.fg ?? '#ece4cf' : p?.bg ?? '#1f2225', ink = box ? p?.bg ?? '#1f2225' : p?.fg ?? '#ece4cf';
+      ctx.fillStyle = light ? '#d8cfb6' : field;
       ctx.fillRect(0, 0, cw, ch);
       ctx.fillStyle = light ? '#b53a2c' : s.kind === 'exit' ? '#c2463a' : p?.accent ?? '#d9a520';
       ctx.fillRect(0, ch - ch * 0.1, cw, ch * 0.045);
@@ -1046,7 +1073,7 @@ function signTexture(s: SignPlacement, w: number, h: number, pal: PlatePalette |
         }
       }
       const arrowW = s.arrow ? ch * 0.6 : 0;
-      ctx.fillStyle = light ? '#1f2225' : p?.fg ?? '#ece4cf';
+      ctx.fillStyle = light ? '#1f2225' : ink;
       let size = Math.round(ch * 0.5);
       const font = () => `bold ${size}px "Helvetica Neue", Arial, sans-serif`;
       ctx.font = font();
@@ -1073,8 +1100,15 @@ function buildSigns(group: THREE.Group, layout: StationLayout, mats: WorldMateri
   const plates: THREE.Matrix4[] = [];
   const stationFrames: THREE.Matrix4[] = [];
   const faces = new Map<THREE.Texture, THREE.Matrix4[]>();
+  // (task studio-subway-rework-m2-finishing-20261117-111246-01) backlit plates (SignPlacement.lit): their own emissive atlas pages
+  const litFaces = new Map<THREE.Texture, THREE.Matrix4[]>(), litGlow = new Map<THREE.Texture, number[]>();
   const q = new THREE.Quaternion();
-  const addFace = (tex: THREE.Texture, m: THREE.Matrix4) => { let l = faces.get(tex); if (!l) faces.set(tex, (l = [])); l.push(m); };
+  let curLit = 0;
+  const addFace = (tex: THREE.Texture, m: THREE.Matrix4) => {
+    const map = curLit > 0 ? litFaces : faces;
+    let l = map.get(tex); if (!l) map.set(tex, (l = [])); l.push(m);
+    if (curLit > 0) { let gl = litGlow.get(tex); if (!gl) litGlow.set(tex, (gl = [])); gl.push(curLit); }
+  };
   // Station sign model fit (as WorldMaterials.makeSign): back at z = 0, front at frameDepth.
   let frameDepth = 0.02;
   let frameLocal: {mesh: THREE.Mesh; local: THREE.Matrix4}[] = [];
@@ -1093,6 +1127,7 @@ function buildSigns(group: THREE.Group, layout: StationLayout, mats: WorldMateri
     const size = SIGN_SIZE[s.kind];
     const {w, h} = signDims(s);
     const tex = signTexture(s, w, h, pal);
+    curLit = Math.max(0, Math.min(1, s.lit ?? 0));
     const sides = s.hang ? [s.rot, s.rot + Math.PI] : [s.rot];
     const useFrame = s.kind === 'station' && frameLocal.length && !s.hang && (s.w === undefined || s.w === size.w);
     const depth = useFrame ? frameDepth : 0.02;
@@ -1130,6 +1165,7 @@ function buildSigns(group: THREE.Group, layout: StationLayout, mats: WorldMateri
     for (const {mesh, local} of frameLocal) n += addInstanced(group, mesh.geometry, mesh.material as THREE.Material, stationFrames.map(m => m.clone().multiply(local)), 'sign-frame');
   }
   n += buildSignFaces(group, faces);
+  if (litFaces.size) n += buildSignFaces(group, litFaces, litGlow);
   return n;
 }
 
@@ -1163,7 +1199,22 @@ export function packSignAtlas(sizes: readonly {width: number; height: number}[])
   return {cells, pages: pages.map(hh => Math.max(16, Math.ceil(hh / 4) * 4))};
 }
 
-function buildSignFaces(group: THREE.Group, faces: Map<THREE.Texture, THREE.Matrix4[]>): number {
+/**
+ * Task studio-subway-rework-m2-finishing-20261117-111246-01: the backlight gain of a lit sign face (a v3 hall's illuminated destination
+ * plates: the ticket office fascia, pocket name plates, hung wayfinding boxes, clerestory tablets) — emissive = the face's own colour x its
+ * SignPlacement.lit x this, as the mall's backlit ad boxes (world/mallAds.ts adAtlasMaterial). A local light box: no light-field or exposure
+ * change; every unlit plate draws exactly as before.
+ */
+export const SIGN_GLOW = 0.85;
+/** The sign-atlas program plus a per-instance backlight (aGlow). */
+export const litSignAtlasMat = (atlas: THREE.Texture): MeshStandardNodeMaterial => {
+  const m = signAtlasMat(atlas);
+  m.emissiveNode = tslTexture(atlas, SIGN_ATLAS_UV).rgb.mul(attribute('aGlow', 'float')).mul(SIGN_GLOW);
+  m.name = 'sign-atlas-lit';
+  return m;
+};
+
+function buildSignFaces(group: THREE.Group, faces: Map<THREE.Texture, THREE.Matrix4[]>, glow?: Map<THREE.Texture, number[]>): number {
   if (!faces.size) return 0;
   const texs = [...faces.keys()];
   const imgs = texs.map(t => t.image as {width: number; height: number});
@@ -1182,15 +1233,17 @@ function buildSignFaces(group: THREE.Group, faces: Map<THREE.Texture, THREE.Matr
       }
     });
     atlas.wrapS = atlas.wrapT = THREE.ClampToEdgeWrapping;
-    const mats4: THREE.Matrix4[] = [], rects: number[] = [];
-    for (const [[, x, y, w, h], i] of mine) for (const m of faces.get(texs[i])!) {
+    const mats4: THREE.Matrix4[] = [], rects: number[] = [], glows: number[] = [];
+    for (const [[, x, y, w, h], i] of mine) for (const [k, m] of faces.get(texs[i])!.entries()) {
       mats4.push(m);
+      if (glow) glows.push(glow.get(texs[i])?.[k] ?? 0);
       // Canvas y runs down, texture v up (flipY).
       rects.push(x / SIGN_PAGE_W, 1 - (y + h) / H, w / SIGN_PAGE_W, h / H);
     }
     const geo = new THREE.PlaneGeometry(1, 1);
     geo.setAttribute('aUvRect', new THREE.InstancedBufferAttribute(new Float32Array(rects), 4));
-    n += addInstanced(group, geo, signAtlasMat(atlas), mats4, 'sign-face');
+    if (glow) geo.setAttribute('aGlow', new THREE.InstancedBufferAttribute(new Float32Array(glows), 1));
+    n += addInstanced(group, geo, glow ? litSignAtlasMat(atlas) : signAtlasMat(atlas), mats4, glow ? 'sign-face-lit' : 'sign-face');
   });
   return n;
 }

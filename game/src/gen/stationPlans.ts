@@ -29,6 +29,8 @@ import {Kit, TUN} from './stationKit';
 import {levelProgram} from './levelGen';
 import {Plan, PATTERNS, arcade, district, exitHall, hall, r1, setP1, ticketHall, type Pattern} from './archetypes';
 import {type Archetype, type Area, type Side, type StationIdentity} from './stationTypes';
+import {SUBWAY_HALL_V3_MIN_VERSION} from './subwayLayoutVersion';
+import {grandHallV3} from './stationHallV3'; // task studio-subway-architecture-materials-rework-20261117-072826-01
 
 // ---------------------------------------------------------------------------------------------
 // The roll
@@ -45,10 +47,14 @@ export function planFamilyOf(seed: number): PlanFamily {
 
 export const isPlanFamily = (a: Archetype): a is 'grand-hall' | 'cavern' | 'hub' => a === 'grand-hall' || a === 'cavern' || a === 'hub';
 
-/** The skeleton of a version-2 plan family (null: this attempt does not fit; the generator retries like the classic archetypes). */
-export function buildPlanFamily(k: Kit, arch: 'grand-hall' | 'cavern' | 'hub', terms: string[]): Plan | null {
+/**
+ * The skeleton of a version-2 plan family (null: this attempt does not fit; the generator retries like the classic archetypes).
+ * (task studio-subway-architecture-materials-rework-20261117-072826-01: from layout version 3 the grand-hall family builds its great hall
+ * sectioned, gen/stationHallV3.ts; `version` absent = 2, every other family is version 2's at any version)
+ */
+export function buildPlanFamily(k: Kit, arch: 'grand-hall' | 'cavern' | 'hub', terms: string[], version = 2): Plan | null {
   const plan = new Plan();
-  const ok = arch === 'grand-hall' ? grandHall(k, plan, terms) : arch === 'cavern' ? cavern(k, plan, terms) : hub(k, plan, terms);
+  const ok = arch === 'grand-hall' ? (version >= SUBWAY_HALL_V3_MIN_VERSION ? grandHallV3(k, plan, terms) : grandHall(k, plan, terms)) : arch === 'cavern' ? cavern(k, plan, terms) : hub(k, plan, terms);
   return ok && plan.foods.length ? plan : null;
 }
 

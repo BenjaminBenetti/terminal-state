@@ -1,0 +1,206 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "subway-arch-tile-green-brick",
+ "task": "studio-subway-architecture-materials-rework-20261117-072826-01",
+ "lane": "TEX",
+ "status": "runtime PBR derivative (period crop / seam feather / resize / derived normal + ORM / JPEG; deterministic processing only) of an ORIGINAL tileable surface texture generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization for the Subway architecture + materials rework; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Subway public walls: glazed brick tile field",
+ "subject": "sage green glazed 200 x 75 mm brick slips, running bond",
+ "cls": "tile",
+ "rebuild": "node tools/asset-pipeline/props/build-subway-arch-textures.mjs",
+ "rawStorage": "reference/tasks/subway-architecture-materials-rework-20261117-072826/gen/{LEDGER.jsonl, raw/codex-<n>-<id>-exec-<uuid>.png, prompts/frozen/<id>-c<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 11,
+  "session": "01a1e878-3e9c-7bc1-950c-72953c4a7d5e",
+  "requested": "2026-11-17T07:45:56.769402Z",
+  "finished": "2026-11-17T07:46:38.206098Z",
+  "seconds": 41.4,
+  "imageGenGenerations": 1
+ },
+ "prompt": {
+  "file": "frozen/tile-green-brick-c11.txt",
+  "sha256": "16f4c06a9f184689d0ef6da9a5ee1a1a645293896ce913919bd03999ec75e8ac"
+ },
+ "source": {
+  "file": "codex-11-tile-green-brick-exec-07eedf38-d3fe-4a07-90fd-ed06c399472e.png",
+  "sha256": "a3fd13d718c55f50a1d11f5ab4a7846c1bb5e417f5f9ea2fe8512800af12988a",
+  "bytes": 2738144,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "jointPolarity": "light",
+  "profileHighPassPx": 31,
+  "crop": {
+   "x": 315,
+   "y": 168,
+   "w": 836,
+   "h": 1001,
+   "u": {
+    "mode": "joints",
+    "module": 0.2,
+    "cropStart": 315,
+    "cropSize": 836,
+    "periods": 4,
+    "periodPx": 208.994,
+    "mmPerPx": 0.957,
+    "featherPx": 37,
+    "jointStepPx": 105.5,
+    "jointLines": 10,
+    "why": "from joint centre 315.258 to joint centre 1151.234: 4 whole periods of 208.994 px (2 joint lines per period)"
+   },
+   "v": {
+    "mode": "joints",
+    "module": 0.15,
+    "cropStart": 168,
+    "cropSize": 1001,
+    "periods": 6,
+    "periodPx": 166.896,
+    "mmPerPx": 0.8988,
+    "featherPx": 29,
+    "jointStepPx": 83.62,
+    "jointLines": 14,
+    "why": "from joint centre 167.935 to joint centre 1169.309: 6 whole periods of 166.896 px (2 joint lines per period)"
+   }
+  },
+  "seam": {
+   "feather": "cropped axes: the last featherPx columns / rows cross-fade (cosine) into the source pixels just before the crop start (the true wrap neighbours)",
+   "fullFramePatch": null
+  },
+  "lighting": {
+   "threshold": {
+    "cornerToCentre": 0.04,
+    "lowRange": 0.08
+   },
+   "eligible": true,
+   "before": {
+    "cornerToCentre": 0.003,
+    "spread": 0.04,
+    "lowRange": 0.019
+   },
+   "applied": false,
+   "after": {
+    "cornerToCentre": 0.001,
+    "spread": 0.035,
+    "lowRange": 0.016
+   }
+  },
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill",
+   "wrap": "3 x 3 tiled, centre extract"
+  },
+  "height": {
+   "jointDepthM": 0.002,
+   "bevelM": 0.003,
+   "detailSlope": 0.03,
+   "jointHalfWidthPx": 2,
+   "rowJoints": 12,
+   "courses": 12,
+   "runningBond": {
+    "courses": 12,
+    "score": 3913.884,
+    "stackAlternative": 2231.285,
+    "ok": true
+   }
+  },
+  "normal": {
+   "convention": "tangent space, R = -dh/dx, G = +dh/dy (image y down), B = z (build-reactor-kit.mjs)",
+   "slopes": "metres per metre from the height (m) and the span per texel"
+  },
+  "orm": {
+   "r": "ambient occlusion from cavity",
+   "g": "roughness 0.18-0.32 faces, 0.9 joints / gaps",
+   "b": "metalness 0",
+   "aoGainPerM": 260,
+   "aoBlurPx": 6,
+   "aoFloor": 0.35
+  },
+  "encode": {
+   "color": {
+    "quality": 85,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:2:0"
+   },
+   "normal": {
+    "quality": 90,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "orm": {
+    "quality": 88,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) + plain JS via tools/asset-pipeline/props/build-subway-arch-textures.mjs"
+ },
+ "tileCheck": {
+  "before": {
+   "seamLR": 8.4,
+   "interiorLR": 5.1,
+   "meanLR": 3.4,
+   "phaseLR": 5.3,
+   "ratioLR": 1.582,
+   "seamTB": 28.5,
+   "interiorTB": 9.7,
+   "meanTB": 6.3,
+   "phaseTB": 22.5,
+   "ratioTB": 1.269
+  },
+  "after": {
+   "seamLR": 9.7,
+   "interiorLR": 5,
+   "meanLR": 3.4,
+   "phaseLR": 5.3,
+   "ratioLR": 1.827,
+   "seamTB": 6.2,
+   "interiorTB": 9.8,
+   "meanTB": 6.3,
+   "phaseTB": 22.5,
+   "ratioTB": 0.275
+  },
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs interior neighbour rows / columns (pre-JPEG 1024 buffers); phase = the same position in every other whole period; ratio = seam / phase (else / mean); before = the plain crop"
+ },
+ "spanM": {
+  "u": 0.8,
+  "v": 0.8997
+ },
+ "meanLinearAlbedo": [
+  0.2634,
+  0.3327,
+  0.1531
+ ],
+ "meanRoughness": 0.302,
+ "outputs": {
+  "color": {
+   "url": "assets/textures/subway/arch/subway-arch-tile-green-brick-color.jpg",
+   "bytes": 130172,
+   "sha256": "1945d86422d87c40ddace4e28be4742db500db0c4cc61883369f422fbeff6b53",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "normal": {
+   "url": "assets/textures/subway/arch/subway-arch-tile-green-brick-normal.jpg",
+   "bytes": 82810,
+   "sha256": "c75eac2aac2210e4f0bc0b4be1d57cb4e6f0f559ef416480da417dcaa78c92ca",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "orm": {
+   "url": "assets/textures/subway/arch/subway-arch-tile-green-brick-orm.jpg",
+   "bytes": 140254,
+   "sha256": "638ad9630e4e5dc0bef8b510f14c98c417f716295449c5d0f4eba0466e063af5",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  }
+ }
+}
