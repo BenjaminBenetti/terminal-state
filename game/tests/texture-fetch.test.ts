@@ -16,6 +16,7 @@ import {fetchTexel, plainTexture, sampleAt} from '../src/render/textureFetch';
 import {REFL} from '../src/world/reflectionNode';
 import {DECAY_UNIFORMS} from '../src/world/decay';
 import {FLARE_VIS} from '../src/world/flareLight';
+import {RTB} from '../src/world/rtBounceNode';
 
 interface TexNode { updateMatrix: boolean; sampler: boolean; uvNode: unknown; referenceNode: unknown; value: THREE.Texture; isTextureNode?: boolean; updateType: string;
   load(c: unknown): TexNode; sample(c: unknown): TexNode; rgb: {add(o: unknown): {add(o: unknown): unknown}} }
@@ -125,7 +126,7 @@ describe('fetchTexel / sampleAt / plainTexture', () => {
 
 describe('the game\'s nodes that use them', () => {
   it('hold untransformed textures (identity matrix: the same texel with or without it) and are switched off themselves', () => {
-    const nodes = {reflAtlas: REFL.atlas, reflMeta: REFL.meta, decayMap: DECAY_UNIFORMS.uDecayMap, decayTex: DECAY_UNIFORMS.uDecayTex, flareVis: FLARE_VIS} as unknown as Record<string, TexNode>;
+    const nodes = {reflAtlas: REFL.atlas, reflMeta: REFL.meta, decayMap: DECAY_UNIFORMS.uDecayMap, decayTex: DECAY_UNIFORMS.uDecayTex, flareVis: FLARE_VIS, rtE: RTB.E, rtN: RTB.N} as unknown as Record<string, TexNode>;
     const identity = new THREE.Matrix3();
     for (const [name, node] of Object.entries(nodes)) {
       expect(node.updateMatrix, name).toBe(false);
@@ -144,5 +145,10 @@ describe('the game\'s nodes that use them', () => {
     const decay = readFileSync(new URL('../src/world/decay.ts', import.meta.url), 'utf8');
     expect(decay).not.toMatch(/(uDecayMap|uDecayTex|\btex)\.sample\(/);
     expect(decay.match(/sampleAt\(/g)!.length).toBeGreaterThanOrEqual(5);
+    // task studio-cpu-submit-parallelism-20261116-205022-01: the traced flashlight bounce's two textures (8 texel loads per lookup, in
+    // every lit material of the RT variant: ~40 per-object matrix updates per drawn object before)
+    const rt = readFileSync(new URL('../src/world/rtBounceNode.ts', import.meta.url), 'utf8');
+    expect(rt).not.toMatch(/RTB\.[EN]\)?\.(load|sample)\(/);
+    expect(rt.match(/fetchTexel\(RTB\.[EN],/g)).toHaveLength(2);
   });
 });

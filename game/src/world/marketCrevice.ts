@@ -31,10 +31,10 @@ import {marketSpan, marketTexture} from './marketTextures';
 /** The bridge kit's lazy prop-library entry (game.ts propModels / sectionModelKeys): market-only (assets/levelAssets.ts 'market-*'). */
 export const MARKET_BRIDGE_KEY = MARKET_BRIDGE_KIT.key;
 export const MARKET_BRIDGE_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = {[MARKET_BRIDGE_KIT.key]: {url: MARKET_BRIDGE_KIT.url, bytes: MARKET_BRIDGE_KIT.bytes}};
-/** The kit's key for a layout that needs it: only a version-5 market with bridges ever fetches the kit. */
+/** The kit's key for a layout that needs it: only a version-5 / 6 market with bridges ever fetches the kit. */
 export function marketBridgeModelKeys(layout: {market?: StationLayout['market']}): string[] {
   const m = layout.market;
-  return m?.v === 5 && m.crevice && m.crevice.bridges.length ? [MARKET_BRIDGE_KEY] : [];
+  return m && m.v >= 5 && m.crevice && m.crevice.bridges.length ? [MARKET_BRIDGE_KEY] : [];
 }
 
 /** Merge chunk size (m). */

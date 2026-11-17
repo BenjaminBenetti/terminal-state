@@ -54,6 +54,7 @@ import {isSubwayMapKioskKind} from '../gen/subwayMapKioskKind'; // task studio-u
 import {buildSubwayMapKiosks} from './subwayMapKiosks';
 import {isSurfaceKind} from '../gen/surface/kinds'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT)
 import {buildSurfaceKitProp} from './surface/kit';
+import {buildStationColumns, isLevelOwnColumn} from './stationColumns'; // task studio-subway-platform-pillars-20261116-214939-01
 import {OfficeArch} from './officeArch'; // Task office-overhaul-20261030 (lane ARCH): office storeys look like an office
 import {setExteriorRoof} from './exterior'; // Task office-overhaul-20261030 (lane ARCH): roof deck for the outdoor fog / tower shell
 import {levelsOf} from '../gen/levels'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's collision rails
@@ -787,19 +788,23 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     } else if (modelKey && models[modelKey]) {
       instances += instanceModel(group, models[modelKey]!, list.map(placeM), {w: def.w, h: def.h, d: def.d, anchor: 'bottom'}, kind);
     } else if (kind === 'column') {
-      // Unit-height box scaled per instance (platform/concourse columns differ in height).
-      const geo = new THREE.BoxGeometry(def.w, 1, def.d);
-      geo.translate(0, 0.5, 0);
-      // (task studio-graphics-gpu-materials-toggle-20261114-212239-01: brushed-steel cladding — 'pillar' — instead of the charcoal trim
-      // paint. Every 'column' is a station column: gen/stationDress.ts places them on the platforms and concourses of each level's
-      // station storey)
-      const im = new THREE.InstancedMesh(geo, mats.get('pillar'), list.length);
-      const m4 = new THREE.Matrix4();
-      list.forEach((p, i) => im.setMatrixAt(i, m4.makeScale(1, p.h, 1).setPosition(p.x, p.y, p.z)));
-      im.name = 'prop-column';
-      im.computeBoundingSphere();
-      group.add(im);
-      instances += list.length;
+      // Task studio-subway-platform-pillars-20261116-214939-01: the station columns (gen/stationDress.ts: platform rows, between two
+      // tracks, concourses — each level's station storey) are riveted built-up steel H-columns in 'columnPaint' (world/stationColumns.ts)
+      const own = list.filter(p => isLevelOwnColumn(layout, p));
+      instances += buildStationColumns(group, own.length ? list.filter(p => !own.includes(p)) : list, mats.get('columnPaint'));
+      if (own.length) {
+        // A level's own colonnade (the Bunker vault hall, under its own capitals and beams): the unit-height box scaled per instance in
+        // the brushed-steel cladding, as before (task studio-graphics-gpu-materials-toggle-20261114-212239-01, 'pillar')
+        const geo = new THREE.BoxGeometry(def.w, 1, def.d);
+        geo.translate(0, 0.5, 0);
+        const im = new THREE.InstancedMesh(geo, mats.get('pillar'), own.length);
+        const m4 = new THREE.Matrix4();
+        own.forEach((p, i) => im.setMatrixAt(i, m4.makeScale(1, p.h, 1).setPosition(p.x, p.y, p.z)));
+        im.name = 'prop-column';
+        im.computeBoundingSphere();
+        group.add(im);
+        instances += own.length;
+      }
     } else if ((kind as PropKind) === 'bin') { // iteration 08 (Lane I): bins are openable holders now (world/openables.ts); dead fallback
       const geo = new THREE.CylinderGeometry(def.w / 2, def.w / 2 * 0.92, def.h, 14, 1);
       geo.translate(0, def.h / 2, 0);

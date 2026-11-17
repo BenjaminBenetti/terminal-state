@@ -135,6 +135,7 @@ export const WORLD_MAT_CLASS: Record<string, DamageClass> = {
   ...STRUCTURAL_CLASS, steel: 'steel', rail: 'steel', sleeper: 'wood', coverboard: 'plastic', crate: 'wood', bin: 'sheetMetal', gate: 'steel', tube: 'glass',
   tileBase: 'tile', // Iteration 12 (ARCH): raked charcoal skirting of stair-flight walls (world/materials.ts)
   pillar: 'steel', // the station columns' brushed-steel cladding (world/materials.ts 'pillar'): structural steel, as when they were drawn with 'steel'
+  columnPaint: 'steel', // the station columns' riveted painted steel (world/materials.ts 'columnPaint', world/stationColumns.ts)
 };
 
 // ---------------------------------------------------------------------------------------

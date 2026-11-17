@@ -41,17 +41,19 @@ describe('Survivor Market layout version (save compatibility)', () => {
     // den, gen/market/v4/; a recorded 3 stays 3 byte for byte: market-den-layout.test.ts)
     // (re-pinned by task studio-survivor-market-crevice-20261116-074419: the current version is now 5 — the crevice, gen/market/v5/; a
     // recorded 4 stays 4 byte for byte: market-crevice-layout.test.ts)
-    expect(MARKET_LAYOUT_VERSION).toBe(5);
+    // (re-pinned by task studio-market-irregular-envelope-20261116-210503-01: the current version is now 6 — the crevice in its irregular
+    // envelope, gen/market/v6/; a recorded 5 stays 5 byte for byte: market-crevice-envelope.test.ts)
+    expect(MARKET_LAYOUT_VERSION).toBe(6);
     expect(MARKET_LAYOUT_LANE).toBe('market.layout');
-    expect(marketLayoutVersionFor(undefined)).toBe(5);
-    expect(marketLayoutVersionFor({visits: 0, lanes: {}})).toBe(5);
+    expect(marketLayoutVersionFor(undefined)).toBe(6);
+    expect(marketLayoutVersionFor({visits: 0, lanes: {}})).toBe(6);
     expect(marketLayoutVersionFor({visits: 3, lanes: {}})).toBe(1);
     expect(marketLayoutVersionFor({visits: 3, lanes: {[MARKET_LAYOUT_LANE]: {v: 1}}})).toBe(1);
     expect(marketLayoutVersionFor({visits: 3, lanes: {[MARKET_LAYOUT_LANE]: {v: 2}}})).toBe(2);
     expect(marketLayoutVersionFor({visits: 0, lanes: {[MARKET_LAYOUT_LANE]: {v: 1}}})).toBe(1);
     // a malformed record falls back to the visit rule
     expect(marketLayoutVersionFor({visits: 1, lanes: {[MARKET_LAYOUT_LANE]: {v: 9}}})).toBe(1);
-    expect(marketLayoutVersionFor({visits: 0, lanes: {[MARKET_LAYOUT_LANE]: {v: 'x'}}})).toBe(5);
+    expect(marketLayoutVersionFor({visits: 0, lanes: {[MARKET_LAYOUT_LANE]: {v: 'x'}}})).toBe(6);
   });
 
   it('version 1 regenerates the shipped first market exactly (fingerprints of the shipped generator)', () => {
@@ -61,23 +63,25 @@ describe('Survivor Market layout version (save compatibility)', () => {
     }
   });
 
-  it('version 2 is the container settlement; deterministic; the same station name and stall ids (version 4: + the bar, + the den; version 5, the default: the crevice)', () => {
+  it('version 2 is the container settlement; deterministic; the same station name and stall ids (version 4: + the bar, + the den; version 5: the crevice; version 6, the default: in its envelope)', () => {
     for (const s of [1, 42]) {
       const v1 = generateMarketLevel({levelSeed: s, layoutVersion: 1}), v2 = generateMarketLevel({levelSeed: s, layoutVersion: 2});
       expect([v1.market!.v, v2.market!.v, v2.levels.length]).toEqual([1, 2, 3]);
       expect(v2.name).toBe(v1.name);
       expect(v2.market!.stalls.map(q => q.id)).toEqual(v1.market!.stalls.map(q => q.id));
       expect(fingerprint(generateMarketLevel({levelSeed: s, layoutVersion: 2}))).toBe(fingerprint(v2));
-      const v4 = generateMarketLevel({levelSeed: s, layoutVersion: 4}), v5 = generateMarketLevel({levelSeed: s});
+      const v4 = generateMarketLevel({levelSeed: s, layoutVersion: 4}), v5 = generateMarketLevel({levelSeed: s, layoutVersion: 5}), v6 = generateMarketLevel({levelSeed: s});
       expect([v4.market!.v, v4.name, !!v4.market!.den]).toEqual([4, v2.name, true]);
       expect(v4.market!.stalls.map(q => q.id)).toEqual([...v2.market!.stalls.map(q => q.id), 'bar']);
       expect([v5.market!.v, v5.name, !!v5.market!.den, v5.levels.length]).toEqual([5, v2.name, true, 4]);
       expect(v5.market!.stalls.map(q => q.id)).toEqual(v4.market!.stalls.map(q => q.id));
+      expect([v6.market!.v, v6.name, !!v6.market!.den, v6.levels.length]).toEqual([6, v2.name, true, 4]);
+      expect(v6.market!.stalls.map(q => q.id)).toEqual(v4.market!.stalls.map(q => q.id));
       expect(v1.market!.stalls.every(q => q.displays === undefined)).toBe(true); // (v1 derives its display surfaces: market/wares)
     }
   });
 
-  it('a campaign station: an old visited market keeps version 1, a new one records the current version (5) on its first build (Game.generateSection)', () => {
+  it('a campaign station: an old visited market keeps version 1, a new one records the current version (6) on its first build (Game.generateSection)', () => {
     const run = createRun({seeds: {subway: 1, office: 2, mall: 3, market: 4, bunker: 7, skyways: 5, reactor: 6}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
     const oldKey = {level: 'market' as const, section: 'main', station: 'st-old'}, newKey = {level: 'market' as const, section: 'main', station: 'st-new'};
     run.memory(oldKey).visits = 2; // entered under the first market's build: no record
@@ -86,10 +90,10 @@ describe('Survivor Market layout version (save compatibility)', () => {
       if (run.laneStore(MARKET_LAYOUT_LANE, k) === undefined) run.setLaneStore(MARKET_LAYOUT_LANE, {v}, k);
       return v;
     };
-    expect([version(oldKey), version(newKey)]).toEqual([1, 5]);
+    expect([version(oldKey), version(newKey)]).toEqual([1, 6]);
     run.memory(newKey).visits++;
-    expect([version(oldKey), version(newKey)]).toEqual([1, 5]); // kept after visits, both
-    expect([run.laneStore(MARKET_LAYOUT_LANE, oldKey), run.laneStore(MARKET_LAYOUT_LANE, newKey)]).toEqual([{v: 1}, {v: 5}]);
+    expect([version(oldKey), version(newKey)]).toEqual([1, 6]); // kept after visits, both
+    expect([run.laneStore(MARKET_LAYOUT_LANE, oldKey), run.laneStore(MARKET_LAYOUT_LANE, newKey)]).toEqual([{v: 1}, {v: 6}]);
     // the game's generateSection applies exactly this rule to the market (and records the lane like the Skyways')
     const src = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/game.ts'), 'utf8');
     expect(src).toMatch(/key\.level === 'market' \? marketLayoutVersionFor\(run\.peekMemory\(key\)\)/);

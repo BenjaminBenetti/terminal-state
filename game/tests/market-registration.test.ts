@@ -42,10 +42,15 @@ describe('the Survivor Market registration', () => {
     const L2 = generateMarketLevel({levelSeed: 31337, layoutVersion: 2});
     expect(L2.name).toBe(L.name);
     expect([0, 1, 2].map(lv => storeyLabel(L2, lv))).toEqual(['Market lanes', 'Catwalks', 'Rooftops']);
-    // (task studio-survivor-market-crevice-20261116-074419) layout version 5 (the default, the crevice): the same name, its four storeys
-    const L5 = generateMarketLevel({levelSeed: 31337});
+    // (task studio-survivor-market-crevice-20261116-074419) layout version 5 (the crevice): the same name, its four storeys
+    const L5 = generateMarketLevel({levelSeed: 31337, layoutVersion: 5});
     expect([L5.market!.v, L5.name]).toEqual([5, L.name]);
     expect([0, 1, 2, 3].map(lv => storeyLabel(L5, lv))).toEqual(['Crevice floor', 'Lower terrace', 'Middle terrace', 'Upper terrace']);
+    // (task studio-market-irregular-envelope-20261116-210503-01) layout version 6 (the default: the crevice in its irregular envelope):
+    // the same name, the same storeys
+    const L6 = generateMarketLevel({levelSeed: 31337});
+    expect([L6.market!.v, L6.name]).toEqual([6, L.name]);
+    expect([0, 1, 2, 3].map(lv => storeyLabel(L6, lv))).toEqual(['Crevice floor', 'Lower terrace', 'Middle terrace', 'Upper terrace']);
     expect(levelDisplayName('market')).toBe(MARKET_GENERIC_NAME);
     expect([storeyLabel(L, 0), storeyLabel(L, 1)]).toEqual(['Market floor', 'Housing deck']);
     expect(sectionLabel({level: 'market', section: 'main'})).toBe('Station and settlement');

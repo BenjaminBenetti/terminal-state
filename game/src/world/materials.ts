@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {MeshBasicNodeMaterial, MeshStandardNodeMaterial, type MeshStandardNodeMaterialParameters, type Node, type NodeMaterial} from 'three/webgpu';
-import {Fn, float, materialColor, materialRoughness, min, positionWorld, smoothstep, vec4} from 'three/tsl';
+import {Fn, float, materialColor, materialRoughness, max, min, positionWorld, pow, smoothstep, vec3, vec4} from 'three/tsl';
 import type {TextureKey} from '../assets/manifest';
 import {ENV_TEXTURE_LAYOUT} from '../assets/manifest';
 import {addNodeHook, copyNodeHooks, hasNodeHook} from '../render/nodeHooks';
@@ -173,9 +173,39 @@ export const PILLAR_NORMAL = 1.3;
 /** x the wall tile's authored roughness map (0.38-0.42 on a glazed face). */
 export const TILE_GLAZE_ROUGHNESS = 0.7;
 
+/**
+ * Task studio-subway-platform-pillars-20261116-214939-01: the station columns' paint (WorldMaterials 'columnPaint', drawn on the
+ * riveted steel columns of world/stationColumns.ts). The existing charcoal painted-steel set — its chips to the teal undercoat and
+ * to bare steel, rust, scratches, run-down streaks, repainted patches — GRADED to a weathered slate-teal enamel: the vision's
+ * charcoal-painted steel and desaturated teal at a value the dim station still reads (the charcoal itself, ~0.035 linear, drew a black
+ * slab: PR #119). No new texture: a tone curve on the set's linear albedo, `tint x c^gamma` (columnPaintGrade): the paint lands at
+ * ~0.12-0.16, the bare-steel chips at ~0.35-0.4, the run-down streaks stay darker than the paint (a plain gain would have taken the
+ * chips past 0.6 to lift the paint as far).
+ *  - finish: a semi-gloss enamel (mean roughness; finishRoughness over the set's map): chips stay smoother than the paint;
+ *  - metalness: paint over steel is a dielectric; a little so the column stays a 'metal' reflection candidate whose smooth texels
+ *    (worn chips and scratches, below REFLECT_ROUGHNESS_MAX) catch the probes while the enamel does not mirror;
+ *  - grime: darker and rougher toward the floor (the kick zone);
+ *  - lightAlbedo: the graded paint's linear albedo for the traced flashlight bounce (render/rt/rtMaterials.ts), which would otherwise
+ *    take colour x the charcoal map's mean.
+ */
+export const COLUMN_PAINT = {
+  tint: [1.0, 1.12, 1.08] as [number, number, number], gamma: 0.58, finish: 0.52, metalness: 0.1, normal: 1.1,
+  grime: [0.45, 0.9] as [number, number], macro: 0.2,
+  /** The set's base paint (canvasTextures.ts paintedSteel '#30363a'), linear. */
+  base: [0.0296, 0.0369, 0.0409] as [number, number, number],
+};
+/** The grade of one linear albedo channel (CPU mirror of columnPaintGrade). */
+export const columnPaintGradeCpu = (c: number, ch: 0 | 1 | 2): number => COLUMN_PAINT.tint[ch] * Math.pow(Math.max(0, c), COLUMN_PAINT.gamma);
+/** The column paint's colour stage: the tone curve over colour x map, before the world mapping's grime / macro tone (order 90). */
+const columnPaintGrade = sharedStage(prev => {
+  const c = asColor(prev, materialColor);
+  const t = COLUMN_PAINT.tint;
+  return skipInShadowPass(vec4(pow(max(c.rgb, vec3(0)), vec3(COLUMN_PAINT.gamma)).mul(vec3(t[0], t[1], t[2])), c.a), c, 'vec4');
+});
+
 export type MatKey =
   | 'tileLower' | 'tileUpper' | 'tileBase' | 'paint' | 'terrazzo' | 'concrete' | 'platformSlab' | 'safetyEdge' | 'platformFace'
-  | 'ceiling' | 'ceilingService' | 'tunnel' | 'ballast' | 'steel' | 'pillar' | 'rail' | 'sleeper' | 'coverboard'
+  | 'ceiling' | 'ceilingService' | 'tunnel' | 'ballast' | 'steel' | 'pillar' | 'columnPaint' | 'rail' | 'sleeper' | 'coverboard'
   | 'crate' | 'bin' | 'gate' | 'tube';
 
 /**
@@ -231,7 +261,7 @@ export class WorldMaterials {
       ceilingService: {u: L.ceiling.w, v: L.ceiling.h},
       tunnel: {u: L.tunnel.w, v: L.tunnel.h},
       ballast: {u: 2, v: 2},
-      steel: {u: 1, v: 1}, pillar: {u: 1, v: 1}, rail: {u: 1, v: 1}, sleeper: {u: 1, v: 1}, coverboard: {u: 1, v: 1},
+      steel: {u: 1, v: 1}, pillar: {u: 1, v: 1}, columnPaint: {u: 1, v: 1}, rail: {u: 1, v: 1}, sleeper: {u: 1, v: 1}, coverboard: {u: 1, v: 1},
       crate: {u: 1, v: 1}, bin: {u: 1, v: 1}, gate: {u: 1, v: 1}, tube: {u: 1, v: 1},
     };
     // Iteration 13 (MAT-A): node materials (decay and other lanes' hooks layer onto them).
@@ -274,6 +304,16 @@ export class WorldMaterials {
     // columns are clad in brushed stainless (the existing brushedSteel set) instead of the charcoal trim paint, which read as a black
     // slab. A 'metal' reflection candidate by its metalness: with probes it shows the lit station around it (see PILLAR_METALNESS).
     this.mats.set('pillar', surfaceMaterial('brushedSteel', {metalness: PILLAR_METALNESS, roughness: PILLAR_ROUGHNESS}, {grime: [0.3, 0.45], macro: 0.15, normal: PILLAR_NORMAL}));
+    // Task studio-subway-platform-pillars-20261116-214939-01: the station columns are riveted painted steel now (world/stationColumns.ts,
+    // COLUMN_PAINT); 'pillar' above stays the clad box of a level's own colonnade (the Bunker vault hall). Thin trim: the rivet heads
+    // and bolts swap the world-mapping plane over a few millimetres (anisotropic sampling there stalled software GL; thinTrim).
+    const cp = COLUMN_PAINT;
+    const columnPaint = thinTrim(surfaceMaterial('paintedSteel', {metalness: cp.metalness}, {grime: cp.grime, macro: cp.macro, normal: cp.normal}));
+    columnPaint.roughness = finishRoughness(columnPaint, cp.finish);
+    addNodeHook(columnPaint, {key: 'column-paint-grade', stage: 'color', order: WM_ORDER - 10, fn: columnPaintGrade});
+    columnPaint.userData.lightAlbedo = cp.base.map((c, i) => columnPaintGradeCpu(c, i as 0 | 1 | 2));
+    columnPaint.name = 'station-column-paint';
+    this.mats.set('columnPaint', columnPaint);
     this.mats.set('rail', thinTrim(surfaceMaterial('railSteel', {metalness: 0.45}, {grime: [0.12, 0.4], macro: 0.12})));
     this.mats.set('sleeper', surfaceMaterial('timberTie', {}, {topAlongZ: true, macro: 0.2}));
     this.mats.set('coverboard', surfaceMaterial('coverboard', {}, {macro: 0.2}));
