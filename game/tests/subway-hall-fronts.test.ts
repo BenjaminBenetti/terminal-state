@@ -24,7 +24,7 @@ import {bayBounds} from '../src/gen/subwayBays';
 import type {Area, HallFront, HallSection, HallUpperFeature, LightPlacement, StationLayout} from '../src/gen/stationTypes';
 import {WorldMaterials} from '../src/world/materials';
 import {buildWorld, layoutFixture, type BuiltWorld} from '../src/world/builder';
-import {buildSubwayKit, hallKit, type KitStats} from '../src/world/subwayKit';
+import {buildSubwayKit, hallKit, type KitInput, type KitStats} from '../src/world/subwayKit';
 import {HallFrontsKit, type FrontHall} from '../src/world/subwayKitFronts';
 import {normalizeFaces} from '../src/world/wallDetailFaces';
 import {bakeLightField, fixtureTint, sampleField} from '../src/world/lightField';
@@ -141,7 +141,7 @@ function frontsOnly(L: StationLayout, w: BuiltWorld) {
 }
 const kitOf = (L: StationLayout, w: BuiltWorld) => {
   const rec = recorder();
-  const stats: KitStats = buildSubwayKit(rec.sink, {layout: L, gridOf: lv => L.levels?.[lv]?.grid ?? L.grid, faces: w.wallFaces, sub: w.subwayArch!});
+  const stats: KitStats = buildSubwayKit(rec.sink, {layout: L, gridOf: lv => L.levels?.[lv]?.grid ?? L.grid, faces: w.wallFaces as unknown as KitInput['faces'], sub: w.subwayArch!});
   return {stats, items: rec.items};
 };
 
