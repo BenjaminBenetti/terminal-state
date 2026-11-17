@@ -308,9 +308,10 @@ export const SIGN_SIZE: Readonly<Record<SignKind, {w: number; h: number}>> = {
 };
 
 /** Rendered plate size of a sign (a width override widens wayfinding plates a little taller). */
-export function signDims(s: Pick<SignPlacement, 'kind' | 'w'>): {w: number; h: number} {
+export function signDims(s: Pick<SignPlacement, 'kind' | 'w'> & Partial<Pick<SignPlacement, 'h'>>): {w: number; h: number} {
   const size = SIGN_SIZE[s.kind];
   const w = s.w ?? size.w;
+  if (s.h) return {w, h: s.h}; // (task studio-subway-rework-m2-finishing-20261117-111246-01: a v3 clerestory tablet's own plate height)
   const h = s.w && s.kind !== 'station' && s.kind !== 'platform' ? Math.max(size.h, Math.min(0.34, w * 0.15)) : size.h;
   return {w, h};
 }

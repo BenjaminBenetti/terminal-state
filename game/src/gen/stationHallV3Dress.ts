@@ -283,6 +283,8 @@ function naveSigns(ctx: PlaceCtx, a: Area, S: HallSection, api: HallV3Api, sum: 
  * course over the aisle ceiling (+0.24 course, +0.45 inset) to under the piers' caps below the nave's transverse beams (a grand hall's
  * nave is >= 7 m tall: 0.9 m beams; 0.16 m cap, 0.45 inset).
  */
+/** A clerestory tablet's plate height (m; at most 60 % of the panel band). */
+export const TABLET_H = 0.8;
 export function clerestoryBand(S: Pick<HallSection, 'aisleCeil' | 'naveCeil'>): [number, number] {
   return [r2(S.aisleCeil + 0.24 + 0.45), r2(S.naveCeil - 0.9 - 0.16 - 0.45)];
 }
@@ -309,7 +311,9 @@ function clerestory(ctx: PlaceCtx, a: Area, S: HallSection, office: [number, num
     if (w < 1.2) return;
     const {face, facing} = faces[fi];
     feats.set(key(fi, bi), {kind: 'tablet', face, facing, along: [p, q], text});
-    layout.signs.push({x: r3((p + q) / 2), y: r2((b0 + b1) / 2 - base), z: r3(face + 0.06 * facing), rot: facing > 0 ? 0 : Math.PI, kind, text, area: a.id, w});
+    // (a tablet is a tall plate — lettering that reads across the nave, not a thin strip: TABLET_H, within the panel band)
+    layout.signs.push({x: r3((p + q) / 2), y: r2((b0 + b1) / 2 - base), z: r3(face + 0.06 * facing), rot: facing > 0 ? 0 : Math.PI, kind, text, area: a.id, w,
+      h: r2(Math.min(TABLET_H, (b1 - b0) * 0.6))});
     sum.tablets++;
   };
   const doors = ctx.doorsOf.get(a.id) ?? [];

@@ -1037,7 +1037,7 @@ const inkOn = (hex: string): string => {
  */
 function signTexture(s: SignPlacement, w: number, h: number, pal: PlatePalette | null = null): THREE.Texture {
   const p = s.style || s.kind === 'service' ? null : pal;
-  const key = `${s.kind}|${s.text}|${s.arrow ?? ''}|${w.toFixed(2)}${signStyleKey(s)}${p ? `|${p.bg}${p.fg}${p.accent}` : ''}`;
+  const key = `${s.kind}|${s.text}|${s.arrow ?? ''}|${w.toFixed(2)}${s.h ? `x${h.toFixed(2)}` : ''}${signStyleKey(s)}${p ? `|${p.bg}${p.fg}${p.accent}` : ''}`;
   let tex = signTexCache.get(key);
   if (tex) return tex;
   if (s.style) tex = companySignTexture(s, w, h); // Task office-overhaul-20261030 (lane TENANTS): company / directory plates
