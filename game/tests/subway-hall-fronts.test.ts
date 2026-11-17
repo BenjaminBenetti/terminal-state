@@ -236,7 +236,7 @@ describe('the fronts kit (synthetic records on real version-3 halls)', () => {
       // the tablet surround frames its sign plate (the plate inside the border, the border clear of the plate)
       const sign = L.signs[inj.tabletSign];
       const tab = inj.upper.find(q => q.kind === 'tablet')!;
-      const border = added.filter(it => it.mat === sub.accentKey() && it.min.x >= Math.min(...tab.along) && it.max.x <= Math.max(...tab.along) && Math.abs(far(it, tab) - 0.09) < 1e-3);
+      const border = added.filter(it => it.mat === sub.trimKey() && it.min.x >= Math.min(...tab.along) && it.max.x <= Math.max(...tab.along) && Math.abs(far(it, tab) - 0.09) < 1e-3);
       expect(border.length).toBe(4);
       const bx0 = Math.min(...border.map(b => b.min.x)), bx1 = Math.max(...border.map(b => b.max.x));
       expect(bx0).toBeLessThan(sign.x - sign.w! / 2);

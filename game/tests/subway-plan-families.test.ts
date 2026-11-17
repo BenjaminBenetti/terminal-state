@@ -273,7 +273,8 @@ describe('the station identity: drawn with the Subway architecture sets', () => 
     const tile = gen(4, 2), conc = gen(3, 2);
     expect([tile.identity!.theme, conc.identity!.theme]).toEqual(['civic', 'brutalist']);
     const wt = buildWorld(tile, mats(), {});
-    for (const k of ['subway-stone-plinth', 'subway-tile-dado', 'subway-tile-field', 'subway-tile-band', 'subway-stone-field-hall', 'subway-plaster-ceil', 'subway-stone-floor']) expect(keyed(wt, k).length, k).toBeGreaterThan(0);
+    // (task studio-subway-rework-m2-finishing-20261117-111246-01: a civic hall is its own blue tile under a white clerestory, not limestone)
+    for (const k of ['subway-stone-plinth', 'subway-tile-dado', 'subway-tile-field', 'subway-tile-band', 'subway-tile-field-hall', 'subway-plaster-ceil', 'subway-stone-floor']) expect(keyed(wt, k).length, k).toBeGreaterThan(0);
     expect((keyed(wt, 'subway-tile-field')[0].material as THREE.Material).userData.subwayArchTex).toBe('tileBlueSquare');
     // the old glazed tile set is gone from the public walls
     expect(keyed(wt, 'tileUpper').length + keyed(wt, 'tileLower').length).toBe(0);

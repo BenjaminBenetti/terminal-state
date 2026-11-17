@@ -364,13 +364,14 @@ export class HallFrontsKit {
     const m = 0.16, t = 0.12, W = w + 2 * m, H = hh + 2 * m;
     if (W > hi - lo || cy - H / 2 - 0.1 < bot || cy + H / 2 > top) return false;
     const accent = this.sub.accentKey(), trim = this.sub.trimKey();
-    // a raised stone border round the plate (proud of its 0.06 m face), a sill under it and a cap over it
-    this.fb(accent, face, mid - W / 2, mid + W / 2, cy + H / 2 - t, cy + H / 2, 0, 0.09);
-    this.fb(accent, face, mid - W / 2, mid + W / 2, cy - H / 2, cy - H / 2 + t, 0, 0.09);
-    this.fb(accent, face, mid - W / 2, mid - W / 2 + t, cy - H / 2 + t, cy + H / 2 - t, 0, 0.09);
-    this.fb(accent, face, mid + W / 2 - t, mid + W / 2, cy - H / 2 + t, cy + H / 2 - t, 0, 0.09);
-    this.fb(trim, face, mid - W / 2 - 0.08, mid + W / 2 + 0.08, cy - H / 2 - 0.07, cy - H / 2, 0, 0.14);
-    this.fb(trim, face, mid - W / 2 - 0.04, mid + W / 2 + 0.04, cy + H / 2, cy + H / 2 + 0.05, 0, 0.11);
+    // a raised stone border round the plate (the scheme's trim stone, proud of the plate's 0.06 m face), a sill under it and a cap over it
+    // in the scheme's accent (its line colour: the tablet reads as part of the station's sign hierarchy)
+    this.fb(trim, face, mid - W / 2, mid + W / 2, cy + H / 2 - t, cy + H / 2, 0, 0.09);
+    this.fb(trim, face, mid - W / 2, mid + W / 2, cy - H / 2, cy - H / 2 + t, 0, 0.09);
+    this.fb(trim, face, mid - W / 2, mid - W / 2 + t, cy - H / 2 + t, cy + H / 2 - t, 0, 0.09);
+    this.fb(trim, face, mid + W / 2 - t, mid + W / 2, cy - H / 2 + t, cy + H / 2 - t, 0, 0.09);
+    this.fb(accent, face, mid - W / 2 - 0.08, mid + W / 2 + 0.08, cy - H / 2 - 0.07, cy - H / 2, 0, 0.14);
+    this.fb(accent, face, mid - W / 2 - 0.04, mid + W / 2 + 0.04, cy + H / 2, cy + H / 2 + 0.05, 0, 0.11);
     this.stats.tablets++;
     return true;
   }
