@@ -3,7 +3,8 @@
 //  - Subway: the lift is at a NORMAL closed street exit — never a hall off the food court / retail arcade while another closed hall can
 //    take it (swept over present stations; network seed 1's first Subway node, whose version-1 stairwell opens off the food court, named);
 //  - append-only and RNG-neutral like the version-1 stairwell: the plain station's lists are unchanged but for the chosen hall's grille
-//    retired, its two signs and label; one area appended (the car); the grid differs only inside the chosen hall;
+//    retired, its two signs and label; one area appended (the car) and one light (the landing's fixture, follow-up 3); the grid differs
+//    only inside the chosen hall;
 //  - a real room: the car's FLOOR cells at the hall floor, its ceiling, the gate's doorway, the return pose standing in it, reachable;
 //  - the district's end: the car at the back of the command tent, in the tent's own area, the portal pose standing in it, the way from
 //    the car to the flap free; version 1 (both sides) keeps its stairwell / portal (tests/surface-v1-compat.test.ts pins the bytes).
@@ -81,7 +82,10 @@ describe('Surface Run v2: the Subway lift at a normal closed street exit', () =>
       L0.areas.forEach((ar, i) => expect(plain({...L2.areas[i], label: i === hall ? ar.label : L2.areas[i].label}), `area ${i}`).toEqual(plain(ar)));
       expect(L2.areas[hall].label).not.toMatch(/closed/i);
       expect(a.lift!.area).toBe(L0.areas.length);
-      for (const k of ['doors', 'pickups', 'zombies', 'storefronts', 'decor', 'trenches', 'playerSpawn', 'levelLinks', 'hordes', 'lights'] as const) expect(plain(L2[k]), k).toEqual(plain(L0[k]));
+      for (const k of ['doors', 'pickups', 'zombies', 'storefronts', 'decor', 'trenches', 'playerSpawn', 'levelLinks', 'hordes'] as const) expect(plain(L2[k]), k).toEqual(plain(L0[k]));
+      // (follow-up 3) lights: the plain list, then the landing's fixture appended (tests/surface-lift-lights.test.ts)
+      expect(plain(L2.lights.slice(0, L0.lights.length))).toEqual(plain(L0.lights));
+      expect(L2.lights.length).toBe(L0.lights.length + 1);
       expect(plain(L2.traversal.stairs)).toEqual(plain(L0.traversal.stairs));
       expect(L2.props.length).toBe(L0.props.length);
       L0.props.forEach((p, i) => {
@@ -123,12 +127,14 @@ describe('Surface Run v2: the Subway lift at a normal closed street exit', () =>
     }
   }, 180_000);
 
-  it('version 1 keeps its stairwell; an Office / Mall keeps its street door at version 2 (its record says version 1)', () => {
+  it('version 1 keeps its stairwell / street doors; an Office / Mall at version 2 takes its lift inside the building', () => {
     const s = seeds('subway', 1)[0];
     expect(gen('subway', s, 1).surfaceAccess).toMatchObject({v: 1, kind: 'subway-stair'});
     for (const host of ['office', 'mall'] as const) {
       const t = seeds(host, 1)[0];
-      expect(gen(host, t, 2).surfaceAccess?.v).toBe(1);
+      expect(gen(host, t, 1).surfaceAccess).toMatchObject({v: 1, kind: `${host}-door`});
+      // (follow-up 2: the host's own version-2 lift — tests/surface-access-v2-hosts.test.ts sweeps it)
+      expect(gen(host, t, 2).surfaceAccess).toMatchObject({v: 2, kind: 'lift'});
     }
   }, 120_000);
 });

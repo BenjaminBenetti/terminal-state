@@ -18,7 +18,7 @@ import type {Door, LightPlacement, PickupPlacement, Side} from '../stationTypes'
 import type {PropPlacement} from '../props';
 import {layStairRun, type StairFlight} from '../traversal';
 import type {SBox, SPose, SRect, SurfaceCheckpoint, SurfaceLift, SurfacePortal} from './surfaceTypes';
-import {LIFT_FOOT, carveLiftRoom, liftInsidePose, liftRecord, liftTrigger} from './accessLift';
+import {LIFT_FOOT, LIFT_LANDING_LIGHT, carveLiftRoom, liftInsidePose, liftRecord, liftTrigger, outward} from './accessLift';
 import type {SurfaceHost} from './surfaceRun';
 import {crH, crW, type CR, type CityFrame} from './cityFrame';
 import {KERB, addBuildingPlan, type BlockPlans, type BuildingPlan} from './cityBlocks';
@@ -362,6 +362,13 @@ export function dressCheckpoint(op: OutdoorProps, kit: Kit, pc: PortalCarve, hos
   const tl = at(tableU, tableV);
   lights.push({x: tl.x, y: KERB + T.clear - 0.25, z: tl.z, rot: 0, area: pc.tent.area, broken: false, flicker: false, warm: true, power: 0.8, dying: false, level: 0, virtual: true,
     tint: [1.0, 0.84, 0.62]});
+  if (pc.tent.lift) {
+    // (version 2, lane ACCESS follow-up) a second work lamp under the ridge, over the lift's landing: the gate and the car at rest (the
+    // station ends' landing fixture, gen/surface/accessLift.ts liftLandingLight; the car carries its own lit finish)
+    const L = pc.tent.lift, n = outward(L.doorSide);
+    lights.push({x: r3(L.door.x + n[0] * LIFT_LANDING_LIGHT.out), y: KERB + T.clear - 0.25, z: r3(L.door.z + n[1] * LIFT_LANDING_LIGHT.out), rot: 0, area: pc.tent.area,
+      broken: false, flicker: false, warm: true, power: 0.8, dying: false, level: 0, virtual: true, tint: [1.0, 0.84, 0.62]});
+  }
   // the truck: in its box behind the gate, facing out through it
   const tc = at(gu, V - 0.9 - 1.6 - PORTAL.truck.len / 2);
   const truck: SPose = {x: tc.x, z: tc.z, yaw: YAW[sv], level: 0, y: KERB};
