@@ -14,7 +14,7 @@
 //  - 'street-exit' (exit index, default 0; task mall-round2-20261031 lane GEN, M09): ~6 m inside the hall in front of a locked street
 //    exit, facing its doors (null when the mall has none; NOT in MALL_POSE_NAMES: some seeds may have no exit);
 //  - 'window-wall' (window index, default 0; task studio-mall-layout-variety-20261117-005520-01): on the TOP glazed storey of a
-//    parking-lot window wall, ~5 m in from the glass at its middle, looking out and a little down over the lot (null without one;
+//    parking-lot window wall, ~2.5 m in from the glass at its middle, looking out and down over the lot (null without one;
 //    NOT in MALL_POSE_NAMES: version-1 malls and most atrium-family ones have none).
 // Yaw convention: forward = (-sin yaw, -cos yaw).
 
@@ -157,8 +157,8 @@ export function mallQaPose(layout: StationLayout, name: MallPoseName, ring?: num
       if (!w) return null;
       const b = w.bands[w.bands.length - 1], alongX = w.side === 'N' || w.side === 'S', out = w.side === 'N' || w.side === 'W' ? -1 : 1;
       const c = (w.s0 + w.s1) / 2, tx = alongX ? c : w.plane + out * 20, tz = alongX ? w.plane + out * 20 : c;
-      const p = stand(layout, b.level, alongX ? c : w.plane - out * 5, alongX ? w.plane - out * 5 : c);
-      return p ? pose(b.level, p[0], p[1], yawTo(p[0], p[1], tx, tz), -0.12) : null;
+      const p = stand(layout, b.level, alongX ? c : w.plane - out * 2.5, alongX ? w.plane - out * 2.5 : c);
+      return p ? pose(b.level, p[0], p[1], yawTo(p[0], p[1], tx, tz), -0.3) : null;
     }
   }
   return null;

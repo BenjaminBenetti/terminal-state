@@ -198,16 +198,19 @@ export function planLot(s: WindowWallSpec): LotPlan {
       }
     }
   }
-  // fog cards: parallax murk layers over the lot (the Office fog opacity of each slice, like the street exits')
+  // fog cards: parallax murk layers over the lot (the Office fog opacity of each slice, like the street exits') — from the first
+  // stall row out, at half the exits' patch strength: the lot is seen from up to three storeys above it, through the material's own
+  // distance fog (a street-level eye's near cards / ground sheet buried the near rows under green murk in the browser check)
   const cards: LotPlan['cards'] = [];
   let prev = B;
-  for (const d of [3, 8, 14, 22, 32, 45, 60, 76]) {
+  for (const d of [12, 22, 32, 45, 60, 76]) {
     const cw = B + d;
     if (cw > vol.w1 - 1) break;
-    cards.push({w: cw, opacity: exteriorFogOpacity(cw - prev, 1.6, 1.6) * EXT_FOG.noise * 2});
+    cards.push({w: cw, opacity: exteriorFogOpacity(cw - prev, 1.6, 1.6) * EXT_FOG.noise});
     prev = cw;
   }
-  const ground = {y: 0.45, opacity: Math.min(0.8, exteriorFogOpacity(8, 0.45, 0.45) * EXT_FOG.noise * 2)};
+  // the low ground murk: its path through the 0.45 m layer for a view ~20 degrees down (not a street-level eye's grazing 8 m)
+  const ground = {y: 0.45, opacity: Math.min(0.8, exteriorFogOpacity(1.3, 0.45, 0.45) * EXT_FOG.noise * 2)};
   return {vol, B, apron, lotEnd, rows, lines, islands, cars, poles, rubble, road, deck, buildings, cards, ground};
 }
 
