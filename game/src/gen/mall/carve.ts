@@ -30,7 +30,13 @@ export {decompose, type CellRect} from './skeleton';
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
 
-/** Ramp headroom of an OPEN well (no ceiling follows the flight; the band is capped by the cell ceiling: levels.ts header). */
+/**
+ * Ramp headroom of an OPEN well (no ceiling follows the flight; the band is capped by the cell ceiling: levels.ts header). Task
+ * mall-roof-stairwell-fix-20261117 (user: "a massive hole in the roof ... above a stairwell on a lower floor"): only collision honoured
+ * that cap; the renderer, rays and Grid.ceilAt cap a ramp's band only with Ramp.capCeil, which the mall never set — every public run's
+ * band rose 40 m past its flight (no ceiling over the well, shaft walls up to ~55 m through the top floor and the roof). carveRun now
+ * marks its flights capCeil (the Skyways / Market open-well contract): the well's band stops at the upper storey's gallery ceiling.
+ */
 export const OPEN_HEADROOM = 40;
 /** Service stair (cores): one storey = 28 risers of STOREY / 28 m on 0.28 m treads in 3 flights. */
 export const SERVICE_STAIR: StairSpec = {...STAIR, riser: STOREY / 28};
@@ -362,10 +368,12 @@ function carveRun(k: Kit, p: RunPlan, bases: number[]): RunCarve {
     const rect: CellRect = p.axis === 'x' ? {x: p.rect.x, y: p.rect.y + li * laneW, w: p.rect.w, h: laneW} : {x: p.rect.x + li * laneW, y: p.rect.y, w: laneW, h: p.rect.h};
     const fl: StairFlight[] = layStairRun([k.grid(lo), k.grid(hi)], rect, area.id, p.axis, p.from, bases[hi], bases[lo], spec);
     const ids: number[] = [];
-    for (const q of fl) { q.id = k.flights.length; q.spec = p.kind === 'escalator' ? 'escalator' : 'transit'; ids.push(q.id); k.flights.push(q); }
+    // (task mall-roof-stairwell-fix-20261117) capped open well: one ramps list is shared by every level grid of the Kit
+    for (const q of fl) { q.id = k.flights.length; q.spec = p.kind === 'escalator' ? 'escalator' : 'transit'; ids.push(q.id); k.flights.push(q); k.grid(lo).ramps[q.ramp].capCeil = true; }
     lanes.push({kind: p.kind, rect, flights: ids});
   }
-  // Open well: both storeys' bands rise to the upper storey's gallery ceiling (no ceiling following the pitch).
+  // Open well: both storeys' bands rise to the upper storey's gallery ceiling (no ceiling following the pitch) — and stop there
+  // (Ramp.capCeil): the well's flat ceiling is drawn over the flight, its side walls end at it.
   for (const g of [k.grid(lo), k.grid(hi)]) for (let y = p.rect.y; y < p.rect.y + p.rect.h; y++) for (let x = p.rect.x; x < p.rect.x + p.rect.w; x++) g.ceil[g.idx(x, y)] = ceil;
   return {id: p.id, kind: p.kind, lower: lo, rect: p.rect, axis: p.axis, from: p.from, lanes, area: area.id, side: p.side, zone: p.zone};
 }
