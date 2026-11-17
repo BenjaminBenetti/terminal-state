@@ -92,13 +92,18 @@ export function mallIssues(layout: StationLayout, opts: {startCells?: number; ro
   if (closedBad) issues.push(`${closedBad} void cells floored on a retail floor`);
   if (bandBad) issues.push(`${bandBad} open void cells whose station band stops below the roof`);
   // per-floor openings: closed on their floor and above; the floor below's cells inside them open to the apex
+  // (task studio-mall-layout-variety-20261117-005520-01: a plan family's bridge decks cross its openings — a deck cell is floored on
+  // its own storey and the cells under it stop at its soffit; every layout without bridges checks exactly as before)
+  const deckAreas = new Set(info.bridges.map(b => b.area));
+  const deckOn = (lv: number, i: number) => deckAreas.size > 0 && deckAreas.has(levels[lv].grid.area[i]) && levels[lv].grid.cells[i] === FLOOR;
+  const underDeck = (lv: number, i: number) => { for (let up = lv + 1; up <= FLOORS; up++) if (deckOn(up, i)) return true; return false; };
   for (const op of info.void.openings ?? []) {
     const cells = polyCells(layout, op.outline, op.bounds);
     let floored = 0, low = 0;
     for (const i of cells) {
-      for (let lv = op.level; lv <= FLOORS; lv++) if (levels[lv].grid.cells[i] !== SOLID) floored++;
+      for (let lv = op.level; lv <= FLOORS; lv++) if (levels[lv].grid.cells[i] !== SOLID && !deckOn(lv, i)) floored++;
       const below = levels[op.level - 1].grid;
-      if (below.cells[i] !== SOLID && below.rampIdx[i] < 0 && below.ceil[i] < apex - 1e-3) low++;
+      if (below.cells[i] !== SOLID && below.rampIdx[i] < 0 && below.ceil[i] < apex - 1e-3 && !underDeck(op.level - 1, i)) low++;
     }
     if (floored) issues.push(`opening L${op.level}: ${floored} floored cells`);
     if (low) issues.push(`opening L${op.level}: ${low} cells below it not open to the roof`);

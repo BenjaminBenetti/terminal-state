@@ -432,10 +432,13 @@ describe('no indoor gas at the exits; shaders; warm-up; cost', () => {
 });
 
 describe('the REAL generator\'s exits (lane GEN; seed 4242, elbow-branch: the two leaks this lane found and fixed)', () => {
-  it('inside the view, above the slab bound, under the roof deck, off open cells; panes in the collider; the cut; drawn from the exit pose, never seen culled from the platform / court', async () => {
+  // (task studio-mall-layout-variety-20261117-005520-01: seed 4242 is the elbow-branch at layout version 1 — pinned — and a promenade
+  // (plan family) at version 2: the exit by its glazed promenade stood on the promenade's wall face until the views kept a free cell)
+  it.each([[1, 'elbow-branch'], [2, 'promenade']] as const)('layout version %i (%s): inside the view, above the slab bound, under the roof deck, off open cells; panes in the collider; the cut; drawn from the exit pose, never seen culled from the platform / court', async (layoutVersion, variant) => {
     const {generateMallLevel} = await import('../src/gen/mall/index');
     const {mallQaPose} = await import('../src/gen/mall/qa');
-    const layout = generateMallLevel({levelSeed: 4242, startWeapon: 'pistol'} as never) as StationLayout;
+    const layout = generateMallLevel({levelSeed: 4242, startWeapon: 'pistol', layoutVersion} as never) as StationLayout;
+    expect(layout.mall!.variant).toBe(variant);
     const exits = layout.mall!.exits ?? [];
     expect(exits.length, 'lane GEN places street exits on this seed').toBeGreaterThan(0);
     const w = buildWorld(layout, mats(), {});

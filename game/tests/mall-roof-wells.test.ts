@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import {describe, expect, it} from 'vitest';
 import {installCanvasShim} from './helpers/canvas2d';
 import {fakeEnvTextures} from './helpers/openablesFixture';
-import {generateMallLevel, MALL_VARIANTS, type MallVariant} from '../src/gen/mall/index';
+import {generateMallLevel, MALL_ALL_VARIANTS, type MallVariant} from '../src/gen/mall/index';
 import {OPEN_HEADROOM} from '../src/gen/mall/carve';
 import {CLEAR} from '../src/gen/mall/frame';
 import {CELL, FLOOR, VOID, type Ramp} from '../src/gen/grid';
@@ -57,8 +57,9 @@ const pointInPoly = (poly: readonly {x: number; z: number}[], x: number, z: numb
   return c;
 };
 
+// (task studio-mall-layout-variety-20261117-005520-01: every variant = MALL_ALL_VARIANTS — the atrium family + the version-2 plan families)
 describe('mall open wells: capped at the upper storey\'s gallery ceiling (every variant)', () => {
-  for (const v of MALL_VARIANTS as readonly MallVariant[]) it(`${v}: every public run is a capped open well — render, rays and Grid.ceilAt stop at its ceiling`, () => {
+  for (const v of MALL_ALL_VARIANTS as readonly MallVariant[]) it(`${v}: every public run is a capped open well — render, rays and Grid.ceilAt stop at its ceiling`, () => {
     for (const seed of SEEDS) {
       const l = mallOf(v, seed), levels = l.levels!, W = l.grid.w, LV = levelsOf(l);
       const ws = wells(l);
@@ -93,7 +94,7 @@ describe('mall open wells: capped at the upper storey\'s gallery ceiling (every 
 });
 
 describe('the top floor keeps its roof (the reported visual class)', () => {
-  for (const v of MALL_VARIANTS as readonly MallVariant[]) it(`${v}: no band rises past the top floor's ceiling outside the glass roof; every well has its ceiling; nothing above the roof apex`, () => {
+  for (const v of MALL_ALL_VARIANTS as readonly MallVariant[]) it(`${v}: no band rises past the top floor's ceiling outside the glass roof; every well has its ceiling; nothing above the roof apex`, () => {
     for (const seed of SEEDS) {
       const l = mallOf(v, seed), levels = l.levels!, cols = new LevelColumns(levels), W = cols.W, n = W * cols.H;
       const top = levels[levels.length - 1].baseY, roofTop = top + CLEAR.gallery, apex = l.mall!.roof.apexY;

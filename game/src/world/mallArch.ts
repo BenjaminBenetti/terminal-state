@@ -52,6 +52,7 @@ import {MALL_EXT_ORDER, buildMallExteriorGas, hazeSat, mallSkyMaterial} from './
 import {adArtOf, adAtlasMaterial, adGlowOf, adTexture, adsOf, planGalleryAds, type AdWall, type MallAd} from './mallAds'; // task mall-playtest-revision (D06); R5: + backlight; mall-round4 (ADS): + art
 import {AD_ART_IDS, mallAdArt, releaseMallAdArt, type AdArtId} from '../assets/mallAdArt'; // task mall-round4 (lane ADS): the Codex ad artwork, released after the atlas
 import {buildStreetExit, cutExitOpenings, setStreetHaze, streetExitSpecs, streetExitTune, type StreetExitSpec, type StreetExitStats, type StreetExitTune} from './mallStreetExit'; // task mall-round2 (M09)
+import {buildWindowWall, windowCuts, windowWallSpecs, type WindowWallSpec, type WindowWallStats} from './mallWindows'; // task studio-mall-layout-variety-20261117-005520-01
 import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 import {FOUNTAIN, PYLON} from '../gen/mall/landmarks'; // landmark dimensions (placement: gen/mall/landmarks.ts)
 
@@ -465,6 +466,8 @@ export interface AtriumStats {
   litAds: number; adPages: number; adMeshes: number; adTextureMB: number;
   /** Task mall-round2 (M09): locked street exits drawn (lane GEN's layout.mall.exits) and the cost of each (meshes = draws, tris). */
   exits: number; exitCost: StreetExitStats[];
+  /** Task studio-mall-layout-variety-20261117-005520-01: parking-lot window walls drawn (layout.mall.windows) and the cost of each. */
+  windowWalls: number; windowCost: WindowWallStats[];
   /** Build time of the atrium dressing (ms). */
   ms: number;
 }
@@ -505,7 +508,7 @@ export class MallArch {
    *  plain fill (no image held), images released after the atlas (QA __LL.mallAds().art). */
   adArt: {loaded: AdArtId[]; byTheme: Partial<Record<AdArtId, number>>; drawn: number; fallback: number; released: number} = {loaded: [], byTheme: {}, drawn: 0, fallback: 0, released: 0};
   readonly dress: MallDressMaterials;
-  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, balustradeTrimmedM: 0, balustradeTrimmedRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, shaftSpandrels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, fountains: 0, pylons: 0, exteriorGas: 0, exteriorCurtain: 0, flatGlazingM2: 0, shopAds: 0, galleryAds: 0, litAds: 0, adPages: 0, adMeshes: 0, adTextureMB: 0, exits: 0, exitCost: [], ms: 0};
+  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, balustradeTrimmedM: 0, balustradeTrimmedRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, shaftSpandrels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, fountains: 0, pylons: 0, exteriorGas: 0, exteriorCurtain: 0, flatGlazingM2: 0, shopAds: 0, galleryAds: 0, litAds: 0, adPages: 0, adMeshes: 0, adTextureMB: 0, exits: 0, exitCost: [], windowWalls: 0, windowCost: [], ms: 0};
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): MallArch | null {
     return layout.mall ? new MallArch(layout, mats, levels) : null;
@@ -702,6 +705,15 @@ export class MallArch {
   }
   private exitCache: StreetExitSpec[] | null = null;
 
+  /**
+   * Task studio-mall-layout-variety-20261117-005520-01: the parking-lot window walls (lane GEN's layout.mall.windows, layout version >= 2;
+   * [] for every older layout), the exterior kept under the roof deck like the exits'.
+   */
+  windowWalls(): WindowWallSpec[] {
+    return (this.windowCache ??= windowWallSpecs(this.layout, this.topRingCeil + ROOF_BEAM - 0.1));
+  }
+  private windowCache: WindowWallSpec[] | null = null;
+
   /** A face on a glass side of the shaft (dropped: the glass shaft tower replaces it). */
   private onShaft(f: FaceLike): boolean {
     const sd = this.shaftSide(f);
@@ -718,7 +730,8 @@ export class MallArch {
     const out: F[] = [];
     const spring = this.info.roof.springY;
     // (task mall-round2 M09: + each locked street exit's glazed opening cut out of its hall-end wall face; collision stays GEN's rock)
-    for (const f of cutExitOpenings(this.cutShaftDoors(faces), this.exits())) {
+    // (task studio-mall-layout-variety-20261117-005520-01: + every window wall's glazed band per storey)
+    for (const f of cutExitOpenings(this.cutShaftDoors(faces), [...this.exits(), ...windowCuts(this.windowWalls())])) {
       const isFloor = f.level === this.floorLevel;
       const up = /tileUpper/.test(f.finish) && f.vb0 !== undefined ? {vb0: f.vb0 - tileLowerHeight, vb1: (f.vb1 ?? f.vb0) - tileLowerHeight} : {};
       if (this.onShaft(f)) { this.stats.droppedFaces++; continue; }
@@ -1743,6 +1756,15 @@ export class MallArch {
       this.stats.exitCost.push(v.stats);
     }
     this.stats.exits = this.stats.exitCost.length;
+    // Task studio-mall-layout-variety-20261117-005520-01: the parking-lot window walls (world/mallWindows.ts: the exits' four materials,
+    // four aperture-gated meshes per wall tagged with its glazed storeys) in the same build step
+    this.stats.windowCost = [];
+    for (const s of this.windowWalls()) {
+      const v = buildWindowWall(s);
+      for (const m of v.meshes) add(m);
+      this.stats.windowCost.push(v.stats);
+    }
+    this.stats.windowWalls = this.stats.windowCost.length;
   }
 
   /** QA (world/mallAtmosphere.ts mallExits): the street exits' look (uniform values only; world/mallStreetExit.ts STREET_U). */

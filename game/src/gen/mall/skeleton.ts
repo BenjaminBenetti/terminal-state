@@ -32,6 +32,11 @@ export interface WalkPiece {
   label: string;
 }
 
+/** Task studio-mall-layout-variety-20261117-005520-01 (plan families): a bridge deck across an opening on one retail floor (cells). */
+export interface BridgePlan { id: string; level: number; rect: CellRect }
+/** (plan families) An extra patrol sample line on the listed floors (canvas cells, from a to b). */
+export interface PatrolLine { floors: readonly number[]; a: readonly [number, number]; b: readonly [number, number] }
+
 /** A corridor END (the short edge of a wing walkway): an end unit / anchor closes it on the floors listed. */
 export interface EndSpec {
   id: string;
@@ -46,6 +51,9 @@ export interface EndSpec {
   /** Task mall-round2-20261031 (lane GEN, M09): on the street floor this end meets the street — no unit; the locked glazed exit
    *  (gen/mall/exits.ts 'corridor-end') closes it. The carver keeps its outside clear of lots. */
   exit?: true;
+  /** Task studio-mall-layout-variety-20261117-005520-01 (plan families): on EVERY retail floor this end is a glazed wall over the
+   *  parking lot — no unit; the carver keeps its outside clear of lots and the window-wall post-pass glazes it (gen/mall/windows.ts). */
+  window?: true;
 }
 
 export interface RunPlan {
@@ -85,6 +93,17 @@ export interface MallSkeleton {
   runs: RunPlan[];
   lift: LiftPlan;
   foodFloor: number;
+  // --- Task studio-mall-layout-variety-20261117-005520-01: plan families only (gen/mall/plans.ts; absent = the atrium family) ---
+  /** Bridge decks across the openings (floored walkway inside the opening envelope on their floor). */
+  bridges?: BridgePlan[];
+  /** Per floor (index like `open`): the opening's ENVELOPE (opening + bridge decks) for the records' outlines; `open` = the true void. */
+  openOutline?: Uint8Array[];
+  /** Extra patrol sample lines (the court loop alone misses a long nave / arms). */
+  patrol?: PatrolLine[];
+  /** Soft unit target per retail floor (the carver's FLOOR_UNITS otherwise). */
+  units?: Readonly<Record<number, number>>;
+  /** The plan family ('galleria' / 'crossroads' / 'promenade'). */
+  family?: string;
 }
 
 /** Why the last attempts failed (QA / tests). */
