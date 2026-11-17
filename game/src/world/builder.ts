@@ -827,7 +827,8 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
       // Task studio-subway-platform-pillars-20261116-214939-01: the station columns (gen/stationDress.ts: platform rows, between two
       // tracks, concourses — each level's station storey) are riveted built-up steel H-columns in 'columnPaint' (world/stationColumns.ts)
       const own = list.filter(p => isLevelOwnColumn(layout, p));
-      instances += buildStationColumns(group, own.length ? list.filter(p => !own.includes(p)) : list, mats.get('columnPaint'));
+      // (task studio-subway-rework-m2-finishing-20261117-111246-01: a version-2+ station's columns in its scheme's paint, world/subwayArch.ts)
+      instances += buildStationColumns(group, own.length ? list.filter(p => !own.includes(p)) : list, sub?.columnMaterial(mats.get('columnPaint')) ?? mats.get('columnPaint'));
       if (own.length) {
         // A level's own colonnade (the Bunker vault hall, under its own capitals and beams): the unit-height box scaled per instance in
         // the brushed-steel cladding, as before (task studio-graphics-gpu-materials-toggle-20261114-212239-01, 'pillar')

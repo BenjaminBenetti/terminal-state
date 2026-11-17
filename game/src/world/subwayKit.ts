@@ -25,6 +25,7 @@ import type {BuiltFace} from './levelGeometry';
 import {normalizeFaces, type TreatFace} from './wallDetailFaces';
 import {ZONES} from './subwayFinish';
 import type {SubwayArch} from './subwayArch';
+import {buildCavernKit, type CavernKitStats} from './subwayKitCavern';
 
 /** The builder's trim sink. */
 export interface KitSink {
@@ -32,11 +33,20 @@ export interface KitSink {
   geo(mat: string, geo: THREE.BufferGeometry, cx: number, cy: number, cz: number): void;
 }
 
-export interface KitStats { boxes: number; strips: number; pilasters: number; beams: number; shifted: number; dropped: number; lanterns: number; coves: number; panels: number }
+export interface KitStats { boxes: number; strips: number; pilasters: number; beams: number; shifted: number; dropped: number; lanterns: number; coves: number; panels: number;
+  /** (task studio-subway-rework-m2-finishing-20261117-111246-01) piers drawn as deep fins; the cavern's neutral relief (world/subwayKitCavern.ts). */
+  fins?: number; cavern?: CavernKitStats }
 
 /** Lantern ('drum') body: outer size (m) and height above its underside. */
 export const LANTERN = {w: 1.0, h: 0.46, glass: 0.9, glassH: 0.4} as const;
-const PILASTER = {w: 0.6, proud: 0.14} as const;
+export const PILASTER = {w: 0.6, proud: 0.14} as const;
+/**
+ * Task studio-subway-rework-m2-finishing-20261117-111246-01: a brutalist scheme's board-formed structural FIN (instead of an applied
+ * pilaster): narrower and ~3x deeper, from the floor to the beam's underside with no base or capital. Up to `step` above the floor it
+ * stands `low` proud (the player's own radius: no walking into it), above that the full `proud` depth (a haunched blade). Its coffer
+ * ribs are wider and deeper (ribW, ribDeep x the form's rib, kept above every cove ledge).
+ */
+export const FIN = {w: 0.32, proud: 0.45, low: 0.3, step: 2.6, ribW: 0.34, ribDeep: 1.5} as const;
 const CAP = {h: 0.05, proud: 0.035} as const;
 const BASE_PROUD = 0.025;
 /** A clerestory's (an upper wall over a lower ceiling) arcade beam (under it, from beamFrom m above the floor), string course, panels. */
@@ -103,7 +113,7 @@ function joinSpans(list: [number, number][]): [number, number][] {
   return out;
 }
 /** [0, len] minus the blocked spans, pieces shorter than `min` dropped. */
-function freeSpans(len: number, blocked: [number, number][], min = 0.2): [number, number][] {
+export function freeSpans(len: number, blocked: [number, number][], min = 0.2): [number, number][] {
   const out: [number, number][] = [];
   let pos = 0;
   for (const [a, b] of joinSpans(blocked)) { if (a > pos + min) out.push([pos, Math.min(a, len)]); pos = Math.max(pos, b); }
@@ -191,6 +201,8 @@ export function buildSubwayKit(sink: KitSink, inp: KitInput): KitStats {
     sink.box(mat, cx, cy, cz, sx, sy, sz); st.boxes++;
   };
   const scheme = sub.scheme, trim = sub.trimKey(), baseKey = sub.baseKey(), rock = !!scheme.rock;
+  // (task studio-subway-rework-m2-finishing-20261117-111246-01) the scheme's structural language: piers / fins and its accent trim
+  const fins = sub.pierForm === 'fin', accent = sub.accentKey();
 
   // --- the halls with a ceiling form, their (fixture-clear) bay lines --------------------------------------------------------------
   const halls = new Map<number, HallKit>();
@@ -266,7 +278,10 @@ export function buildSubwayKit(sink: KitSink, inp: KitInput): KitStats {
       // coffer ribs: an odd count per bay and across the width, so every bay centre (where the hall's lantern hangs) is a coffer centre
       const odd = (len: number) => { let n = Math.max(1, Math.round(len / form.module)); if (n % 2 === 0) n += len / n > form.module ? 1 : -1; return Math.max(1, n); };
       const edges = [b.a0, ...h.lines, b.a1];
-      const ribY0 = form.ceil - form.rib, ribY1 = form.ceil - 0.005, rw = 0.22;
+      // (fins: a heavier waffle — wider ribs, deeper where no cove ledge runs under them: they stay above every cove's lips)
+      const coveTop = Math.max(-Infinity, ...lights.filter(l => l.style === 'cove').map(l => l.y + 0.1));
+      const rib = fins ? Math.max(form.rib, Math.min(form.rib * FIN.ribDeep, form.beam - 0.1, form.ceil - coveTop)) : form.rib;
+      const ribY0 = form.ceil - rib, ribY1 = form.ceil - 0.005, rw = fins ? FIN.ribW : 0.22;
       for (let i = 0; i + 1 < edges.length; i++) {
         const lo = edges[i], hi = edges[i + 1], n = odd(hi - lo);
         for (let k = 1; k < n; k++) {
@@ -379,18 +394,25 @@ export function buildSubwayKit(sink: KitSink, inp: KitInput): KitStats {
         run(trim, sa, sb, corniceTop - 0.14, corniceTop - 0.005, 0.15);
       }
     }
-    // pilasters (with base and capital) on the long walls at the hall's bay lines, carrying the beams / ribs
+    // pilasters (with base and capital) on the long walls at the hall's bay lines, carrying the beams / ribs (in the scheme's PIER finish;
+    // a fin scheme's deep board-formed fins from the floor to the beam, no base or capital)
     if (h && longWall && h.form.kind !== 'rock' && h.lines.length) {
       const pTop = h.form.kind === 'vault' ? h.form.spring - VAULT_GAP - 0.24 : h.form.ceil - h.form.beam;
       if (pTop - floor > 2.6 && covers(floor, pTop)) {
-        const struct = sub.structKey(h.a);
+        const pier = sub.pierKey(h.a), pw = fins ? FIN.w : PILASTER.w;
         const blocked = [...openAt(floor, 0.35), ...keep];
         for (const l of h.lines) {
-          const s = (l - s0w) * dir, a0 = s - PILASTER.w / 2, a1 = s + PILASTER.w / 2;
+          const s = (l - s0w) * dir, a0 = s - pw / 2, a1 = s + pw / 2;
           if (a0 < 0.15 || a1 > len - 0.15 || blocked.some(([p, q]) => a1 > p && a0 < q)) continue;
-          run(struct, a0, a1, floor + ZONES.plinth, pTop - 0.16, PILASTER.proud);
-          run(baseKey, a0 - 0.04, a1 + 0.04, floor, floor + ZONES.plinth + 0.08, PILASTER.proud + 0.04);
-          run(trim, a0 - 0.05, a1 + 0.05, pTop - 0.16, pTop, PILASTER.proud + 0.05);
+          if (fins) {
+            run(pier, a0, a1, floor, floor + FIN.step, FIN.low);
+            run(pier, a0, a1, floor + FIN.step, pTop, FIN.proud);
+            st.fins = (st.fins ?? 0) + 1;
+          } else {
+            run(pier, a0, a1, floor + ZONES.plinth, pTop - 0.16, PILASTER.proud);
+            run(baseKey, a0 - 0.04, a1 + 0.04, floor, floor + ZONES.plinth + 0.08, PILASTER.proud + 0.04);
+            run(trim, a0 - 0.05, a1 + 0.05, pTop - 0.16, pTop, PILASTER.proud + 0.05);
+          }
           st.pilasters++;
         }
       }
@@ -398,22 +420,26 @@ export function buildSubwayKit(sink: KitSink, inp: KitInput): KitStats {
     // clerestory: a long upper wall standing on a lower ceiling (a version-3 nave over its aisles; a tall lintel wall) gets an arcade
     // beam under it, a string course, piers on the bay lines up to the beams and framed blind panels between them
     if (h && longWall && f.y0 - floor >= 2.4 && f.y1 - f.y0 >= 1.5) {
-      const y0 = f.y0, sc = CLERESTORY.course;
+      // (the arcade beam and the piers in the scheme's PIER finish, the string course in its ACCENT: an oxblood / navy / signal-orange line)
+      const y0 = f.y0, sc = CLERESTORY.course, pier = sub.pierKey(h.a);
       for (const [sa, sb] of freeSpans(len, openAt(y0 - 0.4, 0.05), 0.3)) {
         if (y0 - floor >= CLERESTORY.beamFrom) {
           // (only over a real arcade: a lower lintel wall keeps its opening's full height)
           const w0 = s0w + dir * sa, w1 = s0w + dir * sb, mid = (w0 + w1) / 2, L = Math.abs(w1 - w0), D = CLERESTORY.beamD, Y = y0 - CLERESTORY.beamH / 2;
-          if (alongX) box(sub.structKey(h.a), mid, Y, plane, L, CLERESTORY.beamH, D); else box(sub.structKey(h.a), plane, Y, mid, D, CLERESTORY.beamH, L);
+          if (alongX) box(pier, mid, Y, plane, L, CLERESTORY.beamH, D); else box(pier, plane, Y, mid, D, CLERESTORY.beamH, L);
         }
-        run(trim, sa, sb, y0, y0 + sc, 0.12);
+        run(accent, sa, sb, y0, y0 + sc, 0.12);
       }
       const pTop = Math.min(f.y1, h.form.kind === 'vault' ? h.form.spring - VAULT_GAP - 0.24 : h.form.ceil - h.form.beam);
       const piers: [number, number][] = [];
+      const pw = fins ? FIN.w : PILASTER.w;
       if (pTop - y0 > 1.2) for (const l of h.lines) {
-        const s = (l - s0w) * dir, a0 = s - PILASTER.w / 2, a1 = s + PILASTER.w / 2;
+        const s = (l - s0w) * dir, a0 = s - pw / 2, a1 = s + pw / 2;
         if (a0 < 0.15 || a1 > len - 0.15) continue;
-        run(sub.structKey(h.a), a0, a1, y0 + sc, pTop - 0.16, PILASTER.proud);
-        run(trim, a0 - 0.05, a1 + 0.05, pTop - 0.16, pTop, PILASTER.proud + 0.05);
+        if (fins) { run(pier, a0, a1, y0 + sc, pTop, FIN.proud); st.fins = (st.fins ?? 0) + 1; } else {
+          run(pier, a0, a1, y0 + sc, pTop - 0.16, PILASTER.proud);
+          run(trim, a0 - 0.05, a1 + 0.05, pTop - 0.16, pTop, PILASTER.proud + 0.05);
+        }
         piers.push([a0, a1]);
         st.pilasters++;
       }
@@ -432,6 +458,9 @@ export function buildSubwayKit(sink: KitSink, inp: KitInput): KitStats {
       }
     }
   }
+
+  // --- a cavern's neutral relief (task studio-subway-rework-m2-finishing-20261117-111246-01: world/subwayKitCavern.ts) ---------------------
+  if (rock) st.cavern = buildCavernKit({layout, sub, faces, box, freeSpans, nearWall, formOf: a => halls.get(a.id)?.form ?? null});
 
   // --- styled fixtures ---------------------------------------------------------------------------------------------------------------
   const cov = coveLengths(layout.lights);
