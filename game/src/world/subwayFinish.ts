@@ -171,7 +171,7 @@ const SCHEMES: Readonly<Record<string, FinishScheme>> = {
  */
 function cavernScheme(wallTint: number): FinishScheme {
   const wall = z('rockPainted', paintTint(wallTint, 0.92)), ceil = z('rockPainted', paintTint(wallTint, 0.78));
-  const granite = z('floorGranite', greyTint('floorGranite', 0.5)), precast = z('concretePrecast', greyTint('concretePrecast', 0.56));
+  const granite = z('floorGranite', greyTint('floorGranite', 0.5)), precast = z('concretePrecast', greyTint('concretePrecast', 0.62));
   return {plinth: z('plinthGranite'), dado: granite, field: wall, band: null, upper: wall, ceil, floor: z('floorGranite'), trim: precast, struct: wall,
     pier: granite, accent: precast, panel: z('enamelPanel'),
     hall: {field: wall, upper: wall, ceil, floor: z('floorGranite'), struct: wall, pier: granite}, rock: {wall, ceil}};

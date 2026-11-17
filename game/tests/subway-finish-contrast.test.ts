@@ -176,6 +176,9 @@ describe("the cavern's neutral relief", () => {
       expect(s.panel && ARCH_CLASS[s.panel.tex]).not.toBe('rock');
       // the wainscot reads apart from both the rock above it and the floor below it (a lighter honed granite)
       expect(lum(albedo(s.dado))).toBeGreaterThan(lum(albedo(s.floor)) * 1.1);
+      // the precast mouldings / portal frames a step lighter again (the cove troughs no longer read as black lines along the vault)
+      expect(lum(albedo(s.accent))).toBeGreaterThan(lum(albedo(s.dado)) * 1.1);
+      expect(same(s.trim, s.accent)).toBe(true);
       const sub = archOf(theme, [plainArea]);
       expect(sub.zoneFinish('dado', plainArea).key).toBe('subway-stone-dado');
       for (const z of ['field', 'upper'] as const) expect(sub.zoneFinish(z, plainArea)).toEqual({finish: s.rock!.wall, key: 'subway-rock-dado'});
