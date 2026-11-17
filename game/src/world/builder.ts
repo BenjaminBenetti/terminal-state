@@ -882,7 +882,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   yield 'world.levelKit';
   // Task track3-eaton-centre-20261031 (lane ARCH): the mall atrium — glass vault + steel arches, glass balustrades, columns, the
   // glass shaft tower, shopfront / blade / level signage, banners, escalator soffits (world/mallArch.ts).
-  if (mall) yield* mall.buildAtriumSteps(group, rails);
+  if (mall) yield* mall.buildAtriumSteps(group, rails, models); // (task studio-mall-parking-glass-followup-20261117-043548-01: + the exterior views' cooked wrecks)
   yield 'world.levelKit.reactor';
   // Task reactor-build-20261101 (lane ARCH): the Reactor's industrial kit (deck steel, towers, crane, pipe banks, fans, generators, the
   // vessel, site machines, bands, lamps, railings; world/reactor/arch.ts) + its ReactorVisuals (null for every other world).

@@ -7,10 +7,11 @@
 //  - each plan family at a natural seed: valid, its signature structure (bridge decks / the promenade's glazing on every storey), shops,
 //    anchors, a food court, every storey pair linked, street exits + the Surface Run's usable door;
 //  - the window walls' generator contract (collider SOLID, the view volume free of the mall, heads under the ceiling, walkway in front,
-//    clear of the exits and the lift, daylight) and its render on a real build (four meshes on the street exits' materials, the lot inside
-//    the view and off every open cell, panes in the collider, the cut, the culler's aperture gate: drawn from the glass, never visible-
-//    but-culled, not submitted facing away);
-//  - no gas: the window walls are not Office windows (no outside air, no roof air).
+//    clear of the exits and the lift, daylight) and its render on a real build (three meshes on the street exits' materials + the cars, the
+//    lot inside the view and off every open cell, no glass mesh of its own, the cut, the culler's aperture gate: drawn from the glass,
+//    never visible-but-culled, not submitted facing away);
+//  - no tower windows / roof air: the window walls' breakable panes and their gas are the Mall's own window source (task studio-mall-
+//    parking-glass-followup-20261117-043548-01: tests/mall-window-gas.test.ts; the cars: tests/mall-vehicles.test.ts).
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -245,7 +246,7 @@ describe('window walls: the generator contract', () => {
     }
   });
 
-  it('version 1 never has windows; the window walls are not Office windows (no outside air: the gas system has nothing to read)', () => {
+  it('version 1 never has windows; the window walls add no tower windows / roof air (their panes are the Mall\'s own gas window source)', () => {
     for (const s of ATRIUM_SEEDS) expect(windowWallSpecs(gen(s, 1))).toEqual([]);
     for (const s of Object.values(FAMILY_SEEDS)) {
       const L = gen(s);
@@ -270,13 +271,14 @@ describe('window walls: the render on a real build (promenade, seed 2)', () => {
     return out;
   };
 
-  it('four meshes per wall on the street exits\' four materials, tagged with the glazed storeys + aperture; bounded cost', () => {
+  it('three meshes per wall on the street exits\' materials (the panes are the runtime\'s), tagged with the glazed storeys + aperture; bounded cost', () => {
     const w = fw(), wins = L().mall!.windows!;
     expect(w.mallArch!.stats.windowWalls).toBe(wins.length);
     const exitMats = new Set(streetExitMaterials());
     for (const r of wins) {
       const mine = winMeshes(w).filter(m => m.userData.windowWall === r.id);
-      expect(mine.map(m => m.name.replace(`mall-window-${r.id}-`, '')).sort()).toEqual(['fog', 'frame', 'glass', 'lot']);
+      // (no model record here: no car drawn; the cooked wrecks: tests/mall-vehicles.test.ts)
+      expect(mine.map(m => m.name.replace(`mall-window-${r.id}-`, '')).sort()).toEqual(['fog', 'frame', 'lot']);
       for (const m of mine) {
         expect(m.userData.levels).toEqual(r.bands.map(b => b.level));
         const a = m.userData.aperture as {s0: number; s1: number; y0: number; y1: number};
@@ -286,14 +288,15 @@ describe('window walls: the render on a real build (promenade, seed 2)', () => {
       }
     }
     for (const c of w.mallArch!.stats.windowCost) {
-      expect(c.meshes).toBe(4);
+      expect(c.meshes).toBe(3);
       expect(c.stalls, `${c.id} stalls`).toBeGreaterThan(10);
-      expect(c.cars, `${c.id} cars`).toBeGreaterThan(3);
+      expect(c.carSpots, `${c.id} car spots`).toBeGreaterThan(3);
+      expect(c.cars).toBe(0); // (no model loaded)
       expect(c.triangles, `${c.id} triangles`).toBeLessThan(60_000);
     }
   }, 120_000);
 
-  it('the lot stays inside the view volume, under the roof deck and off every open cell; panes in the collider; each storey\'s wall carries the cut', () => {
+  it('the lot stays inside the view volume, under the roof deck and off every open cell; no glass of its own; each storey\'s wall carries the cut', () => {
     const w = fw(), layout = L(), specs = w.mallArch!.windowWalls(), g0 = layout.levels[0].grid;
     for (const r of layout.mall!.windows!) {
       const s = specs.find(q => q.id === r.id)!, mine = winMeshes(w).filter(m => m.userData.windowWall === r.id);
@@ -308,10 +311,8 @@ describe('window walls: the render on a real build (promenade, seed 2)', () => {
           if (c === FLOOR || c === VOID) expect(q.y < lv.grid.floorOf(i) - 0.05 || q.y > lv.grid.ceil[i] + 0.05, `${m.name} inside an open cell of L${lv.id}`).toBe(true);
         }
       }
-      const c = r.collider;
-      for (const q of verts(mine.find(m => m.name.endsWith('-glass'))!)) {
-        expect(q.x >= c.x0 - 1e-6 && q.x <= c.x1 + 1e-6 && q.z >= c.z0 - 1e-6 && q.z <= c.z1 + 1e-6 && q.y >= c.y0 - 1e-6 && q.y <= c.y1 + 1e-6, `${r.id} pane in the collider`).toBe(true);
-      }
+      // the panes (in the collider: visual = collision) are world/mallWindowPanes.ts's breakable runtime glass: tests/mall-window-gas.test.ts
+      expect(mine.some(m => /glass/.test(m.name)), `${r.id}: no static glass`).toBe(false);
       const alongX = r.side === 'N' || r.side === 'S';
       for (const b of r.bands) {
         const fs = w.wallFaces.filter(f => f.level === b.level && (alongX ? Math.abs(f.z0 - r.plane) < 1e-6 && Math.abs(f.z1 - r.plane) < 1e-6 : Math.abs(f.x0 - r.plane) < 1e-6 && Math.abs(f.x1 - r.plane) < 1e-6));
