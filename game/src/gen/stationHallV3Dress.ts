@@ -14,7 +14,7 @@
 //    in front of its windows (crowd barriers, when the palette has them) and a ticket machine bank beside it;
 //  - WAYFINDING: double-sided signs hung across the nave on bay lines (to trains, exits, the district).
 // Furnishing (after the composer and the iteration-07 dresser):
-//  - the south aisle's bays: retail pockets (a newsstand / hot-dog island, vending against the wall) and waiting pockets (benches);
+//  - the aisles' pockets (below: the finishing pass's layout-aware fit);
 //  - the nave beside the spine: 3-7 islands at bay centres, about every other bay (staggered between the two strips of a wide nave) —
 //    seating (two back-to-back bench pairs + a bin), information (touch kiosks / ticket machines), a newsstand, a hot-dog cart — each
 //    with a walkway ring; members meet on cell lines so no two footprints share a cell;
@@ -27,8 +27,8 @@
 //  - aisle POCKETS are fitted to the free floor that is really there (layout-aware: every cell-line anchor of both aisles' walls and
 //    arcade sides is tested with the rectClear predicates, never only bay centres): kiosk (newsstand / food cart), service (ticket
 //    machines, information / cash points from the palette) and waiting (benches against a wall, or back to back beside the arcade)
-//    pockets, 2-4 per hall, spread along it and one per bay of an aisle (the aisle stays a walkway, never an obstacle course);
-//    the gate-aisle variant's south nave strip is its pocket zone; waiting groups (pockets and nave seating islands) get a hung
+//    pockets, 2-4 per hall, spread along it and never two side by side in one stretch of an aisle (the aisle stays a walkway, never an
+//    obstacle course); the gate-aisle variant's south nave strip is its pocket zone; waiting groups (pockets and nave seating islands) get a hung
 //    wayfinding plate beside the clock the kit hangs on them, kiosk / service pockets a name plate on their wall;
 //  - the CLERESTORY (the nave wall over each aisle) gets purposeful bays: a framed tablet over the ticket office, each gate bank and
 //    each street exit (its sign on the face), one station clock near the hall centre, ventilation grilles in about every third
@@ -463,7 +463,8 @@ export function freeRuns(ctx: PlaceCtx, a: Area, y0: number, y1: number): [numbe
   return out;
 }
 
-/** The members of a pocket (best first), as wall members (`wall`) or a free-standing group (benches back to back). */
+/** A pocket's wall members, label and front kind (a waiting group on a free-standing band is benchGroup's instead); null: a kiosk past the
+ *  holder cap. */
 function pocketRecipe(type: PocketType, palette: ReadonlySet<string>, holderRoom: number, cart: boolean): {members: WallMember[]; label: string; kind: HallFront['kind']} | null {
   if (type === 'kiosk') {
     if (holderRoom <= 0) return null;
@@ -498,8 +499,8 @@ function aislePockets(ctx: PlaceCtx, a: Area, S: HallSection, palette: ReadonlyS
   // (the longest free wall run 2 m deep, QA)
   for (const [y0, y1] of [[R.y0, R.y0 + 4], [R.y1 - 4, R.y1]]) for (const [p, q] of freeRuns(ctx, a, y0, y1)) sum.freeRun = Math.max(sum.freeRun, r2(q - p));
   const spans: Record<'N' | 'S', [number, number][]> = {N: [], S: []};
-  // (the ticket office and the machine bank beside it are the gate aisle's first destination: its queue keeps the aisle there)
-  for (const f of frontsWorld(a)) if (f.kind === 'office') spans.N.push([f.along[0] - 4.4, f.along[1] + 4.4]);
+  // (the ticket office and the machine bank beside it hold their stretch of the gate aisle; its queue lanes stay walkway)
+  for (const f of frontsWorld(a)) if (f.kind === 'office') { spans.N.push([f.along[0] - 4.4, f.along[1] + 4.4]); keepRing(ctx, a, f.along[0], f.across[0], f.along[1], f.across[1]); }
   const a0 = a.x * CELL, len = a.w * CELL;
   const n = rng.int(2, 4);
   const kioskFirst = room() > 0 && rng.chance(0.55);
@@ -511,13 +512,13 @@ function aislePockets(ctx: PlaceCtx, a: Area, S: HallSection, palette: ReadonlyS
     waiting: [[wallS, freeS, freeN, wallN], [freeN, freeS, wallN, wallS]],
   };
   const placed: Record<PocketType, number> = {kiosk: 0, service: 0, waiting: 0};
-  const attempt = (type: PocketType, bands: Band[], target: number, spaced: boolean): boolean => {
+  const attempt = (type: PocketType, bands: Band[], target: number, spread: boolean): boolean => {
     const t = type === 'kiosk' && room() <= 0 ? 'service' : type;
     const rec = pocketRecipe(t, palette, room(), cart);
     if (!rec) return false;
     for (const b of bands) {
-      const got = 'wall' in b ? wallPocket(ctx, a, b.wall, rec.members, target, spaced ? spans[b.aisle] : null)
-        : t === 'waiting' ? benchGroup(ctx, a, b.zm, b.naveDir, target, spaced ? spans[b.aisle] : null) : null;
+      const got = 'wall' in b ? wallPocket(ctx, a, b.wall, rec.members, target, spread ? spans[b.aisle] : null)
+        : t === 'waiting' ? benchGroup(ctx, a, b.zm, b.naveDir, target, spread ? spans[b.aisle] : null) : null;
       if (!got) continue;
       count(got.props);
       spans[b.aisle].push([got.along[0], got.along[1]]);
