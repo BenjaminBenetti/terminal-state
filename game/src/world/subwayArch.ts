@@ -15,9 +15,9 @@ import type * as THREE from 'three';
 import type {Level} from '../gen/levels';
 import type {Area, StationIdentity, StationLayout} from '../gen/stationTypes';
 import type {BuiltFace} from './levelGeometry';
-import type {WorldMaterials} from './materials';
+import {COLUMN_PAINT, cloneSurfaceMaterial, columnPaintGradeCpu, type WorldMaterials} from './materials';
 import type {DecayProfile} from './decay';
-import {ARCH_CLASS, BAND_MIN_WALL, ZONES, finishSchemeOf, isSignatureHall, keyClass, schemeTextures, zoneKey, type ArchClass, type ArchTex, type ArchZone, type FinishScheme, type ZoneFinish} from './subwayFinish';
+import {ARCH_CLASS, BAND_MIN_WALL, HALL_ZONES, ZONES, finishSchemeOf, isSignatureHall, keyClass, schemeTextures, zoneKey, type ArchClass, type ArchTex, type ArchZone, type FinishScheme, type HallZone, type ZoneFinish} from './subwayFinish';
 import {installSubwayArchTextures, subwayArchMaterial, type SubwayArchLook} from './subwayArchTextures';
 import {SUBWAY_ARCH_TEXTURES} from '../assets/subwayArchTextures.generated';
 import type {MarketTexHost} from './marketTextures';
@@ -61,14 +61,37 @@ const GLOSS: ReadonlySet<ArchClass> = new Set(['tile', 'stone', 'terrazzo']);
 function lookOf(f: ZoneFinish, zone: ArchZone): SubwayArchLook {
   const cls = ARCH_CLASS[f.tex];
   const wall = WALL_ZONES.has(zone);
-  const role: SubwayArchLook['role'] = wall ? 'wall' : zone === 'floor' ? 'floor' : zone === 'ceil' || zone === 'struct' ? 'ceiling' : 'trim';
+  // (the kit's piers / fins and panels are large wall-like relief: the wall's anisotropy and floor grime, never a wall-detail cut host)
+  const wallLike = wall || zone === 'pier' || zone === 'panel';
+  const role: SubwayArchLook['role'] = wallLike ? 'wall' : zone === 'floor' ? 'floor' : zone === 'ceil' || zone === 'struct' ? 'ceiling' : 'trim';
   const decay = zone === 'plinth' || zone === 'base' ? DECAY.plinth : zone === 'floor' ? (cls === 'terrazzo' ? DECAY.terrazzo : DECAY.floor) : zone === 'ceil' ? (cls === 'plaster' ? DECAY.ceil : DECAY[cls]) : DECAY[cls];
   return {
     role, reflect: GLOSS.has(cls) && zone !== 'struct' && zone !== 'ceil' ? 'gloss' : 'none', tint: f.tint, decay,
-    grime: wall ? [zone === 'plinth' ? 0.35 : 0.22, 0.7] : undefined, macro: cls === 'rock' || cls === 'concrete' ? 0.22 : 0.12,
-    thin: zone === 'trim',
+    grime: wallLike ? [zone === 'plinth' ? 0.35 : 0.22, 0.7] : undefined, macro: cls === 'rock' || cls === 'concrete' ? 0.22 : 0.12,
+    thin: zone === 'trim' || zone === 'accent',
   };
 }
+
+/** A scheme's own (non-hall) finish of a zone (null: the scheme draws none — a scheme without a band / panel). */
+function schemeZone(s: FinishScheme, zone: ArchZone): ZoneFinish | null {
+  switch (zone) {
+    case 'base': return s.plinth;
+    case 'band': return s.band;
+    case 'panel': return s.panel ?? null;
+    default: return s[zone];
+  }
+}
+
+/**
+ * Task studio-subway-rework-m2-finishing-20261117-111246-01: the GRADED paint (linear) the station columns' 'columnPaint' material lands at
+ * now, per channel (its set's base paint through the column grade).
+ */
+const COLUMN_GRADED = COLUMN_PAINT.base.map((c, i) => columnPaintGradeCpu(c, i as 0 | 1 | 2));
+/** The colour multiplier that takes the column grade's output to `target` (the grade is a power curve: (target / now)^(1 / gamma)). */
+export function columnPaintMultiplier(target: readonly [number, number, number]): [number, number, number] {
+  return [0, 1, 2].map(i => Math.min(3, Math.max(0.08, Math.pow(target[i] / COLUMN_GRADED[i], 1 / COLUMN_PAINT.gamma)))) as [number, number, number];
+}
+const columnCache = new WeakMap<THREE.Material, Map<string, THREE.Material>>();
 
 export class SubwayArch {
   readonly identity: StationIdentity;
@@ -93,18 +116,23 @@ export class SubwayArch {
     return !!a && a.publicSpace && !a.ext && a.type !== 'shop' && a.type !== 'eatery';
   }
 
-  /** The finish of a wall zone of an area (a signature hall's field / upper are its own). */
+  /** The finish of a wall zone of an area (a signature hall's field / upper / piers are its own). */
   zoneFinish(zone: ArchZone, a: Area | undefined): {finish: ZoneFinish; key: string} {
     const s = this.scheme, hall = isSignatureHall(a);
+    // a cavern's painted rock above its wainscot: one key for every rock wall (the track bed's too: world/subwayArch.ts remapFaces)
+    if (s.rock && (zone === 'field' || zone === 'upper')) return {finish: s.rock.wall, key: zoneKey(s.rock.wall, 'dado')};
+    const eq = (p: ZoneFinish, q: ZoneFinish) => p.tex === q.tex && String(p.tint) === String(q.tint);
     const pick = (): [ZoneFinish, boolean] => {
-      if (s.rock && (zone === 'dado' || zone === 'field' || zone === 'upper')) return [s.rock.wall, false];
-      if (hall && (zone === 'field' || zone === 'upper' || zone === 'ceil' || zone === 'floor' || zone === 'struct')) return [s.hall[zone], true];
-      const f = zone === 'base' ? s.plinth : s[zone];
-      return [f ?? s.field, false];
+      if (hall && HALL_ZONES.has(zone)) {
+        const f = s.hall[zone as HallZone], own = schemeZone(s, zone);
+        // (a hall pier in the station's own pier finish keeps its key: one material)
+        return [f, !(zone === 'pier' && own && eq(own, f))];
+      }
+      return [schemeZone(s, zone) ?? s.field, false];
     };
     const [finish, h] = pick();
     // a wall zone drawn in the same finish as the zone below it shares that zone's key (one material, one mesh per chunk)
-    const same = (q: ArchZone) => { const o = q === 'dado' ? s.dado : s.rock ? s.rock.wall : hall ? s.hall.field : s.field; return o.tex === finish.tex && String(o.tint) === String(finish.tint); };
+    const same = (q: ArchZone) => eq(q === 'dado' ? s.dado : hall ? s.hall.field : s.field, finish);
     if (zone === 'upper' && same('field')) return this.zoneFinish('field', a);
     if ((zone === 'field' || zone === 'upper') && !h && same('dado')) return {finish, key: zoneKey(finish, 'dado')};
     return {finish, key: zoneKey(finish, zone, h)};
@@ -203,12 +231,40 @@ export class SubwayArch {
   /** A cavern's rock vault (the rock ceiling finish). */
   rockCeilKey(): string { return zoneKey(this.scheme.rock?.ceil ?? this.scheme.ceil, 'ceil'); }
   /**
-   * Task studio-subway-rework-m2-finishing-20261117-111246-01: the kit's PIER finish of an area (pilasters, clerestory piers, the arcade
-   * beam's face) and its ACCENT finish (fascias, clock bezels, tablet surrounds, portal frames) — the scheme's own structural / trim
-   * language. (Defaults: the structure / trim finishes.)
+   * Task studio-subway-rework-m2-finishing-20261117-111246-01: the kit's PIER finish of an area (pilasters / fins, clerestory piers, the
+   * arcade beam) and the scheme's ACCENT finish (string courses, fascias, clock bezels, tablet surrounds, portal frames) — its own
+   * structural / trim language (heritage oxblood faience, civic navy glaze, brutalist precast fins + signal orange, a cavern's grey
+   * granite + neutral precast...: world/subwayFinish.ts).
    */
-  pierKey(a: Area | undefined): string { return this.structKey(a); }
-  accentKey(): string { return this.trimKey(); }
+  pierKey(a: Area | undefined): string { return this.zoneFinish('pier', a).key; }
+  accentKey(): string { return zoneKey(this.scheme.accent, 'accent'); }
+  /** Backing / service panels against a wall (null: the scheme draws none). */
+  panelKey(): string | null { return this.scheme.panel ? zoneKey(this.scheme.panel, 'panel') : null; }
+  /** How the kit shapes the piers: applied pilasters or deep fins. */
+  get pierForm(): 'pilaster' | 'fin' { return this.scheme.pierForm ?? 'pilaster'; }
+
+  /**
+   * The station columns' material (world/stationColumns.ts riveted H-columns): the shared 'columnPaint' with the scheme's paint — a
+   * render-only per-identity clone of the same node graph (colour uniform only; one material per station), or `base` itself when the
+   * scheme keeps the default slate-teal.
+   */
+  columnMaterial(base: THREE.Material): THREE.Material {
+    const target = this.scheme.columnPaint;
+    if (!target) return base;
+    let per = columnCache.get(base);
+    if (!per) columnCache.set(base, (per = new Map()));
+    const name = `station-column-paint#${this.identity.theme}`;
+    let m = per.get(name);
+    if (!m) {
+      const k = columnPaintMultiplier(target);
+      const c = cloneSurfaceMaterial(base) as THREE.Material & {color: THREE.Color};
+      c.color.setRGB(c.color.r * k[0], c.color.g * k[1], c.color.b * k[2]);
+      c.userData.lightAlbedo = COLUMN_PAINT.base.map((v, i) => columnPaintGradeCpu(v * k[i], i as 0 | 1 | 2));
+      c.name = name;
+      per.set(name, (m = c));
+    }
+    return m;
+  }
 
   scale(key: string): {u: number; v: number} | undefined {
     return isSubwayKey(key) ? {u: 1, v: 1} : undefined; // world-mapped at each set's own span (UVs unused)
@@ -220,7 +276,7 @@ export class SubwayArch {
     if (!m) return null;
     const zone = m[1] as ArchZone, hall = !!m[2], s = this.scheme;
     if (s.rock && keyClass(key) === 'rock') return {finish: zone === 'ceil' ? s.rock.ceil : s.rock.wall, zone};
-    const f = zone === 'base' ? s.plinth : hall && (zone === 'field' || zone === 'upper' || zone === 'ceil' || zone === 'floor' || zone === 'struct') ? s.hall[zone] : s[zone];
+    const f = hall && HALL_ZONES.has(zone) ? s.hall[zone as HallZone] : schemeZone(s, zone);
     return f ? {finish: f, zone} : null;
   }
 
