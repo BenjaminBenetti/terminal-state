@@ -251,14 +251,14 @@ export function creviceBridgePieces(layout: StationLayout, kit: BridgeKitSpec): 
   const out: CrevBridgePiece[] = [];
   const E = kit.pieces.End.length ?? 0, bay = kit.pieces.Mid.length ?? kit.pieces.MidPlain.length ?? 1;
   cr.bridges.forEach((b, bi) => {
-    const D = b.x1 - b.x0, z = r3((b.z0 + b.z1) / 2), y = r3(b.y - kit.deckY), inner = D - 2 * E;
+    const D = b.x1 - b.x0, z = r3((b.z0 + b.z1) / 2), y = r3(b.y - kit.deckY), inner = D - 2 * E, [px0, px1] = pitSpan(cr, b.z0, b.z1);
     const fit = bridgeBays(inner, bay, kit.stretch);
     const n = fit?.n ?? Math.max(1, Math.round(inner / bay)), k = fit?.k ?? inner / (n * bay);
     out.push({bridge: bi, piece: 'End', x: r3(b.x0 + E), y, z, sx: 1, yaw: 0, x0: b.x0, x1: r3(b.x0 + E)});
     const joints: number[] = [];
     for (let j = 0; j < n; j++) {
       const xa = b.x0 + E + j * bay * k, xb = xa + bay * k;
-      const piece: BridgePieceName = xa >= cr.chasm.x0 - 1e-6 && xb <= cr.chasm.x1 + 1e-6 ? 'Mid' : 'MidPlain';
+      const piece: BridgePieceName = xa >= px0 - 1e-6 && xb <= px1 + 1e-6 ? 'Mid' : 'MidPlain';
       out.push({bridge: bi, piece, x: r3(xa), y, z, sx: r3(k), yaw: 0, x0: r3(xa), x1: r3(xb)});
       if (j) joints.push(xa);
     }
@@ -350,6 +350,19 @@ export function creviceObstacles(layout: StationLayout, art = creviceContainerAr
   return out;
 }
 
+/** The pit's open span (m) under rows z0 .. z1: version 7, where its edges step, the narrowest of its runs there; else the chasm's. */
+function pitSpan(cr: MarketCrevice, z0: number, z1: number): [number, number] {
+  let a = -Infinity, b = Infinity;
+  for (const p of cr.settlement?.pit ?? []) if (p.z1 > z0 + 1e-6 && p.z0 < z1 - 1e-6) { a = Math.max(a, p.x0); b = Math.min(b, p.x1); }
+  return Number.isFinite(a) ? [a, b] : [cr.chasm.x0, cr.chasm.x1];
+}
+
+/** (layout version 7) Storey L's edge over the drop on world side `side` at z: the settlement's run there (NaN off the runs). */
+function edgeAt(cr: MarketCrevice, L: number, side: 'W' | 'E', z: number): number {
+  const q = cr.settlement?.edges[L]?.[side].find(e => z >= e.z0 - 1e-6 && z < e.z1 - 1e-6);
+  return q ? q.x : NaN;
+}
+
 /** The terrace edges per storey (the walk's outer edge = the front plane of the band below; storey 0: the chasm's edges). */
 function terraceEdges(cr: MarketCrevice): {W: number; E: number}[] {
   const med = (v: number[]) => { const s = [...v].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : NaN; };
@@ -393,9 +406,10 @@ export function creviceLines(layout: StationLayout): CrevLine[] {
     const Lb = Math.min(B.length - 1, Math.max(0, La + (h(3) < 0.25 ? (h(4) < 0.5 ? -1 : 1) : 0)));
     const west = h(5) < 0.5;
     const [Lw, Le] = west ? [La, Lb] : [Lb, La];
-    const ew = edges[Lw]?.W, ee = edges[Le]?.E;
-    if (!Number.isFinite(ew) || !Number.isFinite(ee)) continue;
     const skew = (h(8) - 0.5) * 1.4;
+    // (layout version 7: each end on its own storey's edge at that end's z — the edges step section by section)
+    const ew = cr.settlement ? edgeAt(cr, Lw, 'W', zz - skew / 2) : edges[Lw]?.W, ee = cr.settlement ? edgeAt(cr, Le, 'E', zz + skew / 2) : edges[Le]?.E;
+    if (!Number.isFinite(ew) || !Number.isFinite(ee)) continue;
     const sag = Ln.sag[0] + (Ln.sag[1] - Ln.sag[0]) * h(9);
     const laundry = Lw === Le && Math.abs(ee - ew) <= Ln.laundryRun && h(10) < 0.72 && out.filter(q => q.laundry).length < Ln.laundry[0];
     // (a laundry line is LEVEL: world/marketClothes.ts planLaundry hangs from y less the sag, the far end's y1 unread)
@@ -409,14 +423,23 @@ export function creviceLines(layout: StationLayout): CrevLine[] {
   }
   // along the terraces: off the railing of storey L (L >= 1) over the walk below, a short run between two ties
   for (const side of ['W', 'E'] as const) for (let L = 1; L < B.length; L++) {
-    const edge = edges[L]?.[side];
-    if (!Number.isFinite(edge)) continue;
-    const o = side === 'W' ? 1 : -1, x = r3(edge + o * Ln.out), y = r3(B[L] + Ln.terrace);
+    // (layout version 7: the line keeps to one straight stretch of the railing, a run of the stepped edge long enough for it)
+    const runs = (cr.settlement?.edges[L]?.[side] ?? []).map(q => ({x: q.x, z0: Math.max(q.z0, cr.chasm.z0 + 1), z1: Math.min(q.z1, cr.chasm.z1 - 1)}));
+    const edge0 = cr.settlement ? NaN : edges[L]?.[side];
+    if (!cr.settlement && !Number.isFinite(edge0)) continue;
+    const o = side === 'W' ? 1 : -1, y = r3(B[L] + Ln.terrace);
     for (let t = 0; t < 2; t++) {
       if (out.filter(q => q.laundry).length >= Ln.laundry[1]) break;
       const h = (j: number) => crevHash(seed ^ (side === 'W' ? 0x3c6ef372 : 0x1b873593), L * 977 + t * 131 + j);
       const len = 3.5 + 3 * h(1);
-      const za = r3(cr.chasm.z0 + 1 + (cr.chasm.z1 - cr.chasm.z0 - 2 - len) * h(2)), zb = r3(za + len);
+      let edge = edge0, za: number;
+      if (cr.settlement) {
+        const fit = runs.filter(q => q.z1 - q.z0 - 0.5 >= len);
+        if (!fit.length) continue;
+        const q = fit[Math.min(fit.length - 1, Math.floor(h(4) * fit.length))];
+        edge = q.x; za = r3(q.z0 + 0.25 + (q.z1 - q.z0 - 0.5 - len) * h(2));
+      } else za = r3(cr.chasm.z0 + 1 + (cr.chasm.z1 - cr.chasm.z0 - 2 - len) * h(2));
+      const zb = r3(za + len), x = r3(edge + o * Ln.out);
       const line: CrevLine = {x0: x, z0: za, x1: x, z1: zb, y, sag: r3(0.1 + 0.08 * h(3)), laundry: true, seed: 2000 + out.length, poles: [
         {x: r3(edge + o * 0.03), z: za, y0: B[L] + 0.95, y1: r3(y + 0.08)}, {x: r3(edge + o * 0.03), z: zb, y0: B[L] + 0.95, y1: r3(y + 0.08)}]};
       if (out.some(q => q.x0 === x && q.x1 === x && Math.max(q.z0, q.z1) > za - 1 && Math.min(q.z0, q.z1) < zb + 1)) continue;

@@ -87,26 +87,28 @@ describe('the Survivor Market, layout version 4 (version 3 plus the corpse buyer
   // (re-pinned by task studio-survivor-market-crevice-20261116-074419: new / unvisited markets build version 5 now; a recorded 4 is kept)
   // (re-pinned by task studio-market-irregular-envelope-20261116-210503-01: new / unvisited markets build version 6 now; a recorded 5 is
   // kept; {v: 6} is a valid record: the malformed example moves to 7)
-  it('the version policy: 6 for new / unvisited markets; a recorded 1 / 2 / 3 / 4 / 5 is kept (a recorded 3: the shipped version 3, no den)', () => {
-    expect(MARKET_LAYOUT_VERSION).toBe(6);
-    expect(marketLayoutVersionFor(undefined)).toBe(6);
-    expect(marketLayoutVersionFor({visits: 0, lanes: {}})).toBe(6);
+  // (re-pinned by task studio-market-irregular-settlement-20261117-003819-01: new / unvisited markets build version 7 now; a recorded 6 is
+  // kept; {v: 7} is a valid record: the malformed example moves to 8)
+  it('the version policy: 7 for new / unvisited markets; a recorded 1 / 2 / 3 / 4 / 5 / 6 is kept (a recorded 3: the shipped version 3, no den)', () => {
+    expect(MARKET_LAYOUT_VERSION).toBe(7);
+    expect(marketLayoutVersionFor(undefined)).toBe(7);
+    expect(marketLayoutVersionFor({visits: 0, lanes: {}})).toBe(7);
     expect(marketLayoutVersionFor({visits: 2, lanes: {}})).toBe(1);
-    for (const v of [1, 2, 3, 4, 5, 6]) expect(marketLayoutVersionFor({visits: 2, lanes: {[MARKET_LAYOUT_LANE]: {v}}})).toBe(v);
-    expect(marketLayoutVersionFor({visits: 2, lanes: {[MARKET_LAYOUT_LANE]: {v: 7}}})).toBe(1);
-    expect(marketLayoutVersionFor({visits: 0, lanes: {[MARKET_LAYOUT_LANE]: {v: 7}}})).toBe(6);
+    for (const v of [1, 2, 3, 4, 5, 6, 7]) expect(marketLayoutVersionFor({visits: 2, lanes: {[MARKET_LAYOUT_LANE]: {v}}})).toBe(v);
+    expect(marketLayoutVersionFor({visits: 2, lanes: {[MARKET_LAYOUT_LANE]: {v: 8}}})).toBe(1);
+    expect(marketLayoutVersionFor({visits: 0, lanes: {[MARKET_LAYOUT_LANE]: {v: 8}}})).toBe(7);
     for (const [s, want] of Object.entries(V3_SHIPPED)) {
       const v3 = generateMarketLevel({levelSeed: Number(s), layoutVersion: 3});
       expect(fingerprint(v3), `seed ${s}`).toBe(want);
       expect(fingerprint(LEVELS.market.generate('main', {levelSeed: Number(s), layoutVersion: 3})), `seed ${s} (registry)`).toBe(want);
       expect([v3.market!.v, v3.market!.den, v3.props.filter(p => (CORPSE_DEN_KINDS as readonly string[]).includes(p.kind)).length]).toEqual([3, undefined, 0]);
     }
-    // version 4 (asked for, and through the registry) builds deterministically; the default is version 6 now
+    // version 4 (asked for, and through the registry) builds deterministically; the default is version 7 now
     const sig = (L: StationLayout) => JSON.stringify({areas: L.areas, doors: L.doors, props: L.props, lights: L.lights, signs: L.signs, market: L.market, rails: L.rails, links: L.levelLinks});
     expect(runs[0].L.market!.v).toBe(4);
     expect(sig(generateMarketLevel({levelSeed: SEEDS[0], layoutVersion: 4}))).toBe(sig(runs[0].L));
     expect(sig(LEVELS.market.generate('main', {levelSeed: SEEDS[0], layoutVersion: 4}))).toBe(sig(runs[0].L));
-    expect(generateMarketLevel({levelSeed: SEEDS[0]}).market!.v).toBe(6);
+    expect(generateMarketLevel({levelSeed: SEEDS[0]}).market!.v).toBe(7);
   });
 
   it('parity: for every seed version 4 takes version 3\'s attempt and, minus the appended den, IS version 3 (no draw moved)', () => {

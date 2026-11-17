@@ -74,9 +74,11 @@ export interface MarketLayout {
    * 5 (task studio-survivor-market-crevice-20261116-074419): THE CREVICE — a new settlement (gen/market/v5/) with the same six stalls, the
    * bar's bartender and the den; its geometry for the look in `crevice`.
    * 6 (task studio-market-irregular-envelope-20261116-210503-01): version 5's crevice in an IRREGULAR ENVELOPE (gen/market/v6/envelope.ts:
-   * the stepped overhead, the top terrace's alcoves, the end clefts, the chasm's shelves); `crevice.envelope` says so.
+   * the stepped overhead, the top terrace's alcoves, the end clefts, the chasm's shelves); `crevice.envelope` says so. 7 (task
+   * studio-market-irregular-settlement-20261117-003819-01): version 6 on an IRREGULAR SETTLEMENT FLOORPLAN (gen/market/v7/settlement.ts:
+   * each storey's container row, terrace and the pit's edges in seeded sections); `crevice.settlement` says so.
    */
-  v: 1 | 2 | 3 | 4 | 5 | 6;
+  v: 1 | 2 | 3 | 4 | 5 | 6 | 7;
   /** Exactly one stall per MARKET_STALLS id (version 3: + the bar, BAR_STALL, last). */
   stalls: MarketStall[];
   /** Resident spots (wander targets / idle posts), at least a dozen, spread over the market's storeys. */
@@ -116,7 +118,17 @@ export interface MarketCrevice {
    * voids into the end walls, world metres, their floor y); the top terrace's alcoves (count).
    */
   envelope?: {sky: number; rock: number; clefts: {x0: number; z0: number; x1: number; z1: number; y: number}[]; alcoves: number};
+  /**
+   * (version 7, task studio-market-irregular-settlement-20261117-003819-01) The irregular settlement floorplan (absent on versions 5 / 6:
+   * every storey's walk one straight ribbon, the pit the `chasm` rectangle). `pit`: the pit's runs of rows (world metres; their union is
+   * the chasm, `chasm` their bounds); `edges[L]`: storey L's walk edge over the drop on each world side (storey 0: the pit's edge; 1-3:
+   * the band below's front plane) as runs along z, each at one x.
+   */
+  settlement?: {pit: {x0: number; z0: number; x1: number; z1: number}[]; edges: {W: CrevEdgeRun[]; E: CrevEdgeRun[]}[]};
 }
+
+/** (version 7) A run of one storey's walk edge along z at one x (world metres). */
+export interface CrevEdgeRun { z0: number; z1: number; x: number }
 
 /** One shipping-container box of the crevice (world metres, incl. its walls: the frame / paint / windows go on its outside). */
 export interface MarketCrevContainer {

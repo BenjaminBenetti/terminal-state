@@ -47,10 +47,11 @@ beforeAll(async () => {
 /** The market as built now (layout v3: the settlement + the bar deck, its 'drink' posts naming their seats, the 'bar' stall; re-pinned by
  *  task studio-corpse-market-shop-20261114-031614-01: now layout v4 = that same v3 plus the corpse buyer's den, appended after it;
  *  re-pinned by task studio-survivor-market-crevice-20261116-074419: now layout v5, the crevice, its bar deck over the Arrival Square;
- *  re-pinned by task studio-market-irregular-envelope-20261116-210503-01: now layout v6, the same crevice in its irregular envelope). */
+ *  re-pinned by task studio-market-irregular-envelope-20261116-210503-01: now layout v6, the same crevice in its irregular envelope;
+ *  re-pinned by task studio-market-irregular-settlement-20261117-003819-01: now layout v7, on its irregular settlement floorplan). */
 function barMarket(seed = 808) {
   const w = combatWorld(A, seed);
-  expect(w.layout.market!.v).toBe(6);
+  expect(w.layout.market!.v).toBe(7);
   w.people.bottleSource = () => ({obj: can, item: 'cola', source: 'models.item_cola (test)'});
   return {w};
 }
@@ -94,12 +95,16 @@ describe('bar patrons drink', () => {
     const P = patrons(w);
     const nRes = w.people.residents.length, posts = w.people.spots.filter(s => s.kind === 'drink').length;
     expect(posts).toBeGreaterThanOrEqual(6);
-    expect(P.length).toBe(Math.min(posts, Math.round(nRes * MARKET_PEOPLE.drink.regulars)));
+    // (the regulars, all at the bar; anyone else whose own seeded start is a 'drink' post drinks there too — layout v7's seed 808 has
+    // one such resident, re-pinned by task studio-market-irregular-settlement-20261117-003819-01)
+    const regulars = w.people.residents.filter(r => r.regular);
+    expect(regulars.length).toBe(Math.min(posts, Math.round(nRes * MARKET_PEOPLE.drink.regulars)));
+    for (const r of regulars) expect(r.drink, r.id).toBeTruthy();
+    expect(P.length).toBeLessThanOrEqual(posts);
     let seated = 0;
     for (const r of P) {
       const a = r.actor, s = w.people.spots[r.spot];
       expect(s.kind).toBe('drink');
-      expect(r.regular).toBe(true);
       expect(a.loop).toBe(r.drink!.clip);
       expect(a.loop).toMatch(/^Drink(Sit)?2?(@\d+)?$/);
       // the bottle: held in the right hand, shown

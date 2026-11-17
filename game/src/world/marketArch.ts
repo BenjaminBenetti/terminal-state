@@ -549,7 +549,10 @@ export class CreviceArch {
   }
   inChasm(x: number, z: number): boolean {
     const c = this.rec.chasm;
-    return x >= c.x0 && x < c.x1 && z >= c.z0 && z < c.z1;
+    if (!(x >= c.x0 && x < c.x1 && z >= c.z0 && z < c.z1)) return false;
+    // (layout version 7: the pit's own runs — its edges step, the low walks reach into its bounding box)
+    const pit = this.rec.settlement?.pit;
+    return !pit || pit.some(p => x >= p.x0 && x < p.x1 && z >= p.z0 && z < p.z1);
   }
   /** Is cell i's band (ceiling at y) the lowered band under a bridge deck? */
   private underBridge(i: number, y: number): boolean {

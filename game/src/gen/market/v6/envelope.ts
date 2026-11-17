@@ -25,6 +25,7 @@ import type {Rng} from '../../../core/rng';
 import {CELL, FLOOR, SOLID, VOID, type Grid} from '../../grid';
 import type {Level, RailRun} from '../../levels';
 import {CREVICE, type creviceRows} from '../v5/frame';
+import type {CreviceSettlement} from '../v7/settlement';
 
 type Rows = ReturnType<typeof creviceRows>;
 
@@ -123,8 +124,9 @@ function walk(r: Rng, n: number, a: number): Int8Array {
 }
 
 /** The envelope of a version-6 crevice: its frame's rows / columns `R` (gen/market/v5/frame.ts creviceRows), the canvas size, the
- *  envelope's own stream. */
-export function creviceEnvelope(R: Rows, W: number, H: number, r: Rng): CreviceEnvelope {
+ *  envelope's own stream. `plan` (layout version 7, task studio-market-irregular-settlement-20261117-003819-01): the irregular settlement,
+ *  whose pit's edges the chasm bed follows row by row (the same draws: absent, version 6's bed exactly). */
+export function creviceEnvelope(R: Rows, W: number, H: number, r: Rng, plan?: CreviceSettlement): CreviceEnvelope {
   const E = ENVELOPE, S = CREVICE;
   // the open crevice's columns over the top terrace: [wallW, wallE) (the storey-3 walks' outer columns), its centre line
   const wallW = R.x0 + S.pitch + 1, wallE = R.x1 - S.pitch - 1, xm = (R.xc0 + R.xc1) / 2;
@@ -277,14 +279,17 @@ export function creviceEnvelope(R: Rows, W: number, H: number, r: Rng): CreviceE
     let k = 0;
     while (k + 2 < ctl.length && y >= ctl[k + 1].y) k++;
     const A = ctl[k], B = ctl[k + 1], t = B.y > A.y ? (y - A.y) / (B.y - A.y) : 0;
-    const cx = A.x + (B.x - A.x) * t, hw = (t < 0.5 ? A.w : B.w) / 2, cd = A.d, j = y - y0c;
+    // (version 7: the pit's own edges on this row, the cleft kept inside them)
+    const px0 = plan ? R.xc0 + plan.pit.W[y] : R.xc0, px1 = plan ? R.xc1 - plan.pit.E[y] : R.xc1;
+    const hw = (t < 0.5 ? A.w : B.w) / 2, cd = A.d, j = y - y0c;
+    const cx = plan ? clamp(A.x + (B.x - A.x) * t, px0 + hw + 0.5, Math.max(px0 + hw + 0.5, px1 - hw - 0.5)) : A.x + (B.x - A.x) * t;
     const rw = runsW.find(q => y >= q.y0 && y < q.y1)!, re = runsE.find(q => y >= q.y0 && y < q.y1)!;
     const lw = Math.max(0, rw.lip + wLipW[j]), le = Math.max(0, re.lip + wLipE[j]);
-    for (let x = R.xc0; x < R.xc1; x++) {
+    for (let x = px0; x < px1; x++) {
       let d: number;
       if (x + 0.5 > cx - hw + wBank0[j] && x + 0.5 < cx + hw + wBank1[j]) d = cd;
-      else if (x + 0.5 < cx) d = x - R.xc0 < lw ? rw.lipD : rw.d;
-      else d = R.xc1 - 1 - x < le ? re.lipD : re.d;
+      else if (x + 0.5 < cx) d = x - px0 < lw ? rw.lipD : rw.d;
+      else d = px1 - 1 - x < le ? re.lipD : re.d;
       bed[y * W + x] = qh(Math.min(E.bed.lipMax, d));
     }
   }
