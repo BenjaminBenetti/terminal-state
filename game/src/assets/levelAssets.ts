@@ -66,6 +66,10 @@ export const LEVEL_ONLY_RULES: readonly LevelOnlyRule[] = [
   // door), the auxiliary generator (REACTOR_KIT.generator: the objective's three generators), control consoles / switchgear — a Bunker
   // fetches only the keys its own layout places (selectLevelKeys), never another level's
   {level: 'reactor', also: ['bunker', 'surface'], path: /^(?:\.\/)?assets\/(?:models\/reactor-[A-Za-z0-9_-]+\.glb|textures\/reactor\/[A-Za-z0-9_/-]+\.(?:png|jpg|jpeg|webp|ktx2))$/},
+  // task studio-mall-parking-glass-followup-20261117-043548-01: the Skyways street wrecks also stand in the MALL's exterior views (the
+  // parking-lot window walls' parked cars, the street exits' road wrecks: world/mallVehicles.ts; still the Skyways family; the Mall fetches
+  // only these keys, Game.sectionModelKeys mallVehicleModelKeysFor) — matched before the general Skyways rule
+  {level: 'skyways', also: ['surface', 'mall'], path: /^(?:\.\/)?assets\/models\/skyways-wreck-[A-Za-z0-9_-]+\.glb$/},
   // task studio-skyways-level-20261106-054448-01: Skyways' kit (skyways-*.glb: the prize car, the mascot statues, street wrecks, the
   // ramen kitchen; textures/skyways/**: the convention / prize / ramen art atlases). The edible food models (item-*.glb) are shared.
   {level: 'skyways', also: ['surface'], path: /^(?:\.\/)?assets\/(?:models\/skyways-[A-Za-z0-9_-]+\.glb|textures\/skyways\/[A-Za-z0-9_/-]+\.(?:png|jpg|jpeg|webp|ktx2))$/},

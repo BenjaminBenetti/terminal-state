@@ -119,6 +119,7 @@ import {MaskView} from './gear/maskView'; // Task gas-mask-roof-feedback-2026103
 import {installStalls, type StallSystem} from './world/stalls'; // Task office-overhaul-20261030 (lane INTERACT, #13): stall doors, walk-in collision, toilet loot
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
 import {installSkywaysWindows, type SkywaysWindowRuntime} from './world/skywaysWindows'; // task studio-skyways-level-20261106-054448 (lane GAS): the Skyways glazing
+import {installMallWindows, type MallWindowRuntime} from './world/mallWindowPanes'; // task studio-mall-parking-glass-followup-20261117-043548-01: the Mall's breakable window walls
 import {installSkywaysExterior} from './world/skywaysExterior'; // task studio-skyways-level-20261106-054448 (lane VIEW): the city outside the Skyways glass
 import {skywalkText} from './gen/skyways/skywalkText'; // task studio-skywalk-variety-20261107-231448-01: player-facing Skyways wording
 import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
@@ -245,6 +246,7 @@ import {OnboardingStore, browserOnboardingStorage} from './ui/onboardingStore'; 
 import type {PropPlacement} from './gen/props';
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
+import {mallVehicleModelKeysFor} from './world/mallVehicles'; // task studio-mall-parking-glass-followup-20261117-043548-01: the Mall exterior views' cooked wrecks
 import {COMPANY_MODEL_FILES, COMPANY_PART_MODEL_FILES} from './assets/companyAssets'; // Task office-overhaul-20261030 (lane TENANTS): company models load lazily per layout (officeModelKeysFor); lane FURN (office-props-physics-scale-20261030): + the separated loose clutter
 import {MALL_MODEL_FILES} from './assets/mallAssets'; // Task track3-eaton-centre-20261031 (lane ASSETS): mall-art models (keys office-<id>, level-only paths assets/models/mall-*.glb), fetched only for the keys a mall layout places
 import {lingerieDisplayModelKeys} from './gen/mall/lingerieStore'; // task mall-lingerie-20261102 (lane STORE): the store's display sets (lane FIT's files)
@@ -598,6 +600,8 @@ export class Game {
   readonly tower: TowerRuntime;
   /** Task studio-skyways-level-20261106-054448 (lane GAS): the Skyways glazing — breakable panes, pre-breached bridges (world/skywaysWindows.ts; inert elsewhere). */
   readonly skywaysWindows: SkywaysWindowRuntime;
+  /** Task studio-mall-parking-glass-followup-20261117-043548-01: the Mall parking-lot window walls' breakable panes (inert without them). */
+  readonly mallWindows: MallWindowRuntime;
   /** Task studio-skyways-level-20261106-054448 (lane ADDON): the add-on's art atlases, the prize turntable and velvet ropes (world/skywaysAddonRuntime.ts; inert elsewhere). */
   readonly skywaysAddon: SkywaysAddonRuntime;
   /** Task player-train-shell-20261101-202805 (lane TRAIN): the parked player train in the world — the car, its interior volume / colliders, doors, lights (world/playerTrain.ts). */
@@ -657,7 +661,7 @@ export class Game {
   // (round 2, R3) + the generated annex genset model on a layout with a genset record (a shared file: every annex-bearing level)
   // (task mall-lingerie-20261102, lane STORE) + the lingerie store's display sets: lane FIT's outfit files they are cut from (lazy, same keys)
   // (task mall-lingerie-20261102-221554, lane CONTEXT) + the lingerie garments on a layout with lingerie-tagged spawns (the mall's lingerie store only)
-  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor, lingerieDisplayModelKeys, lingerieModelKeysFor, cosplayModelKeysFor, shelfJunkModelKeysFor, bunkerModelKindKeysFor, corpseDenModelKeysFor, surfaceKitModelKeysFor]; // (+ lane KIT, Surface Run: the wreck models a district placed) // (+ task studio-food-shelf-production-20261109-002816-01: the shelf-junk atlas only on layouts with stockable holders)
+  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor, lingerieDisplayModelKeys, lingerieModelKeysFor, cosplayModelKeysFor, shelfJunkModelKeysFor, bunkerModelKindKeysFor, corpseDenModelKeysFor, surfaceKitModelKeysFor, mallVehicleModelKeysFor]; // (+ lane KIT, Surface Run: the wreck models a district placed) (+ task studio-mall-parking-glass-followup-20261117-043548-01: the Mall exterior views' cooked wrecks) // (+ task studio-food-shelf-production-20261109-002816-01: the shelf-junk atlas only on layouts with stockable holders)
   /** One lifecycle operation at a time: travel, new game, retry level. */
   private readonly lifecycle = new SingleFlight();
   /** Live pickups that are (what is left of) a generated layout pickup -> its layout.pickups index. */
@@ -920,6 +924,8 @@ export class Game {
     hookName('tower');
     this.skywaysWindows = installSkywaysWindows(this); // task studio-skyways-level-20261106-054448 (lane GAS): before GAS (its build reads the panes); inert without layout.skyways
     hookName('skywaysWindows');
+    this.mallWindows = installMallWindows(this); // task studio-mall-parking-glass-followup-20261117-043548-01: before GAS (its build reads the panes); inert without window walls
+    hookName('mallWindows');
     installSkywaysExterior(this); hookName('skywaysExterior'); // (lane VIEW) streets, building shells, bridge exteriors, wrecks, the far city / murk; the glazing's reveal finish; inert elsewhere
     this.skywaysAddon = installSkywaysAddon(this); hookName('skywaysAddon'); // task studio-skyways-level-20261106-054448 (lane ADDON): inert without layout.skyways
     installSkywaysDestinations(this); // task studio-skyways-destinations-20261106-170011-01 (lane LANDMARKS): poster / plaque atlases before the build; inert elsewhere
@@ -939,6 +945,7 @@ export class Game {
     this.gas = installGas(this); // Task gasmask-breach-20261030 (lane GAS): after TOWER (its build reads the windows) — bullet hits, frame hook, section hooks
     hookName('gas');
     this.gas.windowSources.push(() => this.skywaysWindows.gasSource()); // (lane GAS, Skyways) the glazing's panes when the world has no office tower
+    this.gas.windowSources.push(() => this.mallWindows.gasSource()); // (task studio-mall-parking-glass-followup-20261117-043548-01) the Mall window walls' panes + field
     this.gas.zoneSources.push(bunkerGasSource); // task studio-bunker-level-20261109-072224-01: the Bunker's gas zones (visible green fog + exposure, one field)
     // Task gasmask-breach-20261030 (primary): breach gas spares the player only behind a mask that is on with a working filter.
     // The mask's frame hook runs first (installed earlier), so a filter swapped in this frame already counts.
