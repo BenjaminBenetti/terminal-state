@@ -2666,6 +2666,10 @@ export class Game {
         + `${Object.entries(prep.by).map(([k, ms]) => `${k} ${ms.toFixed(1)}`).join(', ')}; sweep ${v.stats.poses} poses ${v.stats.sweepMs.toFixed(1)} ms) · ${((performance.now() - t0) / 1000).toFixed(1)} s`);
       if (w.end === 'partial' && w.why === 'stalled') job.cancel(); // (no progress at all: continueCrossingPreparation starts a fresh play-paced job)
       else if (job.running) job.pace(null); // (from here on the journey's play pacing: the exit is about to open)
+      // the left world's queued GPU releases, still unseen (the player is held): the first view holds its own programs now — a later
+      // new program group of the destination may build one the left world had (its compile's business, in play pacing); a partial first
+      // view keeps them until its program groups are compiled (continueCrossingPreparation)
+      if (w.end === 'ready') this.flushRetired();
       return w;
     } catch (err) {
       (this.journeyCompile as JourneyCompile | null)?.cancel(); // (set in a step: TS cannot see it)
@@ -2690,8 +2694,8 @@ export class Game {
     if (!job?.running) { this.flushRetired(); return null; }
     job.pace(null);
     const t0 = performance.now(), j = job, cv = this.crossingView;
-    // (this crossing's own job: once the destination's every program group is compiled — the first view's and the new ones after it, not
-    // the rest's own render objects — the left world's programs are no longer needed; another job: its scene pass; 8 s at the most)
+    // (released already when the first view was ready; else this crossing's own job: once the destination's every program group is
+    // compiled — the first view's and the new ones after it, not the rest's own render objects; another job: its scene pass; 8 s at most)
     const programs = cv && cv.job === j.stats ? j.whenScene(cv.programs.first + cv.programs.more) : j.sceneDone;
     void Promise.race([programs, new Promise(r => setTimeout(r, 8000))]).then(() => this.flushRetired());
     void j.done.then(() => { const r = firstViewRest(j.stats); console.info(`Terminal State: crossing compile (the rest, in play) ${j.stats.phase} — ${r.total - r.left}/${r.total} prepared, ${((performance.now() - t0) / 1000).toFixed(1)} s after the exit opened`); });
