@@ -11,7 +11,7 @@ import {PropModelLibrary, loadAssets, type AssetBundle} from './assets/loader';
 import {foreignTo, levelWorkingSet, selectLevelKeys} from './assets/levelAssets';
 import {SURFACE_LANE, hostKeyOf, isSurfaceHost, isSurfaceKey, sectionAssetLevel, surfaceKeyOf, surfaceVersionFor} from './gen/surface/surfaceRun';
 import {abortCrossers, arriveCrossers, departCrossers, surfaceCrossRefusal, surfaceCrossers, type SurfaceCrosser, type SurfaceCrossGate, type SurfaceCrossRefusal, type SurfaceCrossResult} from './world/surface/crossing'; // (lane ACCESS: Game.crossSurface)
-import {LIFT_RIDE_COMPILE, LIFT_RIDE_WAIT, liftOfLayout, waitForLiftCompile, type SurfaceLiftRuntime} from './world/surface/liftRuntime'; // (lane ACCESS follow-up: the v2 crossing is a cargo-lift ride)
+import {LIFT_RIDE_COMPILE, LIFT_RIDE_WAIT, liftOfLayout, type SurfaceLiftRuntime} from './world/surface/liftRuntime'; // (lane ACCESS follow-up: the v2 crossing is a cargo-lift ride)
 import {installSurfaceRun} from './world/surface/install'; // task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN // Task track3-eaton-centre-20261031 (lane PACKAGE): level-scoped lazy assets
 import {adoptStationName} from './campaign/stationName';
 import {LevelResources} from './assets/levelResources'; // lane PACKAGE (track3): level textures / GPU resources released with their level
@@ -282,6 +282,7 @@ import {RtFlashlight} from './render/rt/rtFlashlightRuntime';
 import {RtScene} from './render/rt/rtScene';
 import {shareShaderText} from './render/shaderTextShare'; // task studio-graphics-gpu-materials-toggle-20261114-212239-01
 import {JourneyCompile, type JourneyCompileOptions} from './render/journeyCompile'; // (lane RENDER-CPU: the journey's sliced preparation)
+import {FIRST_VIEW, firstViewProgress, firstViewRest, firstViewStatus, planFirstView, waitForFirstView, type CrossingExit, type CrossingViewResult, type FirstViewPlan} from './render/firstView'; // (lane READY: a crossing's exit opens on its drawn first view)
 import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
 import {loadingPlaceName, type LastSaveStatus} from './ui/loadingScreen'; // task studio-beta-campaign-polish-20261103-063841-01 (lane MENU): loading name only; Load last save
 import type {LoadMeter} from './ui/loadingMap'; // task studio-initial-loading-subway-graphic-20261111-070741-01: the loading screen's map takes the load's progress
@@ -2473,12 +2474,10 @@ export class Game {
    * shadow-map variants by off-screen draws nested at the real frame's depth. The arrival still waits at most 8 s for the scene-pass
    * phase; nothing holds a frame or hides the canvas. 'view' (software rasterizer): the representatives within 24 m only.
    */
-  private async backgroundCompile(full = false, since?: number): Promise<'done' | 'partial' | 'cancelled' | 'skipped' | 'arrived'> {
-    // (lane ACCESS follow-up) `full`: the Surface Run lift ride waits for the WHOLE job and is told how it ended (task studio-surface-run-lift-
-    // reliability-and-cab-20261118-023909-01: bounded — LIFT_RIDE_WAIT from `since` (default: now), active time: 'partial' = the budget /
-    // a stall; read only for `full`, so the train journey's route never touches the frame budget here)
+  private async backgroundCompile(): Promise<'cancelled' | 'skipped' | 'arrived'> {
+    // (task studio-surface-host-ground-connectors-20261118-053602-01, lane READY: a crossing waits for its exit's FIRST VIEW instead —
+    // prepareCrossingView; this is the train journey's arrival gate, and a crossing's play-paced rest after a stalled first view)
     if (!this.world || !this.renderer.initialized || this.gpu?.deviceLost) return this.gpu?.deviceLost ? 'cancelled' : 'skipped';
-    const from = full ? since ?? this.frameBudget.activeMs : 0;
     const mode = warmupMode(location.search, this.softwareGl?.software === true);
     if (mode === 'off') return 'skipped';
     this.journeyCompile?.cancel();
@@ -2501,29 +2500,105 @@ export class Game {
       const casters = mode === 'full' && this.flashlight.castShadow ? runtimeVariantsFirst(byNear([...plan.items, ...plan.others].filter(i => i.caster))) : [];
       const receiver = plan.items.find(i => i.object.receiveShadow && !i.flips.length) ?? null;
       // (task journey-compile-pacing-20261104: paced to real frames — frameNo = the scheduler's frame callbacks begun)
-      // (lane ACCESS follow-up) the lift ride waits for it with only the sealed car drawn: a step every frame, bigger chunks / slices
       const job = (this.journeyCompile = new JourneyCompile({renderer: this.renderer as unknown as JourneyCompileOptions['renderer'], scheduler: this.frameBudget,
-        scene: this.scene, camera: this.camera, target, depth, items, casters, receiver, frameNo: () => this.frameBudget.frame, ...(full ? LIFT_RIDE_COMPILE : {})}).start());
-      if (full) {
-        const w = await waitForLiftCompile(job, () => this.frameBudget.activeMs, from);
-        const st = job.stats;
-        this.surfaceLiftCompile = {end: w.end, why: w.why, ms: performance.now() - t0, activeMs: this.frameBudget.activeMs - from, scene: st.sceneDone, sceneItems: st.sceneItems,
-          shadows: st.shadowDone, casters: st.casters, twoPass: st.twoPassDone, twoPassItems: st.twoPass, calls: st.sceneChunks, postStalls: st.postStalls, tries: (this.surfaceLiftCompile?.tries ?? 0) + 1};
-        console.info(`Terminal State: lift ride compile ${w.end}${w.why ? ` (${w.why})` : ''} — scene ${st.sceneDone}/${st.sceneItems}, shadows ${st.shadowDone}/${st.casters}, two-pass ${st.twoPassDone}/${st.twoPass}, ${st.sceneChunks} calls, ${((performance.now() - t0) / 1000).toFixed(1)} s`);
-        if (w.end === 'partial') job.cancel(); // (the rest in play pacing once the doors are open: rideSurfaceLift)
-        return w.end;
-      }
+        scene: this.scene, camera: this.camera, target, depth, items, casters, receiver, frameNo: () => this.frameBudget.frame}).start());
       // the arrival waits for the scene-pass phase at most 8 s, as before; the job keeps going in spare frame time after that
       await Promise.race([job.sceneDone, new Promise(r => setTimeout(r, 8000))]);
       const st = job.stats;
       console.info(`Terminal State: next station prepared during the ride (${mode}) — scene ${st.sceneDone}/${st.sceneItems}, shadows ${st.shadowDone}/${st.casters} at arrival after ${((performance.now() - t0) / 1000).toFixed(1)} s (continuing in spare frame time)`);
       void job.done.then(() => console.info(`Terminal State: journey compile ${job.stats.phase} — scene ${job.stats.sceneDone}/${job.stats.sceneItems}, shadows ${job.stats.shadowDone}/${job.stats.casters}, ${job.stats.steps} steps (max ${job.stats.stepMaxMs.toFixed(1)} ms), ${((performance.now() - t0) / 1000).toFixed(1)} s`));
-    } catch (err) { console.warn('campaign: background compile failed', err); if (full) return 'cancelled'; }
+    } catch (err) { console.warn('campaign: background compile failed', err); }
     return 'arrived';
   }
 
-  /** (QA / tests) How the last lift ride's compile wait ended (null: none yet). */
-  surfaceLiftCompile: {end: string; why: string; ms: number; activeMs: number; scene: number; sceneItems: number; shadows: number; casters: number; twoPass: number; twoPassItems: number; calls: number; postStalls: number; tries: number} | null = null;
+  /**
+   * (task studio-surface-host-ground-connectors-20261118-053602-01, lane READY) A CROSSING's readiness — the Surface Run cargo lift ride
+   * and the Office / Mall on-foot connector: the destination (built: the current world, its participants arrived) prepared for the
+   * FIRST VIEW from its `exit` (render/firstView.ts: the eye where the player comes out; any yaw). The journey compile's job with the
+   * first view leading: its representatives compiled, then everything of it DRAWN off-screen in the scene pass's own render context,
+   * a few items per frame (adapted to the measured draw; frames keep coming), then one hidden frame of the real view; the rest of the
+   * destination in the same job behind it. Call while the player is still held (the sealed car, the closed far door) with `since` = the
+   * active ms (frameBudget.activeMs) the bound counts from, and null `crossingView` before a crossing's first try. Resolves (never
+   * rejects) with the first view's end:
+   *  - 'ready': drawn (why '') — or, without a scene pass (the direct path), compiled only (why says so);
+   *  - 'partial': its bound ran out (why 'budget': LIFT_RIDE_WAIT.budgetMs of active time; 'stalled': no first-view progress for
+   *    LIFT_RIDE_WAIT.stallMs) — what was prepared stands; open on the BUILT world and report it (never silently);
+   *  - 'cancelled': the job ended without it (why: its reason; a lost device — check gpu.deviceLost — or a replaced job: retry once).
+   * Then open the exit and call continueCrossingPreparation(). From here on the job runs in the journey's play pacing.
+   */
+  async prepareCrossingView(exit: CrossingExit, since: number): Promise<CrossingViewResult> {
+    if (!this.world || !this.renderer.initialized || this.gpu?.deviceLost) return {end: 'cancelled', why: this.gpu?.deviceLost ? 'device lost' : 'no world to prepare'};
+    const mode = warmupMode(location.search, this.softwareGl?.software === true);
+    if (mode === 'off') return {end: 'partial', why: 'graphics warm-up off (?warmup=off)'};
+    this.journeyCompile?.cancel();
+    this.refreshRuntimeVariants(mode); // (the destination's play-only variants join the job, as the journey's)
+    const t0 = performance.now(), tries = (this.crossingView?.tries ?? 0) + 1;
+    try {
+      const target = this.atmosphereBypass ? null : this.atmosphere.warmTarget(this.scene, this.camera);
+      const depth = this.sceneDepth(false), at = new THREE.Vector3(exit.x, exit.y, exit.z), culler = this.world.culler;
+      const plan = planWarmup(this.scene, {mode, cameraMask: this.camera.layers.mask, pools: this.warmRegistry.poolRoots(), near: mode === 'view' ? {center: at, radius: FIRST_VIEW.radius} : undefined});
+      const shadows = !!target && this.flashlight.castShadow;
+      const fv = planFirstView(this.scene, {exit, cameraMask: this.camera.layers.mask, camera: this.camera, casters: shadows,
+        sweep: {update: cam => culler.update(cam, true), restore: () => culler.update(this.camera, true)}});
+      const sphere = new THREE.Sphere(), box = new THREE.Box3();
+      const dist = (o: THREE.Object3D) => { box.setFromObject(o); if (box.isEmpty()) return Infinity; box.getBoundingSphere(sphere); return Math.max(0, sphere.center.distanceTo(at) - sphere.radius); };
+      const byNear = <T extends {object: THREE.Object3D}>(l: readonly T[]) => l.map(i => ({i, d: dist(i.object)})).sort((a, b) => a.d - b.d).map(x => x.i);
+      // the scene lane: the first view's representatives first, then the job's plan (as the journey's) without them
+      const lead = new Set<THREE.Object3D>(fv.reps.map(i => i.object)), leadCasters = new Set<THREE.Object3D>(fv.casters.map(i => i.object));
+      const items = [...fv.reps, ...[...byNear(plan.items), ...(mode === 'full' ? byNear(plan.others) : [])].filter(i => !lead.has(i.object))];
+      const others = mode === 'full' && shadows ? runtimeVariantsFirst(byNear([...plan.items, ...plan.others].filter(i => i.caster))).filter(i => !leadCasters.has(i.object)) : [];
+      const receiver = plan.items.find(i => i.object.receiveShadow && !i.flips.length) ?? null;
+      const job = (this.journeyCompile = new JourneyCompile({renderer: this.renderer as unknown as JourneyCompileOptions['renderer'], scheduler: this.frameBudget,
+        scene: this.scene, camera: this.camera, target, depth, items, casters: [...fv.casters, ...others], receiver, frameNo: () => this.frameBudget.frame, ...LIFT_RIDE_COMPILE,
+        firstView: {items: [...fv.reps, ...fv.others], reps: fv.reps.length, casters: fv.casters.length}}).start());
+      this.crossingView = {end: 'pending', why: '', ms: 0, activeMs: 0, mode, plan: fv.stats, tries, job: job.stats, rest: null};
+      const w = await waitForFirstView(job, () => this.frameBudget.activeMs, since, LIFT_RIDE_WAIT);
+      const st = job.stats, p = firstViewProgress(st);
+      Object.assign(this.crossingView, {end: w.end, why: w.why, ms: performance.now() - t0, activeMs: this.frameBudget.activeMs - since});
+      console.info(`Terminal State: crossing first view ${w.end}${w.why ? ` (${w.why})` : ''} — ${p.done}/${p.total}: ${st.viewRepsCompiled}/${st.viewReps} representatives compiled, `
+        + `${st.viewDone}/${st.viewItems} drawn in ${st.viewDraws} off-screen draws (max ${st.viewMaxPerDraw}, ${st.viewDrawMaxMs.toFixed(1)} ms), casters ${Math.min(st.shadowDone, st.viewCasters)}/${st.viewCasters}, `
+        + `real-view frame ${st.viewFrame ? `${st.viewFrameMs.toFixed(1)} ms` : 'no'} · plan ${fv.stats.ms.toFixed(1)} ms (sweep ${fv.stats.poses} poses ${fv.stats.sweepMs.toFixed(1)} ms) · ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+      if (w.end === 'partial' && w.why === 'stalled') job.cancel(); // (no progress at all: continueCrossingPreparation starts a fresh play-paced job)
+      else if (job.running) job.pace(null); // (from here on the journey's play pacing: the exit is about to open)
+      return w;
+    } catch (err) {
+      console.warn('crossing: preparing the first view failed', err);
+      this.journeyCompile?.cancel();
+      return {end: 'cancelled', why: 'error'};
+    }
+  }
+
+  /**
+   * (lane READY) After a crossing's exit opened: the rest of the destination's preparation goes on in the journey's play pacing — the
+   * same job, or (its first view stalled / cancelled) a fresh one, whose compiled items are cache hits — and the left world's queued GPU
+   * releases follow its scene pass (as the journey's arrival). Returns what is left to prepare (null: nothing; the caller tells the
+   * player: real counts, never fake-ready).
+   */
+  continueCrossingPreparation(): {left: number; total: number} | null {
+    let job = this.journeyCompile;
+    if (!job?.running && this.crossingView && this.crossingView.end !== 'ready' && this.world && !this.gpu?.deviceLost) {
+      void this.backgroundCompile(); // (a new job, synchronously created; its arrival gate is its own business)
+      job = this.journeyCompile;
+    }
+    if (!job?.running) { this.flushRetired(); return null; }
+    job.pace(null);
+    const t0 = performance.now(), j = job;
+    void Promise.race([j.sceneDone, new Promise(r => setTimeout(r, 8000))]).then(() => this.flushRetired());
+    void j.done.then(() => { const r = firstViewRest(j.stats); console.info(`Terminal State: crossing compile (the rest, in play) ${j.stats.phase} — ${r.total - r.left}/${r.total} prepared, ${((performance.now() - t0) / 1000).toFixed(1)} s after the exit opened`); });
+    const rest = firstViewRest(j.stats);
+    if (this.crossingView) this.crossingView.rest = rest;
+    return rest.left > 0 ? rest : null;
+  }
+
+  /**
+   * (lane READY; QA / tests) The last crossing's first-view preparation: how it ended, its time (ms; active ms since the bound's start),
+   * the warm-up mode, the first view's plan, the tries, the job's live stats and what was left when the exit opened. Null: none yet.
+   */
+  crossingView: {end: string; why: string; ms: number; activeMs: number; mode: string; plan: FirstViewPlan['stats']; tries: number; job: JourneyCompile['stats']; rest: {left: number; total: number} | null} | null = null;
+
+  /** (QA / tests) How the last lift ride's first-view wait ended (the lift's crossingView; null: none yet). */
+  get surfaceLiftCompile(): Game['crossingView'] { return this.liftCrossingView; }
+  private liftCrossingView: Game['crossingView'] = null;
 
   /** Lane RENDER-CPU: the journey's background preparation of the next station (render/journeyCompile.ts; QA / tests). */
   get journeyCompileStats(): JourneyCompile['stats'] | null {
@@ -2844,8 +2919,9 @@ export class Game {
    * destination is generated at the press (the one synchronous block, measured: surfaceLiftGenMs); the doors close with the player held in
    * the car; the participants depart (the old world intact); the transit gap: the old world is left (the car's view kept, drawn), the
    * destination prepared, its end's view placed with the car where it was in the shaft, the destination built PACED (frames drawn), the
-   * participants arrive, the destination compiled COMPLETELY (backgroundCompile(true): the scene pass in its render context, the shadow
-   * variants, the hidden groups, the runtime variants; no cap); only then the doors open (in a playing frame: paused, they wait). A
+   * participants arrive, the exit's FIRST VIEW prepared — compiled and drawn off-screen in the scene pass's render context, bounded
+   * (prepareCrossingView, lane READY) — and only then the doors open (in a playing frame: paused, they wait); the rest of the destination
+   * (the scene pass, the shadow variants, the hidden groups, the runtime variants) is prepared on in play pacing, reported. A
    * failure before the old world was left reopens the doors; after, the ride is reset and the left section rebuilt (recoverSurfaceCrossing,
    * behind the loading screen; the error screen if that fails too). Null: the destination has no lift (the caller crosses by loading screen).
    */
@@ -2892,26 +2968,26 @@ export class Game {
       departed = [];
       this.surfaceCrossing.phase = 'warmup';
       this.glassMirror?.prime();
-      // (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01) the compile, bounded like the loading screen's warm-up
-      // (LIFT_RIDE_WAIT); a job that ended early on a live device (replaced under the ride, a failed step) once more within the same
-      // budget. Only a lost device ends the ride here (nothing can draw: the error screen). Otherwise the doors open on the built, live
-      // destination — never before it is built — and what is left compiles in play pacing, reported.
-      this.surfaceLiftCompile = null;
-      const since = this.frameBudget.activeMs;
-      let c = await this.backgroundCompile(true, since);
-      if (c === 'cancelled' && !this.gpu?.deviceLost && this.world) c = await this.backgroundCompile(true, since);
+      // (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01) bounded like the loading screen's warm-up (LIFT_RIDE_WAIT); a
+      // job that ended early on a live device (replaced under the ride, a failed step) once more within the same budget. Only a lost
+      // device ends the ride here (nothing can draw: the error screen). Otherwise the doors open on the built, live destination — never
+      // before it is built. (task studio-surface-host-ground-connectors-20261118-053602-01, lane READY) The doors wait for the FIRST VIEW
+      // from the car's gate (prepareCrossingView: drawn off-screen in the scene pass's context, not only compiled), not for the whole
+      // destination; what is left goes on in play pacing, reported with its real counts.
+      this.crossingView = null;
+      const since = this.frameBudget.activeMs, exit = R.exitPoint() ?? {x: this.player.x, y: this.player.eye, z: this.player.z, yaw: this.player.yaw};
+      let c = await this.prepareCrossingView(exit, since);
+      if (c.end === 'cancelled' && !this.gpu?.deviceLost && this.world) c = await this.prepareCrossingView(exit, since);
+      this.liftCrossingView = this.crossingView;
       if (this.gpu?.deviceLost) { R.reset(); this.transitGap = this.liftBuilt = false; return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'}; }
       this.transitGap = this.liftBuilt = false;
       this.settleRtScene();
-      const rest = c === 'partial' || c === 'cancelled';
-      const lc = this.surfaceLiftCompile as Game['surfaceLiftCompile']; // (set by backgroundCompile: TypeScript keeps the null above)
-      if (rest) console.warn(`Terminal State: the lift opens with the graphics preparation incomplete (${c}${lc?.why ? `: ${lc.why}` : ''}); the rest compiles in play`);
+      if (c.end !== 'ready') console.warn(`Terminal State: the lift opens with its first view incomplete (${c.end}${c.why ? `: ${c.why}` : ''}); the rest is prepared in play`);
       if (!(await R.markReady())) return {ok: false, reason: 'cancelled', error: 'The ride was interrupted.'};
-      // the left section's queued releases (its programs are re-used by now; with work left, once the play-paced job has had its scene pass)
-      if (rest) void this.backgroundCompile(false).then(() => this.flushRetired()); // (the journey's play pacing: compiled items are cache hits)
-      else this.flushRetired();
+      const rest = this.continueCrossingPreparation(); // (the rest in play pacing; the left section's queued releases after its scene pass)
       this.hud.toast(up ? `${layout.surface?.name ?? 'The street'} — street level` : `${station} — back underground`);
-      if (rest) this.hud.toast('Graphics are still being prepared — brief stutters are possible.', true);
+      if (c.end !== 'ready') this.hud.toast(`Graphics are still being prepared — brief stutters are possible${rest ? ` (${rest.left} of ${rest.total} left)` : ''}.`, true);
+      else if (rest) this.hud.toast(`Still preparing the rest of the area in the background (${rest.left} of ${rest.total} left).`);
       if (failed.length) this.hud.toast(`Something you carried did not come with you (${failed.join(', ')})`, true);
       this.surfaceCrossCounts.done++;
       return {ok: true, to};
@@ -2939,15 +3015,14 @@ export class Game {
 
   /**
    * (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01) The held rider's status line while the car waits for the
-   * destination: what is actually happening (the destination being generated / built; then the compile's real share of its items done).
+   * destination: what is actually happening (the destination being generated / built; then — lane READY — its first view's real units
+   * done of all: representatives compiled, renderables drawn, casters, the real-view frame; render/firstView.ts firstViewStatus).
    */
   private liftStatusText(up: boolean, where: string): string {
     const go = up ? 'Going up' : 'Going down';
     if (this.transitGap && !this.liftBuilt) return `${go} — preparing ${where}…`;
     const st = this.journeyCompile?.stats;
-    if (!this.transitGap || !st || (st.phase !== 'scene' && st.phase !== 'shadow')) return '';
-    const total = st.sceneItems + st.casters + st.twoPass, done = st.sceneDone + st.shadowDone + st.twoPassDone;
-    return `${go} — preparing graphics ${Math.min(99, Math.floor((100 * done) / Math.max(1, total)))} %`;
+    return this.transitGap && st ? firstViewStatus(go, st) ?? '' : '';
   }
 
   /**
