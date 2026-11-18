@@ -895,3 +895,7 @@ Original tileable surface textures generated for this project with Codex native 
 - `assets/textures/subway/arch/subway-arch-ceiling-plaster-{color,normal,orm}.jpg` — painted cement-render ceiling soffit, off-white (Codex call 3)
 - `assets/textures/subway/arch/subway-arch-rock-painted-{color,normal,orm}.jpg` — off-white painted shotcrete over blasted rock (tinted at runtime) (Codex call 8)
 <!-- END subway-arch-20261117 -->
+
+### Spray paint
+
+The spray can uses the user-supplied model. The runtime derivative shares its geometry across seven enamel finishes. The original stays in private storage. See `assets/derivatives/spray-can.json`. No additional rights or licensing clearance are asserted.

@@ -1,3 +1,4 @@
+import {isSprayCan, fillText} from '../items/sprayPaint';
 // Task studio-ui-subway-maps-20261108-074144-01: the tooltip content of an item stack (ui/tooltip.ts), shared by every item grid — the
 // inventory, a grounded backpack, the train's Lockbox and the car trunk — and available to any other item view (the market's trade
 // panel). Heading = the item's name (×count for a stack); lines = what this particular stack is: rounds loaded and caliber, what a
@@ -79,7 +80,8 @@ export function itemTipLines(st: ItemStack, o: {inv?: Inventory} = {}): string[]
     if (stats) out.push(stats);
     if (st.bag) out.push(`${st.bag.filter(Boolean).length} of ${st.bag.length} slots used inside`);
   }
-  if (def.kind === 'supply') out.push(supplyText(def.id));
+  if (isSprayCan(def.id)) out.push(fillText(st.paint), def.description);
+  else if (def.kind === 'supply') out.push(supplyText(def.id));
   if (def.kind === 'material') out.push(materialNote(def.id)); // (task train-crafting, lane BENCH: per material — the bench's two, or no recipe yet)
   if (def.kind === 'part') out.push('Reactor restart part — take it to its control and press E there');
   if (def.kind === 'currency') out.push(CURRENCY_NOTE);

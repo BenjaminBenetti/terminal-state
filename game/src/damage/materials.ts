@@ -1,3 +1,4 @@
+import {isSprayCan} from '../items/sprayPaint';
 // Damage / destructibility material registry (iteration 06, Lane D). Pure data + lookups, no three.js:
 // every bullet-hittable thing in a station maps to ONE damage class here — structural grid surfaces
 // (walls / floors / ceilings / ledge faces / track bed), procedural prop parts (shape-material keys),
@@ -305,6 +306,7 @@ export const ITEM_CLASS: Record<string, DamageClass> = {
   ...GOLF_CLASS, // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): a steel-shafted putter; a hard plastic golf ball
 };
 export function itemClass(itemId: string): DamageClass {
+  if (isSprayCan(itemId)) return 'sheetMetal';
   return ITEM_CLASS[itemId] ?? 'plastic';
 }
 
@@ -406,6 +408,7 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   ...GOLF_PHYSICS, // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): a ~0.5 kg putter (box); the 45.9 g golf ball (a SPHERE, physics/golfBall.ts)
 };
 export function itemPhysics(itemId: string): ItemPhysics {
+  if (isSprayCan(itemId)) return {mass: .38, shape: 'cylinder', mat: 'metal'};
   return ITEM_PHYSICS[itemId] ?? {mass: 0.3, shape: 'box', mat: 'plastic'};
 }
 
