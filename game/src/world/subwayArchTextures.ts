@@ -64,14 +64,22 @@ export interface SubwayArchLook {
   metalness?: number;
   /** thinTrim: anisotropy-1 clones of the maps (small relief / thin parts). */
   thin?: boolean;
+  /**
+   * Chroma of the light-bake albedo (userData.lightAlbedo: what the enhanced bounce, the reflection probes and the traced flashlight take
+   * the finish to be) against the drawn colour, its luminance kept (world/subwayFinish.ts CAVERN_BOUNCE_CHROMA). Default 1: as drawn.
+   */
+  bounceChroma?: number;
 }
 
 const cache = new WeakMap<WorldMaterials, Map<string, SurfaceNodeMaterial>>();
 
-/** The linear light-bake albedo of a finish: the set's mean x tint, capped. */
-export function subwayArchAlbedo(key: SubwayArchTexKey, tint?: readonly [number, number, number]): [number, number, number] {
+/** The linear light-bake albedo of a finish: the set's mean x tint, capped (`chroma` < 1: its colour pulled toward its own luminance). */
+export function subwayArchAlbedo(key: SubwayArchTexKey, tint?: readonly [number, number, number], chroma = 1): [number, number, number] {
   const m = SUBWAY_ARCH_TEXTURES[key].mean, t = tint ?? [1, 1, 1];
-  return [0, 1, 2].map(i => Math.min(LIGHT_ALBEDO_MAX, m[i] * t[i])) as [number, number, number];
+  const a = [0, 1, 2].map(i => Math.min(LIGHT_ALBEDO_MAX, m[i] * t[i])) as [number, number, number];
+  if (chroma === 1) return a;
+  const l = 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
+  return a.map(v => Math.min(LIGHT_ALBEDO_MAX, Math.max(0, l + (v - l) * chroma))) as [number, number, number];
 }
 
 /**
@@ -101,7 +109,7 @@ export function subwayArchMaterial(mats: WorldMaterials, key: SubwayArchTexKey, 
   m.name = name;
   m.userData.subwayArchTex = key;
   m.userData.subwayArchSource = color?.uuid ?? null; // (a uuid, not the texture: Material.copy JSON-clones userData)
-  m.userData.lightAlbedo = subwayArchAlbedo(key, tint);
+  m.userData.lightAlbedo = subwayArchAlbedo(key, tint, look.bounceChroma);
   worldMapped(m, {span: [set.span[0], set.span[1]], grime: look.grime, macro: look.macro});
   if (look.decay) applyDecay(m, look.decay);
   tagReflect(m, look.reflect);

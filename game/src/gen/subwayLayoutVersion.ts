@@ -13,6 +13,10 @@
 //    family / identity rolls are version 2's (a seed keeps its family and theme); every other family and the classic share are version 2's
 //    layouts exactly. A recorded version 2 stays version 2 (its hall lights follow the architectural light plan, gen/subwayHallLights.ts,
 //    like every plan-family station's: lights are regenerated, never saved).
+//  - version 4 (task studio-subway-vertical-layout-20261118-022131-01) = version 3 with a per-seed CIRCULATION PLAN on its own salt
+//    (gen/subwayCirculation.ts): compact (exactly version 3's layout), a double-height gallery hall with an overlook gallery, open stair
+//    bank and gallery bridge, a pedestrian subway beneath the platforms at their far end, or both. The family / identity rolls are
+//    version 3's. A recorded version 3 (or older) stays that version.
 // Like SectionGenContext.rosterVersion / surfaceVersion, an ABSENT version on a direct generator call (generateStation / LEVELS.subway.generate
 // without ctx.layoutVersion) is version 1: every pinned Subway fingerprint and census was taken with it, and the game always passes the
 // station's version explicitly (Game.sectionGenInputs).
@@ -20,13 +24,16 @@
 export const SUBWAY_LAYOUT_LANE = 'subway.layout';
 /**
  * 1 = the six classic archetypes only (every Subway station before the plan families); 2 = the plan families + station identities;
- * 3 = version 2 with the sectioned grand hall (task studio-subway-architecture-materials-rework-20261117-072826-01).
+ * 3 = version 2 with the sectioned grand hall (task studio-subway-architecture-materials-rework-20261117-072826-01); 4 = version 3 with
+ * the circulation plans (task studio-subway-vertical-layout-20261118-022131-01).
  */
-export const SUBWAY_LAYOUT_VERSION = 3;
+export const SUBWAY_LAYOUT_VERSION = 4;
 /** The first version with the plan-family roll. */
 export const SUBWAY_PLANS_MIN_VERSION = 2;
 /** The first version whose grand-hall family builds the sectioned great hall (gen/stationHallV3.ts). */
 export const SUBWAY_HALL_V3_MIN_VERSION = 3;
+/** The first version with the circulation plans (gen/subwayCirculation.ts). */
+export const SUBWAY_CIRCULATION_MIN_VERSION = 4;
 
 /** The layout version a Subway station regenerates with, from its section memory (undefined = never touched). */
 export function subwayLayoutVersionFor(mem: {visits: number; lanes: Record<string, unknown>} | undefined): number {
