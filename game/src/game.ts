@@ -284,7 +284,7 @@ import {RtFlashlight} from './render/rt/rtFlashlightRuntime';
 import {RtScene} from './render/rt/rtScene';
 import {shareShaderText} from './render/shaderTextShare'; // task studio-graphics-gpu-materials-toggle-20261114-212239-01
 import {JourneyCompile, type JourneyCompileOptions} from './render/journeyCompile'; // (lane RENDER-CPU: the journey's sliced preparation)
-import {FIRST_VIEW, firstViewProgress, firstViewRest, firstViewStatus, planFirstView, waitForFirstView, type CrossingExit, type CrossingViewResult, type FirstViewPlan} from './render/firstView'; // (lane READY: a crossing's exit opens on its drawn first view)
+import {FIRST_VIEW, firstViewProgress, firstViewRest, firstViewStatus, inFrameStep, planFirstViewSteps, waitForFirstView, type CrossingExit, type CrossingViewResult, type FirstViewPlan} from './render/firstView'; // (lane READY: a crossing's exit opens on its drawn first view)
 import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
 import {loadingPlaceName, type LastSaveStatus} from './ui/loadingScreen'; // task studio-beta-campaign-polish-20261103-063841-01 (lane MENU): loading name only; Load last save
 import type {LoadMeter} from './ui/loadingMap'; // task studio-initial-loading-subway-graphic-20261111-070741-01: the loading screen's map takes the load's progress
@@ -2595,39 +2595,59 @@ export class Game {
     const mode = warmupMode(location.search, this.softwareGl?.software === true);
     if (mode === 'off') return {end: 'partial', why: 'graphics warm-up off (?warmup=off)'};
     this.journeyCompile?.cancel();
-    this.refreshRuntimeVariants(mode); // (the destination's play-only variants join the job, as the journey's)
-    const t0 = performance.now(), tries = (this.crossingView?.tries ?? 0) + 1;
+    this.journeyCompile = null; // (the status line says "preparing the view" until this crossing's job exists — never an old job's counts)
+    const t0 = performance.now(), tries = (this.crossingView?.tries ?? 0) + 1, world = this.world;
+    // each planning phase in a frame of its own (measured on the Subway lift ride in Node: one 2.4 s frame when planned in one go)
+    const prep = {steps: 0, ms: 0, maxMs: 0};
+    const step = <T>(fn: () => T): Promise<T> => inFrameStep(this.frameBudget, 'crossing.plan', () => {
+      if (this.world !== world) throw new Error('the world changed');
+      const s = performance.now();
+      try { return fn(); } finally { const ms = performance.now() - s; prep.steps++; prep.ms += ms; if (ms > prep.maxMs) prep.maxMs = ms; }
+    });
     try {
-      const target = this.atmosphereBypass ? null : this.atmosphere.warmTarget(this.scene, this.camera);
-      const depth = this.sceneDepth(false), at = new THREE.Vector3(exit.x, exit.y, exit.z), culler = this.world.culler;
-      const plan = planWarmup(this.scene, {mode, cameraMask: this.camera.layers.mask, pools: this.warmRegistry.poolRoots(), near: mode === 'view' ? {center: at, radius: FIRST_VIEW.radius} : undefined});
+      const at = new THREE.Vector3(exit.x, exit.y, exit.z), culler = world.culler;
+      let target: unknown = null;
+      const plan = await step(() => {
+        target = this.atmosphereBypass ? null : this.atmosphere.warmTarget(this.scene, this.camera);
+        this.refreshRuntimeVariants(mode); // (the destination's play-only variants join the job, as the journey's)
+        this.containers?.showFrom(at); // (the loot the exit's first frame shows — hidden until a play refresh — is in its first view)
+        return planWarmup(this.scene, {mode, cameraMask: this.camera.layers.mask, pools: this.warmRegistry.poolRoots(), near: mode === 'view' ? {center: at, radius: FIRST_VIEW.radius} : undefined});
+      });
       const shadows = !!target && this.flashlight.castShadow;
-      const fv = planFirstView(this.scene, {exit, cameraMask: this.camera.layers.mask, camera: this.camera, casters: shadows,
+      const g = planFirstViewSteps(this.scene, {exit, cameraMask: this.camera.layers.mask, camera: this.camera, casters: shadows,
         sweep: {update: cam => culler.update(cam, true), restore: () => culler.update(this.camera, true)}});
-      const sphere = new THREE.Sphere(), box = new THREE.Box3();
-      const dist = (o: THREE.Object3D) => { box.setFromObject(o); if (box.isEmpty()) return Infinity; box.getBoundingSphere(sphere); return Math.max(0, sphere.center.distanceTo(at) - sphere.radius); };
-      const byNear = <T extends {object: THREE.Object3D}>(l: readonly T[]) => l.map(i => ({i, d: dist(i.object)})).sort((a, b) => a.d - b.d).map(x => x.i);
-      // the scene lane: the first view's representatives first, then the job's plan (as the journey's) without them
-      const lead = new Set<THREE.Object3D>(fv.reps.map(i => i.object)), leadCasters = new Set<THREE.Object3D>(fv.casters.map(i => i.object));
-      const items = [...fv.reps, ...[...byNear(plan.items), ...(mode === 'full' ? byNear(plan.others) : [])].filter(i => !lead.has(i.object))];
-      const others = mode === 'full' && shadows ? runtimeVariantsFirst(byNear([...plan.items, ...plan.others].filter(i => i.caster))).filter(i => !leadCasters.has(i.object)) : [];
-      const receiver = plan.items.find(i => i.object.receiveShadow && !i.flips.length) ?? null;
-      const job = (this.journeyCompile = new JourneyCompile({renderer: this.renderer as unknown as JourneyCompileOptions['renderer'], scheduler: this.frameBudget,
-        scene: this.scene, camera: this.camera, target, depth, items, casters: [...fv.casters, ...others], receiver, frameNo: () => this.frameBudget.frame, ...LIFT_RIDE_COMPILE,
-        firstView: {items: [...fv.reps, ...fv.others], reps: fv.reps.length, casters: fv.casters.length}}).start());
-      this.crossingView = {end: 'pending', why: '', ms: 0, activeMs: 0, mode, plan: fv.stats, tries, job: job.stats, rest: null};
+      let fv: FirstViewPlan | null = null;
+      while (!fv) { const r = await step(() => g.next()); if (r.done) fv = r.value; }
+      const v = fv;
+      const job = await step(() => {
+        const depth = this.sceneDepth(false);
+        const sphere = new THREE.Sphere(), box = new THREE.Box3();
+        const dist = (o: THREE.Object3D) => { box.setFromObject(o); if (box.isEmpty()) return Infinity; box.getBoundingSphere(sphere); return Math.max(0, sphere.center.distanceTo(at) - sphere.radius); };
+        const byNear = <T extends {object: THREE.Object3D}>(l: readonly T[]) => l.map(i => ({i, d: dist(i.object)})).sort((a, b) => a.d - b.d).map(x => x.i);
+        // the scene lane: the first view's representatives first, then the job's plan (as the journey's) without them
+        const lead = new Set<THREE.Object3D>(v.reps.map(i => i.object)), leadCasters = new Set<THREE.Object3D>(v.casters.map(i => i.object));
+        const items = [...v.reps, ...[...byNear(plan.items), ...(mode === 'full' ? byNear(plan.others) : [])].filter(i => !lead.has(i.object))];
+        const others = mode === 'full' && shadows ? runtimeVariantsFirst(byNear([...plan.items, ...plan.others].filter(i => i.caster))).filter(i => !leadCasters.has(i.object)) : [];
+        const receiver = plan.items.find(i => i.object.receiveShadow && !i.flips.length) ?? null;
+        return (this.journeyCompile = new JourneyCompile({renderer: this.renderer as unknown as JourneyCompileOptions['renderer'], scheduler: this.frameBudget,
+          scene: this.scene, camera: this.camera, target, depth, items, casters: [...v.casters, ...others], receiver, frameNo: () => this.frameBudget.frame, ...LIFT_RIDE_COMPILE,
+          firstView: {items: [...v.reps, ...v.others], reps: v.reps.length, casters: v.casters.length}}).start());
+      });
+      this.crossingView = {end: 'pending', why: '', ms: 0, activeMs: 0, mode, plan: v.stats, prep, tries, job: job.stats, rest: null};
       const w = await waitForFirstView(job, () => this.frameBudget.activeMs, since, LIFT_RIDE_WAIT);
       const st = job.stats, p = firstViewProgress(st);
       Object.assign(this.crossingView, {end: w.end, why: w.why, ms: performance.now() - t0, activeMs: this.frameBudget.activeMs - since});
       console.info(`Terminal State: crossing first view ${w.end}${w.why ? ` (${w.why})` : ''} — ${p.done}/${p.total}: ${st.viewRepsCompiled}/${st.viewReps} representatives compiled, `
         + `${st.viewDone}/${st.viewItems} drawn in ${st.viewDraws} off-screen draws (max ${st.viewMaxPerDraw}, ${st.viewDrawMaxMs.toFixed(1)} ms), casters ${Math.min(st.shadowDone, st.viewCasters)}/${st.viewCasters}, `
-        + `real-view frame ${st.viewFrame ? `${st.viewFrameMs.toFixed(1)} ms` : 'no'} · plan ${fv.stats.ms.toFixed(1)} ms (sweep ${fv.stats.poses} poses ${fv.stats.sweepMs.toFixed(1)} ms) · ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+        + `real-view frame ${st.viewFrame ? `${st.viewFrameMs.toFixed(1)} ms` : 'no'} · planned in ${prep.steps} frame steps, ${prep.ms.toFixed(1)} ms (max ${prep.maxMs.toFixed(1)}; the first view's ${v.stats.ms.toFixed(1)}, `
+        + `sweep ${v.stats.poses} poses ${v.stats.sweepMs.toFixed(1)} ms) · ${((performance.now() - t0) / 1000).toFixed(1)} s`);
       if (w.end === 'partial' && w.why === 'stalled') job.cancel(); // (no progress at all: continueCrossingPreparation starts a fresh play-paced job)
       else if (job.running) job.pace(null); // (from here on the journey's play pacing: the exit is about to open)
       return w;
     } catch (err) {
+      (this.journeyCompile as JourneyCompile | null)?.cancel(); // (set in a step: TS cannot see it)
+      if (this.world !== world) return {end: 'cancelled', why: 'the world changed'};
       console.warn('crossing: preparing the first view failed', err);
-      this.journeyCompile?.cancel();
       return {end: 'cancelled', why: 'error'};
     }
   }
@@ -2658,7 +2678,7 @@ export class Game {
    * (lane READY; QA / tests) The last crossing's first-view preparation: how it ended, its time (ms; active ms since the bound's start),
    * the warm-up mode, the first view's plan, the tries, the job's live stats and what was left when the exit opened. Null: none yet.
    */
-  crossingView: {end: string; why: string; ms: number; activeMs: number; mode: string; plan: FirstViewPlan['stats']; tries: number; job: JourneyCompile['stats']; rest: {left: number; total: number} | null} | null = null;
+  crossingView: {end: string; why: string; ms: number; activeMs: number; mode: string; plan: FirstViewPlan['stats']; prep: {steps: number; ms: number; maxMs: number}; tries: number; job: JourneyCompile['stats']; rest: {left: number; total: number} | null} | null = null;
 
   /** (QA / tests) How the last lift ride's first-view wait ended (the lift's crossingView; null: none yet). */
   get surfaceLiftCompile(): Game['crossingView'] { return this.liftCrossingView; }
@@ -3190,8 +3210,7 @@ export class Game {
    */
   private connectorStatusText(where: string): string {
     if (this.transitGap && !this.liftBuilt) return `The passage — preparing ${where}…`;
-    const st = this.journeyCompile?.stats;
-    return this.transitGap && st ? firstViewStatus('The passage', st) ?? '' : '';
+    return this.transitGap ? firstViewStatus('The passage', this.journeyCompile?.stats ?? null) ?? '' : '';
   }
 
   /**
@@ -3202,8 +3221,7 @@ export class Game {
   private liftStatusText(up: boolean, where: string): string {
     const go = up ? 'Going up' : 'Going down';
     if (this.transitGap && !this.liftBuilt) return `${go} — preparing ${where}…`;
-    const st = this.journeyCompile?.stats;
-    return this.transitGap && st ? firstViewStatus(go, st) ?? '' : '';
+    return this.transitGap ? firstViewStatus(go, this.journeyCompile?.stats ?? null) ?? '' : '';
   }
 
   /**
