@@ -115,7 +115,7 @@ function buildOutdoorMap(s: SurfaceInfo, g: {w: number; h: number; cells: ArrayL
   // (task studio-surface-host-ground-connectors-20261118-053602-01) an Office / Mall connector tube's clear width is indoors to its crown:
   // the walk from the host's door to the tent never reads outdoor gas (the one field exposure and the fog march read); its canvas ring
   // beside it stays an outdoor column (the green air hugs the tube from outside; nothing walks there: SOLID)
-  const con = s.portal.connector;
+  const con = s.portal?.connector; // (hand-built districts in tests may have no portal)
   if (con) for (const {i, role} of connectorCells(con, W, H)) if (role === 'clear') { top[i] = Math.max(top[i], byte(con.y + CONNECTOR.crownH)); mark[i] = 1; }
   const outdoor = new Set(s.outdoorAreas);
   const tentArea = s.checkpoint.tent.area;
