@@ -150,7 +150,7 @@ export class MarketWares {
     this.counters = this.stalls.flatMap(s => counterBoxes(layout, s));
     if (!stock) return;
     this.stock = stock;
-    for (const stall of m.stalls) {
+    for (const stall of m.paintShop ? [...m.stalls, m.paintShop] : m.stalls) {
       if (!isMarketStallId(stall.id)) continue; // (the six; layout version 3: + the bar — task studio-market-bar-20261108-225231-01)
       const list = stock.stalls[stall.id] ?? [];
       const pk = planStall(list, stallSurfaces(layout, stall), id => this.dimsOf(id));

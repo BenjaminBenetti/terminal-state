@@ -1,3 +1,4 @@
+import {isSprayCan} from '../../items/sprayPaint';
 // Task studio-survivor-market-20261108-005807-01 (lane TRADE): THE SIX STALLS' TRADE RULES — what each stall deals in, the one price rule
 // and every refusal, on top of the shared value model (market/trade/value.ts). Pure.
 //
@@ -26,7 +27,7 @@
 import {ITEMS, type ItemDef} from '../../items/items';
 import {econCat} from '../../items/lootTables';
 import {FUEL} from '../../fuel/fuel';
-import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL, type MarketStallId} from '../../gen/market/marketTypes';
+import {BAR_STALL, MARKET_STALLS, TRADE_STALL_IDS, type MarketStallId} from '../../gen/market/marketTypes';
 import {isBeer} from '../../items/beers';
 import type {ItemStack} from '../../items/inventory';
 import {CENTS, GAS_FILTER_ID, stackUnitCents} from './value';
@@ -65,6 +66,7 @@ export const STALL_TRADE: Readonly<Record<MarketStallId, StallTrade>> = {
   scrap: {id: 'scrap', label: 'Scrapyard', line: 'salvage and crafting materials', broadPct: 35, deals: d => d.kind === 'material'},
   // task studio-market-bar-20261108-225231-01 (lane BAR): the upper-level bar's bartender (layout version 3) — the market's beers (items/beers.ts:
   // the bar's own stock) and ordinary drinks; anything else at the specialists' off-line multiple
+  paint: {id: 'paint', label: 'Colour Works', line: 'spray paint', broadPct: TRADE_RATES.offPct, deals: d => isSprayCan(d.id)},
   bar: {id: 'bar', label: 'Bartender', line: 'beers and drinks', broadPct: TRADE_RATES.offPct, deals: d => isBeer(d.id) || isEcon(d, 'drink')},
 };
 
@@ -118,7 +120,7 @@ export function betterStall(stall: MarketStallId, stack: Pick<ItemStack, 'itemId
   names?: Partial<Record<MarketStallId, string>>): {stall: MarketStallId; name: string; price: number} | null {
   const here = sellQuote(stall, stack, count);
   let best: {stall: MarketStallId; name: string; price: number} | null = null;
-  for (const s of names ? MARKET_STALLS_ALL.filter(q => q !== BAR_STALL || names[q] !== undefined) : MARKET_STALLS) {
+  for (const s of names ? TRADE_STALL_IDS.filter(q => (q !== BAR_STALL && q !== 'paint') || names[q] !== undefined) : MARKET_STALLS) {
     if (s === stall) continue;
     const q = sellQuote(s, stack, count);
     if (q.ok && q.price > (here.ok ? here.price : 0) && (!best || q.price > best.price)) best = {stall: s, name: signOf(s, names), price: q.price};

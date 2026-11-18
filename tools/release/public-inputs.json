@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 100373,
-      "sha256": "f8ac52c8e774ece22103ab6f0df04d4427223fa87979a7c4f76f2bac8566e9d3"
+      "bytes": 100646,
+      "sha256": "d87931917479c3ee1d19769b0cd692203a187fef6fd923bab5bb0bc751061b0d"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -3054,6 +3054,11 @@
       "sha256": "50abde035753fad48aab8779a12817435178c1a5d720eecf4105c22a4d3dbdf9"
     },
     {
+      "path": "assets/derivatives/spray-can.json",
+      "bytes": 706,
+      "sha256": "bc16bfac7f964dbcdf2a9c37314590d8e369fee97c1b784772805dad19b4687f"
+    },
+    {
       "path": "assets/derivatives/subway-arch-band-bottle.json",
       "bytes": 5911,
       "sha256": "4224a1770b9f17f8e04e173da9dee8961dd02a34f3def9778192660c1331d06d"
@@ -5622,6 +5627,11 @@
       "path": "assets/models/skyways-wreck-suv.glb",
       "bytes": 1102820,
       "sha256": "18cbef07e1a9d3265c16bae4cc600d197cb17d85b1a942d11e0891e83097417b"
+    },
+    {
+      "path": "assets/models/spray-can.glb",
+      "bytes": 29084,
+      "sha256": "3483c6ed54bb0beb1f6bd33b9fc2cd067d379568bb89ab18bf00200529f2bde3"
     },
     {
       "path": "assets/models/stall-t25.glb",

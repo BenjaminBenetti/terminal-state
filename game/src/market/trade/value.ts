@@ -1,3 +1,4 @@
+import {isSprayCan, CAN_FILL, fillText, paintLeft} from '../../items/sprayPaint';
 // Task studio-survivor-market-20261108-005807-01 (lane TRADE): THE VALUE MODEL — one shared helper that prices every item from the
 // AUTHORITATIVE item data (no per-trader catalogue): a new item / weapon / gear piece is priced by the same rules the day it is added.
 //
@@ -143,6 +144,7 @@ const stackRule = (d: ItemDef) => VALUE.stackTies[d.kind as Exclude<ItemKind, 'p
 export function baseCents(itemId: string): number {
   const d = ITEMS[itemId];
   if (!d || !isTradeable(itemId)) return 0;
+  if (isSprayCan(itemId)) return CENTS;
   let ties: number;
   if (Object.prototype.hasOwnProperty.call(VALUE.fixed, d.id)) return toCents(VALUE.fixed[d.id]); // (task flamethrower-fire) the flamethrower, its tank empty
   if (d.kind === 'weapon' && d.weaponId && WEAPONS[d.weaponId]) ties = VALUE.weapon.base + dps(WEAPONS[d.weaponId]) * VALUE.weapon.perDps;
@@ -179,10 +181,11 @@ export function tankFuelCents(units: number): number {
  * fitted filter charge (its share of a spare filter), + the air left, + a fuel tank's fuel (each unit its share of a fuel can); armor
  * wear takes its share of the armor value off. 0 = untradeable.
  */
-export function stackUnitCents(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter' | 'air' | 'armor' | 'fuel'>): number {
+export function stackUnitCents(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter' | 'air' | 'armor' | 'fuel' | 'paint'>): number {
   const d = ITEMS[stack.itemId];
   const base = baseCents(stack.itemId);
   if (!d || !base) return 0;
+  if (isSprayCan(d.id)) return base + Math.round(5 * CENTS * paintLeft(stack.paint) / CAN_FILL);
   let cents = base;
   if (d.kind === 'weapon' && d.weaponId) {
     const w = WEAPONS[d.weaponId];
@@ -206,7 +209,7 @@ export function stackUnitCents(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter
 }
 
 /** The value of `count` units of the stack (default: all of it), in cents. */
-export function stackCents(stack: Pick<ItemStack, 'itemId' | 'count' | 'mag' | 'filter' | 'air' | 'armor' | 'fuel'>, count = stack.count): number {
+export function stackCents(stack: Pick<ItemStack, 'itemId' | 'count' | 'mag' | 'filter' | 'air' | 'armor' | 'fuel' | 'paint'>, count = stack.count): number {
   return Math.max(0, Math.floor(count)) * stackUnitCents(stack);
 }
 
@@ -216,7 +219,7 @@ const pct = (x: number) => Math.ceil(Math.max(0, Math.min(1, x)) * 100 - 1e-9);
  * The condition a trade row names: "7 of 15 rounds loaded", "filter 54 % fitted", "air 52 % · 312 s", "armor 3 of 4 left", "fuel 1 of 3
  * cans"; '' = none.
  */
-export function conditionText(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter' | 'air' | 'armor' | 'bag' | 'fuel'>): string {
+export function conditionText(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter' | 'air' | 'armor' | 'bag' | 'fuel' | 'paint'>): string {
   const d = ITEMS[stack.itemId];
   if (!d) return '';
   const out: string[] = [];
@@ -224,6 +227,7 @@ export function conditionText(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter'
   if (w && w.caliber) out.push(`${stack.mag ?? 0} of ${w.magazine} ${CALIBERS[w.caliber].unit[1]} loaded`);
   if (isFilterMask(d.id)) out.push((stack.filter ?? 0) > 0 ? `filter ${pct((stack.filter ?? 0) / gearSpec(d.id)!.filterLife!)} % fitted` : 'no filter charge');
   if (isAirtank(d.id)) out.push((stack.air ?? 0) > 0 ? `air ${pct((stack.air ?? 0) / gearSpec(d.id)!.airLife!)} % · ${Math.ceil(stack.air ?? 0)} s left` : 'air empty');
+  if (isSprayCan(d.id)) out.push(fillText(stack.paint));
   if (isFuelTank(d.id)) out.push(tankFuel(stack) > 0 ? `fuel ${fuelCansText(tankFuel(stack))} of ${FLAME_FUEL.capacityCans} cans` : 'fuel empty'); // task flamethrower-fire
   const arm = armorState(stack);
   if (arm && arm.left < arm.full) out.push(`armor worn: ${pct(arm.left / arm.full)} % left`);

@@ -1,3 +1,4 @@
+import {isSprayCan, paintLeft} from '../items/sprayPaint';
 // Task train-lockbox-windows-20261101-232156 (lane BOX): the LOCKBOX — a LOCKBOX_SLOTS-slot store that belongs to the run's player train
 // (run/playerTrain.ts PlayerTrainRecord.lockbox), so it is the SAME container in every level (Subway / Office / Mall / Reactor).
 //
@@ -55,6 +56,7 @@ function stackFrom(j: unknown, inBag: boolean, seen: Set<number>): ItemStack | n
   if (isFilterMask(itemId) && Number.isFinite(o.filter)) s.filter = Math.max(0, Math.min(gearSpec(itemId)!.filterLife!, o.filter as number));
   if (isAirtank(itemId) && Number.isFinite(o.air)) s.air = Math.max(0, Math.min(gearSpec(itemId)!.airLife!, o.air as number)); // task filter-tension-airtank
   // task studio-flamethrower-fire-20261114-031614-01: a fuel tank's fuel stays with it (whole units, never above a full tank; absent = empty)
+  if (isSprayCan(itemId)) s.paint = paintLeft(o.paint as number | undefined);
   if (isFuelTank(itemId) && Number.isFinite(o.fuel)) s.fuel = Math.max(0, Math.min(gearSpec(itemId)!.fuelCap!, Math.floor(o.fuel as number)));
   const fullArmor = gearSpec(itemId)?.armor ?? 0; // task studio-general-armor-20261107-231448-01: worn armour stays worn in the Lockbox
   if (fullArmor > 0 && Number.isFinite(o.armor)) s.armor = Math.max(0, Math.min(fullArmor, o.armor as number));

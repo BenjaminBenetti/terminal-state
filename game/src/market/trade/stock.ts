@@ -1,3 +1,4 @@
+import {CAN_IDS} from '../../items/sprayPaint';
 // Task studio-survivor-market-20261108-005807-01 (lane TRADE): THE STALLS' STOCK — real, finite ItemStacks per market station.
 //
 // SEEDED ONCE: on the station's first build (market/trade/tradeSystem.ts), from the station's own seed + scope in a hashed RNG namespace
@@ -45,7 +46,7 @@ import {BOX_COUNT, GEAR_WEIGHTS, GLOBAL_POOL, LIMB_ECONOMY, type ItemRows, type 
 import {FUEL} from '../../fuel/fuel';
 import {stackToJSON, stacksIn, type ItemStack, type StackJSON} from '../../items/inventory';
 import {TrainLockbox} from '../../run/trainLockbox';
-import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL, type MarketShopId, type MarketStallId} from '../../gen/market/marketTypes';
+import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL, TRADE_STALL_IDS, type MarketShopId, type MarketStallId} from '../../gen/market/marketTypes';
 import {BEER_IDS, type BeerId} from '../../items/beers';
 import {GAS_FILTER_ID} from './value';
 import {isGolfEventItem} from '../../items/golfItems'; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY)
@@ -59,7 +60,7 @@ export const STOCK_MAX = 96;
  * `extras` (task studio-flamethrower-fire-20261114-031614-01): the additive lots the stock has received (STOCK_EXTRAS_VERSION); absent = a
  * record from before them.
  */
-export interface MarketStockJSON { v: 1; stalls: Record<typeof MARKET_STALLS[number], StackJSON[]> & {bar?: StackJSON[]}; extras?: number }
+export interface MarketStockJSON { v: 1; stalls: Record<typeof MARKET_STALLS[number], StackJSON[]> & {bar?: StackJSON[]; paint?: StackJSON[]}; extras?: number }
 
 /**
  * Task studio-flamethrower-fire-20261114-031614-01: the additive lots (see the header) — which stall stocks which bench / Market-only
@@ -125,6 +126,7 @@ const weaponRows = (): ItemRows => Object.values(ITEMS).filter(d => d.kind === '
 /** What one stall stocks (the draws of its own stream; counts before merging). */
 export function stallDraws(stall: MarketStallId, rng: Rng): Draw[] {
   switch (stall) {
+    case 'paint': return CAN_IDS.map(itemId => ({itemId, count: 1}));
     case 'gun': return [...lots(rng, weaponRows(), [1, 2], () => 1, true), ...lots(rng, GLOBAL_POOL.ammo, [4, 6], box(rng))];
     case 'medical': return lots(rng, [...GLOBAL_POOL.med, ...LIMB_ECONOMY.pool], [4, 6], small(rng, 2));
     case 'fuel': {
@@ -172,7 +174,7 @@ export function stockHasRoom(list: readonly ItemStack[], piece: ItemStack): bool
   return list.filter(s => s.itemId === piece.itemId && plain(s)).reduce((n, s) => n + d.stackMax - s.count, 0) >= piece.count;
 }
 
-const emptyStalls = (): Record<MarketStallId, ItemStack[]> => Object.fromEntries(MARKET_STALLS_ALL.map(s => [s, [] as ItemStack[]])) as Record<MarketStallId, ItemStack[]>;
+const emptyStalls = (): Record<MarketStallId, ItemStack[]> => Object.fromEntries(TRADE_STALL_IDS.map(s => [s, [] as ItemStack[]])) as Record<MarketStallId, ItemStack[]>;
 
 /** The RNG namespace of a stall's stock at one market station (scope = the station id; seed = its world seed). */
 export function stockRng(scope: string, seed: number, stall: MarketStallId): Rng {
@@ -186,6 +188,16 @@ export class MarketStock {
   version = 0;
   /** The additive lots this stock has received (STOCK_EXTRAS_VERSION; 0: a record remembered from before them — addExtras gives them once). */
   extras = 0;
+  private paintStocked = false;
+
+  /** Persist the empty list too: buying the last can never reopens the initial delivery. */
+  stockPaint(make: MakeStack, stalls: readonly MarketStallId[]): boolean {
+    if (!stalls.includes('paint') || this.paintStocked) return false;
+    for (const id of CAN_IDS) this.stalls.paint.push(make(id, 1));
+    this.paintStocked = true;
+    this.version++;
+    return true;
+  }
 
   /**
    * The station's first stock (deterministic contents per scope + seed; uids from `make`) for the stalls its layout places (`stalls`,
@@ -208,6 +220,7 @@ export class MarketStock {
       }
     }
     st.addExtras(make, stalls); // (after every seeded stack: the draws above and their uids are untouched)
+    st.stockPaint(make, stalls);
     return st;
   }
 
@@ -234,7 +247,8 @@ export class MarketStock {
     const src = j && typeof j === 'object' && (j as {stalls?: unknown}).stalls && typeof (j as {stalls: unknown}).stalls === 'object'
       ? (j as {stalls: Record<string, unknown>}).stalls : {};
     const seen = new Set<number>();
-    for (const stall of MARKET_STALLS_ALL) {
+    st.paintStocked = Array.isArray(src.paint);
+    for (const stall of TRADE_STALL_IDS) {
       const raw = Array.isArray(src[stall]) ? (src[stall] as unknown[]).slice(0, STOCK_MAX) : [];
       const box = new TrainLockbox(raw.length);
       box.load({v: 1, slots: raw});
@@ -254,6 +268,7 @@ export class MarketStock {
     const stalls = {} as MarketStockJSON['stalls'];
     for (const s of MARKET_STALLS) stalls[s] = this.stalls[s].map(x => stackToJSON(x)!);
     // (the bar only when it holds something: lossless — an absent bar loads empty — and a market without a bar writes the six as before)
+    if (this.paintStocked) stalls.paint = this.stalls.paint.map(s => stackToJSON(s)!);
     if (this.stalls[BAR_STALL].length) stalls[BAR_STALL] = this.stalls[BAR_STALL].map(x => stackToJSON(x)!);
     // (the additive lots' marker only once they were given: a record from before them is written back exactly as it was)
     return this.extras > 0 ? {v: 1, stalls, extras: this.extras} : {v: 1, stalls};
@@ -261,7 +276,7 @@ export class MarketStock {
 
   /** Every stock stack (all stalls). */
   all(): ItemStack[] {
-    return MARKET_STALLS_ALL.flatMap(s => this.stalls[s]);
+    return TRADE_STALL_IDS.flatMap(s => this.stalls[s]);
   }
 
   /** Highest uid held (bag contents included): the inventory's counter stays above it. */

@@ -14,9 +14,10 @@ export type MarketShopId = typeof MARKET_STALLS[number];
 export const BAR_STALL = 'bar' as const;
 /** Every stall id there is, in the fixed order (the six, then the bar). */
 export const MARKET_STALLS_ALL = [...MARKET_STALLS, BAR_STALL] as const;
-export type MarketStallId = typeof MARKET_STALLS_ALL[number];
+export const TRADE_STALL_IDS = [...MARKET_STALLS_ALL, 'paint'] as const;
+export type MarketStallId = typeof TRADE_STALL_IDS[number];
 /** Whether a value is a known stall id (any version). */
-export const isMarketStallId = (v: unknown): v is MarketStallId => (MARKET_STALLS_ALL as readonly unknown[]).includes(v);
+export const isMarketStallId = (v: unknown): v is MarketStallId => (TRADE_STALL_IDS as readonly unknown[]).includes(v);
 
 /** A storey-local point (world x / z, absolute floor height y, its layout storey). */
 export interface MarketPoint { x: number; z: number; y: number; level: number }
@@ -66,6 +67,7 @@ export interface MarketSpot extends MarketPoint {
 }
 
 export interface MarketLayout {
+  paintShop?: MarketStall;
   /**
    * 1: the first market (one salvaged shed, stall row); 2 (task studio-market-rework-20261108-074144-01): the dense container settlement.
    * A station keeps the version it was first built with (its geometry, ids and stock never reroll); unvisited markets build the newest.
