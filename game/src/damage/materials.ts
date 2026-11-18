@@ -1,4 +1,3 @@
-import {isSprayCan} from '../items/sprayPaint';
 // Damage / destructibility material registry (iteration 06, Lane D). Pure data + lookups, no three.js:
 // every bullet-hittable thing in a station maps to ONE damage class here — structural grid surfaces
 // (walls / floors / ceilings / ledge faces / track bed), procedural prop parts (shape-material keys),
@@ -17,6 +16,7 @@ import {officePropPhysics} from '../gen/office/physics'; // Task office-interact
 import {MALL_RIDER_KINDS} from '../gen/mall/kinds'; // Task mall-playtest-revision-20261031 (lane SHOPS, U05): garments ride their rail
 import {SKYWAYS_FOOD_CLASS, SKYWAYS_FOOD_MODEL_CLASS, SKYWAYS_FOOD_PHYSICS} from '../items/skywaysFood'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {PANTRY_CLASS, PANTRY_MODEL_CLASS, PANTRY_PHYSICS} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
+import {CAN_IDS} from '../items/sprayPaint';
 import {WEAPON_VARIETY_CLASS, WEAPON_VARIETY_PHYSICS} from '../items/weaponVarietyItems'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI)
 import {FLAMETHROWER_CLASS, FLAMETHROWER_PHYSICS} from '../items/flamethrowerItems'; // task studio-flamethrower-fire-20261114-031614-01
 import {FLAMETHROWER_ID, FUEL_TANK_ID} from '../fire/flamethrowerSpec';
@@ -281,6 +281,7 @@ export const ALL_PROP_KINDS = Object.keys(PROP_DEFS) as PropKind[];
 // Loose items / loot lots (never destroyed: knocked about only)
 
 export const ITEM_CLASS: Record<string, DamageClass> = {
+  ...Object.fromEntries(CAN_IDS.map(id => [id, 'sheetMetal' as const])),
   rifle: 'steel', shotgun: 'steel', pistol: 'steel', knife: 'steel', ammo_556: 'sheetMetal', ammo_12ga: 'cardboard', ammo_9mm: 'cardboard', medkit: 'plastic', bandage: 'fabric', // lane AMMO: 5.56 steel can
   water: 'plastic', cola: 'sheetMetal', juice: 'cardboard', chocolate: 'food', chips: 'food', beans: 'sheetMetal', noodles: 'food',
   bread: 'food', // lane FURN (office-props-physics-scale-20261030)
@@ -306,7 +307,6 @@ export const ITEM_CLASS: Record<string, DamageClass> = {
   ...GOLF_CLASS, // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): a steel-shafted putter; a hard plastic golf ball
 };
 export function itemClass(itemId: string): DamageClass {
-  if (isSprayCan(itemId)) return 'sheetMetal';
   return ITEM_CLASS[itemId] ?? 'plastic';
 }
 
@@ -365,6 +365,7 @@ export interface ItemPhysics {
 
 /** Loose items / loot lots that react to bullets (every inventory item; unknown ids: a light box). */
 export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
+  ...Object.fromEntries(CAN_IDS.map(id => [id, {mass: .38, shape: 'cylinder', mat: 'metal'} satisfies ItemPhysics])),
   cola: {mass: 0.37, shape: 'cylinder', mat: 'metal'}, beans: {mass: 0.45, shape: 'cylinder', mat: 'metal'},
   water: {mass: 0.55, shape: 'cylinder', mat: 'plastic'}, noodles: {mass: 0.09, shape: 'cylinder', mat: 'soft'},
   juice: {mass: 0.3, shape: 'box', mat: 'soft'}, chocolate: {mass: 0.1, shape: 'box', mat: 'soft'}, chips: {mass: 0.16, shape: 'box', mat: 'soft'},
@@ -408,7 +409,6 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   ...GOLF_PHYSICS, // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): a ~0.5 kg putter (box); the 45.9 g golf ball (a SPHERE, physics/golfBall.ts)
 };
 export function itemPhysics(itemId: string): ItemPhysics {
-  if (isSprayCan(itemId)) return {mass: .38, shape: 'cylinder', mat: 'metal'};
   return ITEM_PHYSICS[itemId] ?? {mass: 0.3, shape: 'box', mat: 'plastic'};
 }
 
