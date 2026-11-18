@@ -151,9 +151,9 @@ await withBrowserLock(async () => {
     const ready = await waitFor(() => { const c = window.__LL.surface.connector(); return !!c && c.ready && c.phase === 'idle'; }, 900);
     endOut();
     step('far side ready', {ready, seconds: (Date.now() - t2) / 1000, c: await con(), firstView: await view(), state: await ev(() => window.__LL.surface.state()).catch(e => String(e))});
-    const out = await walkOn('tube-far-open', 'the far flap rolled up: the command tent beyond (no loading screen, no cut)');
+    const walkedOut = await walkOn('tube-far-open', 'the far flap rolled up: the command tent beyond (no loading screen, no cut)');
     await frames(10);
-    step('walked out', {...out, trace: await stopTrace(), c: await con(), tent: await ev(() => window.__LL.surface.tent()).catch(e => String(e))});
+    step('walked out', {...walkedOut, trace: await stopTrace(), c: await con(), tent: await ev(() => window.__LL.surface.tent()).catch(e => String(e))});
     await shot('tent', 'in the command tent after the walk out');
     const rec = (await con())?.record;
     if (rec) {
