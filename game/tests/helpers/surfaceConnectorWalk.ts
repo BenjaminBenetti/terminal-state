@@ -72,14 +72,15 @@ export async function connectorHostWalk(host: 'office' | 'mall'): Promise<Connec
     const C = surfaceConnectorOf(game)!, P = game.player;
     const tubeViews = () => { let n = 0; game.scene.traverse(o => { if (o.name === 'surface-connector') n++; }); return n; };
     // every drawn frame: the walk's state, the player's world pose (continuity), the sealed draw's leaks
-    type Sample = {gap: boolean; phase: string; holding: boolean; flap: [number, number]; ready: boolean; sealed: boolean; x: number; z: number; y: number; yaw: number; state: string; s: number};
+    type Sample = {gap: boolean; phase: string; holding: boolean; flap: [number, number]; ready: boolean; sealed: boolean; x: number; z: number; y: number; yaw: number; state: string; s: number; gas: number; district: boolean};
     const samples: Sample[] = [];
     const look = {armed: false, yaw: 0};
     const render0 = G.render.bind(game);
     G.render = () => {
       if (look.armed) { look.armed = false; if (Math.abs(P.yaw - look.yaw) > 1e-6) report.looks.moved++; else report.looks.lost++; }
       const r = render0(), q = C.qa();
-      samples.push({gap: G.transitGap, phase: q.phase, holding: q.holding, flap: q.flap, ready: q.ready, sealed: q.sealed, x: P.x, z: P.z, y: P.y, yaw: P.yaw, state: game.state, s: q.local.s});
+      samples.push({gap: G.transitGap, phase: q.phase, holding: q.holding, flap: q.flap, ready: q.ready, sealed: q.sealed, x: P.x, z: P.z, y: P.y, yaw: P.yaw, state: game.state, s: q.local.s,
+        gas: game.gas?.exposure?.c ?? 0, district: !!game.layout?.surface});
       return r;
     };
     const endFrame0 = game.input.endFrame.bind(game.input);
@@ -147,6 +148,10 @@ export async function connectorHostWalk(host: 'office' | 'mall'): Promise<Connec
         prev = s;
       }
       report.maxStep = Math.max(report.maxStep, maxStep);
+      // the tube's air: sealed canvas — no gas at the eye while walking in it (either world), as no gas is drawn in it
+      const inTube = rs.filter(s => s.holding && !s.gap && s.s >= 0.2 && s.s <= r0.len - 0.2);
+      expect(inTube.length, `${label}: frames in the tube in play`).toBeGreaterThan(0);
+      expect(Math.max(...inTube.map(s => s.gas)), `${label}: no gas at the eye in the tube`).toBe(0);
       expect(maxStep, `${label}: no jump in the walk`).toBeLessThan(0.35);
       marks.push(`${label}: ${rs.length} frames (${report.gapFrames[dir]} in the gap), generation ${game.surfaceConnectorGenMs.toFixed(0)} ms, sealed leaks ${seal.leaks}`);
     };
