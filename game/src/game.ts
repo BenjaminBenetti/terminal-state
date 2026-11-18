@@ -288,7 +288,7 @@ import {RtFlashlight} from './render/rt/rtFlashlightRuntime';
 import {RtScene} from './render/rt/rtScene';
 import {shareShaderText} from './render/shaderTextShare'; // task studio-graphics-gpu-materials-toggle-20261114-212239-01
 import {JourneyCompile, type JourneyCompileOptions} from './render/journeyCompile'; // (lane RENDER-CPU: the journey's sliced preparation)
-import {FIRST_VIEW, exitDistance, firstViewProgress, firstViewRest, firstViewStatus, inFrameStep, planFirstViewSteps, waitForFirstView, type CrossingExit, type CrossingViewResult, type FirstViewPlan} from './render/firstView'; // (lane READY: a crossing's exit opens on its drawn first view)
+import {FIRST_VIEW, exitDistance, firstViewCoverage, firstViewProgress, firstViewRest, firstViewStatus, inFrameStep, planFirstViewSteps, waitForFirstView, type CrossingExit, type CrossingViewResult, type FirstViewPlan} from './render/firstView'; // (lane READY: a crossing's exit opens on its drawn first view)
 import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
 import {loadingPlaceName, type LastSaveStatus} from './ui/loadingScreen'; // task studio-beta-campaign-polish-20261103-063841-01 (lane MENU): loading name only; Load last save
 import type {LoadMeter} from './ui/loadingMap'; // task studio-initial-loading-subway-graphic-20261111-070741-01: the loading screen's map takes the load's progress
@@ -2636,7 +2636,7 @@ export class Game {
       const shadows = !!target && this.flashlight.castShadow;
       const g = planFirstViewSteps(this.scene, {exit, cameraMask: this.camera.layers.mask, camera: this.camera, casters: shadows,
         sweep: {update: cam => culler.update(cam, true), restore: () => culler.update(this.camera, true)}});
-      let fv: FirstViewPlan | null = null;
+      let fv: FirstViewPlan | null = null, programs = {first: 0, more: 0, covered: 0};
       while (!fv) { const r = await step('view', () => g.next()); if (r.done) fv = r.value; }
       const v = fv;
       const order = await step('order', () => {
@@ -2644,16 +2644,19 @@ export class Game {
         const dist = new Map<THREE.Object3D, number>();
         const of = (o: THREE.Object3D) => { let d = dist.get(o); if (d === undefined) dist.set(o, d = exitDistance(o, at)); return d; };
         const byNear = <T extends {object: THREE.Object3D}>(l: readonly T[]) => l.map(i => ({i, d: of(i.object)})).sort((a, b) => (a.d - b.d) || 0).map(x => x.i);
-        // the scene lane: the first view's representatives first, then the job's plan (as the journey's) without them
+        // the scene lane: the first view's representatives first, then the job's plan (as the journey's) without them — its program groups
+        // the first view lacks (new programs) before the ones it has ('full': their own render objects, with the others; 'view': done)
         const lead = new Set<THREE.Object3D>(v.reps.map(i => i.object)), leadCasters = new Set<THREE.Object3D>(v.casters.map(i => i.object));
-        const items = [...v.reps, ...[...byNear(plan.items), ...(mode === 'full' ? byNear(plan.others) : [])].filter(i => !lead.has(i.object))];
+        const {fresh, covered} = firstViewCoverage(byNear(plan.items).filter(i => !lead.has(i.object)), v);
+        const items = [...v.reps, ...fresh, ...(mode === 'full' ? [...covered, ...byNear(plan.others).filter(i => !lead.has(i.object))] : [])];
         const others = mode === 'full' && shadows ? runtimeVariantsFirst(byNear([...plan.items, ...plan.others].filter(i => i.caster))).filter(i => !leadCasters.has(i.object)) : [];
+        programs = {first: v.reps.length, more: fresh.length, covered: covered.length};
         return {items, casters: [...v.casters, ...others], receiver: plan.items.find(i => i.object.receiveShadow && !i.flips.length) ?? null};
       });
       const job = await step('job', () => (this.journeyCompile = new JourneyCompile({renderer: this.renderer as unknown as JourneyCompileOptions['renderer'], scheduler: this.frameBudget,
         scene: this.scene, camera: this.camera, target, depth: this.sceneDepth(false), ...order, frameNo: () => this.frameBudget.frame, ...LIFT_RIDE_COMPILE,
         firstView: {items: [...v.reps, ...v.others], reps: v.reps.length, casters: v.casters.length}}).start()));
-      this.crossingView = {end: 'pending', why: '', ms: 0, activeMs: 0, mode, plan: v.stats, prep, tries, job: job.stats, rest: null};
+      this.crossingView = {end: 'pending', why: '', ms: 0, activeMs: 0, mode, plan: v.stats, prep, programs, tries, job: job.stats, rest: null};
       const w = await waitForFirstView(job, () => this.frameBudget.activeMs, since, LIFT_RIDE_WAIT);
       const st = job.stats, p = firstViewProgress(st);
       Object.assign(this.crossingView, {end: w.end, why: w.why, ms: performance.now() - t0, activeMs: this.frameBudget.activeMs - since});
@@ -2686,8 +2689,11 @@ export class Game {
     }
     if (!job?.running) { this.flushRetired(); return null; }
     job.pace(null);
-    const t0 = performance.now(), j = job;
-    void Promise.race([j.sceneDone, new Promise(r => setTimeout(r, 8000))]).then(() => this.flushRetired());
+    const t0 = performance.now(), j = job, cv = this.crossingView;
+    // (this crossing's own job: once the destination's every program group is compiled — the first view's and the new ones after it, not
+    // the rest's own render objects — the left world's programs are no longer needed; another job: its scene pass; 8 s at the most)
+    const programs = cv && cv.job === j.stats ? j.whenScene(cv.programs.first + cv.programs.more) : j.sceneDone;
+    void Promise.race([programs, new Promise(r => setTimeout(r, 8000))]).then(() => this.flushRetired());
     void j.done.then(() => { const r = firstViewRest(j.stats); console.info(`Terminal State: crossing compile (the rest, in play) ${j.stats.phase} — ${r.total - r.left}/${r.total} prepared, ${((performance.now() - t0) / 1000).toFixed(1)} s after the exit opened`); });
     const rest = firstViewRest(j.stats);
     if (this.crossingView) this.crossingView.rest = rest;
@@ -2698,7 +2704,9 @@ export class Game {
    * (lane READY; QA / tests) The last crossing's first-view preparation: how it ended, its time (ms; active ms since the bound's start),
    * the warm-up mode, the first view's plan, the tries, the job's live stats and what was left when the exit opened. Null: none yet.
    */
-  crossingView: {end: string; why: string; ms: number; activeMs: number; mode: string; plan: FirstViewPlan['stats']; prep: {steps: number; ms: number; maxMs: number; by: Record<string, number>}; tries: number; job: JourneyCompile['stats']; rest: {left: number; total: number} | null} | null = null;
+  crossingView: {end: string; why: string; ms: number; activeMs: number; mode: string; plan: FirstViewPlan['stats']; prep: {steps: number; ms: number; maxMs: number; by: Record<string, number>};
+    /** The scene lane's program groups: the first view's, the destination's others (new programs, next), the plan's already covered. */
+    programs: {first: number; more: number; covered: number}; tries: number; job: JourneyCompile['stats']; rest: {left: number; total: number} | null} | null = null;
 
   /** (QA / tests) How the last lift ride's first-view wait ended (the lift's crossingView; null: none yet). */
   get surfaceLiftCompile(): Game['crossingView'] { return this.liftCrossingView; }

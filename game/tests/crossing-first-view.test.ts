@@ -24,7 +24,7 @@ import * as THREE from 'three';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {FrameBudget} from '../src/core/frameBudget';
 import {CASTER_LAYER, FIRST_VIEW_DRAW, JOURNEY_COMPILE, JourneyCompile, PREP_LAYER} from '../src/render/journeyCompile';
-import {FIRST_VIEW, firstViewProgress, firstViewRest, firstViewStatus, inFrameStep, planFirstView, planFirstViewSteps, waitForFirstView, type FirstViewSweep} from '../src/render/firstView';
+import {FIRST_VIEW, firstViewCoverage, firstViewProgress, firstViewRest, firstViewStatus, inFrameStep, planFirstView, planFirstViewSteps, waitForFirstView, type FirstViewSweep} from '../src/render/firstView';
 import type {WarmItem} from '../src/render/warmup';
 import {CULL_LAYER} from '../src/world/levelCulling';
 import {LIFT_RIDE_COMPILE, LIFT_RIDE_WAIT} from '../src/world/surface/liftRuntime';
@@ -192,12 +192,17 @@ describe('crossing readiness: the exit\'s first view (render/firstView.ts, the j
     expect(job.running).toBe(true);
     const r0 = firstViewRest(job.stats);
     expect(r0.left).toBeGreaterThan(0);
+    // whenScene: at once for what is compiled; the rest's count once the lane reaches it
+    let at = -1;
+    await job.whenScene(job.stats.sceneDone);
+    void job.whenScene(job.stats.sceneDone + 5).then(() => { at = job.stats.sceneDone; });
     job.pace(null);
     const sizes: number[] = [];
     const ca = k.R.compileAsync.bind(k.R);
     k.R.compileAsync = (s: THREE.Object3D, v: THREE.Camera) => { let n = 0; s.traverse(x => { if ((x as THREE.Mesh).isMesh && x.layers.test(v.layers)) n++; }); sizes.push(n); return ca(s, v); };
     for (let f = 0; f < 400 && job.running; f++) await k.frame();
     expect(job.stats.phase).toBe('done');
+    expect(at, 'whenScene resolved as the lane reached its count').toBeGreaterThanOrEqual(0);
     expect(sizes.length).toBeGreaterThan(0);
     expect(sizes.every(n => n === JOURNEY_COMPILE.chunk), 'play pacing: one item per call').toBe(true);
     expect(firstViewRest(job.stats)).toEqual({left: 0, total: r0.total});
@@ -335,6 +340,12 @@ describe('crossing readiness: the exit\'s first view (render/firstView.ts, the j
     // a group's caster is its own program group (the shadow flags are part of the key): 5 x 2 + the culled near + the swept far + fx
     expect(plan.reps.length).toBe(5 * 2 + 3);
     expect(plan.others.length).toBe(5 * 2);
+    // the destination plan's items by the first view's program groups: a group's other copy is covered, a far item's own material is new
+    const copy: WarmItem = {object: new THREE.Mesh(k.groups[0][1].geometry, k.groups[0][1].material) as never, flips: [], caster: false};
+    copy.object.position.set(500, 0, 500);
+    copy.object.receiveShadow = true; // (as the group's: the shadow flags are part of the program group)
+    const far: WarmItem = {object: k.farItems[0] as never, flips: [], caster: false};
+    expect(firstViewCoverage([far, copy], plan, false)).toEqual({fresh: [far], covered: [copy]});
     const d = (o: THREE.Object3D) => o.position.length();
     for (let i = 1; i < plan.reps.length; i++) expect(d(plan.reps[i].object)).toBeGreaterThanOrEqual(d(plan.reps[i - 1].object) - 1);
     expect(plan.casters.map(i => i.object)).toEqual(k.groups.map(g => g[0]).sort((a, b) => d(a) - d(b)));

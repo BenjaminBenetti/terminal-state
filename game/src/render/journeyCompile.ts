@@ -213,6 +213,8 @@ export class JourneyCompile {
   /** (lane READY) Resolves when the first view is ready (stats.firstView 'ready'), at once without one, or when the job ended. */
   readonly viewReady: Promise<void>;
   private resolveScene!: () => void;
+  /** (lane READY) whenScene's waiters: resolved once sceneDone reaches their count (or the job ended). */
+  private sceneWaiters: {n: number; resolve: () => void}[] = [];
   private resolveDone!: () => void;
   private resolveView!: () => void;
   /** (lane READY) The first view (null: none); its representatives' compile state by object; the compiled leading run; the next to draw. */
@@ -478,6 +480,20 @@ export class JourneyCompile {
   /** The job has not ended (still preparing something). */
   get running(): boolean { return !this.ended; }
 
+  /**
+   * (lane READY) Resolves once the scene lane has compiled its first `n` items (stats.sceneDone >= n) — a crossing: the destination's
+   * new program groups, before the rest's own render objects — or when the job ended.
+   */
+  whenScene(n: number): Promise<void> {
+    if (this.ended || this.stats.sceneDone >= n) return Promise.resolve();
+    return new Promise(resolve => { this.sceneWaiters.push({n, resolve}); });
+  }
+
+  private settleSceneWaiters(): void {
+    const done = this.stats.sceneDone;
+    this.sceneWaiters = this.sceneWaiters.filter(w => { if (done < w.n) return true; w.resolve(); return false; });
+  }
+
   private request(lane: Lane): void {
     if (this.ended || this.requested[lane]) return;
     this.requested[lane] = true;
@@ -621,6 +637,7 @@ export class JourneyCompile {
     if (this.ended) return;
     if (this.o.scheduler.generation !== this.generation) { this.end('cancelled', 'generation'); return; }
     this.stats.sceneDone += n;
+    if (this.sceneWaiters.length) this.settleSceneWaiters();
     for (const i of this.flight) if (this.twoPass.has(i)) this.sides.push(i); // (lane PLAY: compiled — the 'sides' lane may draw it now)
     if (this.repIndex.size) {
       // (lane READY) a first-view representative compiled: the 'view' lane may draw it now (in order)
@@ -694,6 +711,7 @@ export class JourneyCompile {
     this.stats.cancelReason = reason;
     if (phase === 'cancelled') for (const lane of LANES) { const k = `${JOURNEY_COMPILE.key}.${lane}`; if (this.o.scheduler.has(k)) this.o.scheduler.cancel(k); }
     this.resolveScene();
+    for (const w of this.sceneWaiters.splice(0)) w.resolve();
     this.resolveView(); // (stats.firstView keeps where it got: a waiter reads it)
     this.resolveDone();
   }

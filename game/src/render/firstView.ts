@@ -84,6 +84,8 @@ export interface FirstViewPlan {
   others: WarmItem[];
   /** The first view's shadow casters within the torch's reach, nearest first (empty without `casters`). */
   casters: WarmItem[];
+  /** Its program groups (render/warmup.ts warmKeys of the representatives). */
+  keys: ReadonlySet<string>;
   stats: {
     /**
      * Eligible renderables (shown, with geometry, on the camera's layers or culled); within the far plane of the exit (or drawn by every
@@ -202,7 +204,7 @@ export function* planFirstViewSteps(scene: THREE.Object3D, o: FirstViewPlanOptio
     if (fresh.length) { for (const k of fresh) seen.add(k); reps.push(item); } else others.push(item);
   }
   const casters = o.casters ? [...reps, ...others].filter(i => i.caster && dist.get(i)! <= FIRST_VIEW.torchReach).sort((a, b) => dist.get(a)! - dist.get(b)!) : [];
-  return {reps, others, casters, stats: {candidates, inRange: cand.length, always: alwaysN, near, swept, current, items: reps.length + others.length, reps: reps.length, casters: casters.length, poses, sweepMs, ms: own + now() - t0}};
+  return {reps, others, casters, keys: seen, stats: {candidates, inRange: cand.length, always: alwaysN, near, swept, current, items: reps.length + others.length, reps: reps.length, casters: casters.length, poses, sweepMs, ms: own + now() - t0}};
 }
 
 /**
@@ -217,6 +219,17 @@ export function inFrameStep<T>(s: FrameScheduler, key: string, fn: () => T): Pro
       onCancel: reason => reject(new Error(`crossing step ${key}: ${reason}`))});
     if (r === 'stale' || r === 'dropped') reject(new Error(`crossing step ${key}: ${r}`));
   });
+}
+
+/**
+ * A destination plan's items split by the first view's program groups: `fresh` — a group the first view does not have (a NEW program:
+ * a pool's contents, a part of the destination out of its sight), `covered` — every group of it is the first view's (only its own render
+ * objects are left to prepare). Order kept.
+ */
+export function firstViewCoverage<T extends WarmItem>(items: readonly T[], fv: Pick<FirstViewPlan, 'keys'>, share = sharedInstancing()): {fresh: T[]; covered: T[]} {
+  const fresh: T[] = [], covered: T[] = [];
+  for (const i of items) (warmKeys(i.object as never, share).every(k => fv.keys.has(k)) ? covered : fresh).push(i);
+  return {fresh, covered};
 }
 
 /** What the wait reads of the job (render/journeyCompile.ts JourneyCompile). */
