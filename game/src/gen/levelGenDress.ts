@@ -352,8 +352,10 @@ export function lightServiceLevel(layout: StationLayout, rng: Rng): void {
   }
   // The foot of every down stair (the way back up stays findable).
   if (plan.crossing >= 0) {
+    // (a version-4 circulation run's foot is not in the crossing: the pedestrian subway is lit as the public passage it is)
+    const runFlights = new Set((plan.runs ?? []).flatMap(r => r.flights));
     for (const k of layout.levelLinks) {
-      if (k.lower !== LEVEL_LOWER) continue;
+      if (k.lower !== LEVEL_LOWER || (k.traversalId !== undefined && runFlights.has(k.traversalId))) continue;
       if (!near(plan.crossing, k.bottom.x, k.bottom.z, 2.5)) lamp(r2(k.bottom.x), r2(k.bottom.z), 0, plan.crossing, SERVICE_LAMP.landmark);
     }
   }
