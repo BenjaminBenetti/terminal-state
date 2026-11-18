@@ -25,7 +25,7 @@ import type {Game} from '../../game';
 import type {StationLayout} from '../../gen/stationTypes';
 import type {SurfaceConnector} from '../../gen/surface/surfaceTypes';
 import {CONNECTOR, connectorModel, connectorStepYaw, connectorToStep, connectorToWorld, connectorWorldYaw, stepToConnector, worldToConnector, type ConnectorModel} from '../../gen/surface/connectorShape';
-import type {MoveInput} from '../../player/player';
+import {STAND_EYE, type MoveInput} from '../../player/player';
 import {CULL_LAYER} from '../levelCulling';
 import {towerCue} from '../towerShared';
 import {CONNECTOR_LOOK, buildConnectorView, loadConnectorTextures, type ConnectorView} from './connectorView';
@@ -66,6 +66,11 @@ export function connectorOfLayout(layout: Pick<StationLayout, 'surfaceAccess' | 
 
 /** The flap index of a record's walk-in side (0 the host mouth, 1 the tent mouth) and its plane's s. */
 export const walkInFlap = (r: Pick<SurfaceConnector, 'end'>): 0 | 1 => (r.end === 'host' ? 0 : 1);
+/** A point on this world's own floor just past the walk-in mouth (world x / z; `t` clamped inside the opening): the culler's eye there. */
+function mouthPoint(q: SurfaceConnector, t: number): [number, number] {
+  const ds = q.end === 'host' ? -q.door.depth - 0.35 : q.len + 0.35, half = (q.end === 'host' ? q.door.width : CONNECTOR.width) / 2 - 0.1;
+  return connectorToWorld(q, ds, Math.max(-half, Math.min(half, t)));
+}
 export const flapPlane = (r: Pick<SurfaceConnector, 'len'>, f: 0 | 1): number => (f === 0 ? CONNECTOR_LOOK.flapIn : r.len - CONNECTOR_LOOK.flapIn);
 
 const SEAL_MASK = (1 << CULL_LAYER) >>> 0;
@@ -476,6 +481,17 @@ export class SurfaceConnectorRuntime {
     P.eye = P.stanceEye + P.y - P.landDip;
   }
 
+  /**
+   * Where the walker comes out (lane READY's CrossingExit, render/firstView.ts): the eye just past this world's walk-in mouth on its own
+   * floor (the host lobby inside the doorway / the tent in front of its mouth), facing out of the tube. Null: no tube drawn.
+   */
+  exitPoint(): {x: number; y: number; z: number; yaw: number} | null {
+    const e = this.current();
+    if (!e) return null;
+    const [x, z] = mouthPoint(e.rec, 0);
+    return {x, y: e.rec.y + STAND_EYE, z, yaw: e.rec.end === 'host' ? e.rec.yaw + Math.PI : e.rec.yaw};
+  }
+
   /** The level culler decides from the walk-in side's doorway while the eye is in the tube (in the host world it is off the grid). */
   private setProxy(): void {
     const cul = (this.game.world as unknown as {culler?: {eyeProxy: ((v: THREE.Vector3) => void) | null}} | null)?.culler;
@@ -487,8 +503,7 @@ export class SurfaceConnectorRuntime {
       if (!c || !this.holding) return;
       const q = c.rec, [s, t] = worldToConnector(q, v.x, v.z);
       if (q.end === 'host' ? s < -q.door.depth : s > q.len) return; // (on the world's own floor)
-      const ds = q.end === 'host' ? -q.door.depth - 0.35 : q.len + 0.35, half = (q.end === 'host' ? q.door.width : CONNECTOR.width) / 2 - 0.1;
-      const [x, z] = connectorToWorld(q, ds, Math.max(-half, Math.min(half, t)));
+      const [x, z] = mouthPoint(q, t);
       v.x = x; v.z = z;
     };
     cul.eyeProxy = this.proxy;
