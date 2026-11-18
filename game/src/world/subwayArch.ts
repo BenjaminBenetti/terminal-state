@@ -283,7 +283,11 @@ export class SubwayArch {
   material(key: string): THREE.Material | undefined {
     const z = this.finishOf(key);
     if (!z) return undefined;
-    const m = subwayArchMaterial(this.mats, z.finish.tex, `${key}#${this.identity.theme}#${hexOf(this.identity.wallTint)}`, lookOf(z.finish, z.zone));
+    // (a cavern's painted rock — every zone drawn in its paint, the rock walls / roof and the field / upper / struct it shares them with:
+    // the bounce's own chroma of the paint, when its theme sets one)
+    const rock = this.scheme.rock, painted = !!rock && (z.finish === rock.wall || z.finish === rock.ceil);
+    const look = lookOf(z.finish, z.zone), bounceChroma = painted ? rock!.bounceChroma : undefined;
+    const m = subwayArchMaterial(this.mats, z.finish.tex, `${key}#${this.identity.theme}#${hexOf(this.identity.wallTint)}`, bounceChroma === undefined ? look : {...look, bounceChroma});
     if (WALL_ZONES.has(z.zone)) m.userData[SUBWAY_WALL_TAG] = true;
     return m;
   }
