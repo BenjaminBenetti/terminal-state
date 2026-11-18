@@ -4071,6 +4071,9 @@ export class Game {
       this.syncHeld();
       return;
     }
+    // (task studio-surface-host-ground-connectors-20261118-053602-01) the connector tube is off the host's grid and a crossing may leave
+    // either world under the walker: nothing is put down in the passage (as a carried body: corpses.ts CORPSE_TEXT.passage)
+    if (this.surfaceConnector?.holding) { this.hud.toast('Not in the passage — step out first', true); this.sfx.denied(); return; }
     const st = this.inv.detach(ref, count);
     if (!st) return;
     if (this.use && !this.inv.find(this.use.uid)) this.cancelUse('dropped');

@@ -38,7 +38,7 @@ interface Priv { saveSectionMemory(): void; transitGap: boolean; liftBuilt: bool
 export interface ConnectorWalkReport { marks: string[]; frames: {out: number; back: number}; gapFrames: {out: number; back: number}; maxStep: number; looks: {moved: number; lost: number} }
 
 /** The walk from `host`'s doorway through the tube to the tent and back (the test body of one host's file). */
-export async function connectorHostWalk(host: 'office' | 'mall'): Promise<ConnectorWalkReport> {
+export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?: boolean} = {}): Promise<ConnectorWalkReport> {
   const T0 = performance.now(), marks: string[] = [];
   const mark = (s: string) => marks.push(`${s} ${((performance.now() - T0) / 1000).toFixed(1)} s`);
   for (const k of ['log', 'info', 'debug', 'warn'] as const) vi.spyOn(console, k).mockImplementation(() => {});
@@ -190,7 +190,46 @@ export async function connectorHostWalk(host: 'office' | 'mall'): Promise<Connec
     expect(seal.leaks, `nothing else drawn while sealed (${seal.worst})`).toBe(0);
     expect(report.looks.moved, 'mouse turns in the gap').toBeGreaterThan(0);
     expect(report.looks.lost, 'no turn lost in the gap').toBe(0);
-    expect(errors).toEqual([]);
+
+    if (opts.extras) {
+      const inv0 = JSON.stringify(canon(game.inv.toJSON())), started0 = game.surfaceCrossCounts.started;
+      // ---- a REFUSAL at the seam (a participant that cannot come along now: QA injection): no crossing; the prompt says why; walk back out
+      const refuse = vi.spyOn(game, 'surfaceCrossRefusal').mockReturnValue({code: 'carrying', text: 'qa: that cannot come along'});
+      expect(qa.surface.connectorGo(1.2)).toBe(true);
+      await h.waitFrames(2);
+      await walkTo(rec.len - 1, () => C.qa().refusal !== null, 900);
+      expect(C.qa().refusal, `refused at the seam ${diag()}`).toBe('qa: that cannot come along');
+      expect(qa.surface.access().prompt ?? '', 'the prompt says why').toContain('qa: that cannot come along');
+      expect(game.surfaceCrossCounts.started, 'nothing started').toBe(started0);
+      expect(C.qa().phase).toBe('idle');
+      refuse.mockRestore();
+      await walkTo(-rec.door.depth - 1.4, () => !C.holding, 900);
+      expect(C.holding, 'walked back out of the tube').toBe(false);
+      expect(game.run.current).toEqual(hostKey);
+      mark('refused');
+      // ---- a destination that cannot be prepared (QA injection) after the old world was left: the loading screen's recovery, back in
+      // the lobby in front of the doorway (on the grid, never left in the off-grid tube), everything carried and the host's memory kept
+      const rec0 = game.surfaceCrossCounts.recovered;
+      const prep = vi.spyOn(G as unknown as {prepareSection(...a: unknown[]): Promise<unknown>}, 'prepareSection').mockRejectedValueOnce(new Error('qa: the street is unreachable'));
+      expect(qa.surface.connectorGo(1.2)).toBe(true);
+      await h.waitFrames(2);
+      game.input.keys.add('KeyW');
+      try { expect(await until(() => game.surfaceCrossCounts.started > started0 || game.surfaceCrossCounts.recovered > rec0, 900), `the seam fired ${diag()}`).toBe(true); } finally { game.input.keys.delete('KeyW'); }
+      expect(await until(() => game.surfaceCrossCounts.recovered === rec0 + 1 && game.state === 'playing', 12000), `recovered ${diag()}`).toBe(true);
+      prep.mockRestore();
+      mark('recovered');
+      expect(game.run.current).toEqual(hostKey);
+      expect(C.qa()).toMatchObject({phase: 'idle', holding: false, held: false});
+      expect(tubeViews(), 'one tube after the recovery').toBe(1);
+      const rr = game.layout.surfaceAccess!.connector as SurfaceConnector, [sr] = worldToConnector(rr, P.x, P.z);
+      expect(sr, 'recovered on the lobby floor, not in the tube').toBeLessThan(-rr.door.depth);
+      expect(game.levels.supportIn(P.x, P.z, P.y + 0.05), 'on the host grid\'s floor').not.toBe(null);
+      expect(game.levels.grid(rr.level).circleClear(P.x, P.z, 0.25), 'standing clear').toBe(true);
+      expect(JSON.stringify(canon(game.inv.toJSON())), 'everything carried kept').toBe(inv0);
+      await h.waitFrames(10);
+      expect(snap(), 'the host exactly as left after the recovery').toBe(host0);
+    }
+    expect(errors.filter(e => !/qa: the street is unreachable/.test(e))).toEqual([]);
     expect(frameErrors).toEqual([]);
   } finally {
     h.stop();
