@@ -585,6 +585,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     if (!geo) continue;
     const mesh = new THREE.Mesh(geo, matOf(e.k));
     mesh.name = office?.meshName(e.k) ?? mall?.meshName(e.k) ?? reactor?.meshName(e.k) ?? surf?.meshName(e.k) ?? `arch-${key}`; // (+ reactor: lane ARCH)
+    mesh.userData.paintSurface = true;
     mesh.userData.level = e.level;
     if (e.levels) mesh.userData.levels = e.levels;
     mesh.matrixAutoUpdate = false;

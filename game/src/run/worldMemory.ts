@@ -1,3 +1,4 @@
+import {isSprayCan} from '../items/sprayPaint';
 // Iteration 16 (lane RUN): capture / apply a section's memory (run/memory.ts) from / onto the live world managers —
 // loose pickups (PickupManager) and loot holders (ContainerManager). Game owns the enemy kill list itself.
 // Nothing here creates or destroys loot: restoring spawns exactly the remembered items, and holder lots are only ever
@@ -16,16 +17,21 @@ import {holderFoodOrigin, isNaturalFood, keepNaturalFood} from '../items/natural
 /** Plain deep copy of a stack without its uid. */
 export function stackRecord(st: ItemStack): StackRecord {
   const c = structuredClone(st) as Partial<ItemStack> & Record<string, unknown>;
-  delete c.uid;
+  if (!isSprayCan(st.itemId)) delete c.uid;
   return c as StackRecord;
 }
 
 /** A live stack from a record, with a fresh uid of `inv` (count / mag / lane fields exactly as recorded). */
 export function stackFromRecord(inv: Inventory, rec: StackRecord): ItemStack {
+  if (isSprayCan(rec.itemId) && typeof rec.uid === 'number') {
+    inv.reserveUids(rec.uid);
+    return structuredClone(rec) as unknown as ItemStack;
+  }
   const st = inv.makeStack(rec.itemId, 1, rec.mag);
   // task studio-flamethrower-fire-20261114-031614-01: makeStack's tank is a NEW one (its recipe's fuel) — a remembered tank holds what its
   // record says (0 stays 0), and a record without `fuel` is an EMPTY tank: coming back from memory never adds fuel
   delete st.fuel;
+  delete st.paint;
   Object.assign(st, structuredClone(rec)); // the record has no uid: the fresh one stays
   st.itemId = canonicalItemId(st.itemId); // lane AMMO: a remembered legacy ammo id comes back as its caliber item (same count)
   if (st.bag) st.bag = fitBagContents(st.itemId, st.bag.map(c => (c ? {...c, itemId: canonicalItemId(c.itemId)} : null))); // (lane STORAGE: an older 12-slot bag gains its new empty slots)

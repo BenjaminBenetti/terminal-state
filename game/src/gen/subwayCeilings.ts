@@ -104,6 +104,8 @@ export function ceilingFormOf(layout: Pick<StationLayout, 'identity' | 'props'> 
   // the cavern family: every formable public space sits in painted rock — a rock vault across its width
   // (a vault needs walls to spring from: never over a platform, whose track side is open, nor a hall open along a long side)
   const closed = a.type !== 'platform' && longSidesClosed(layout, a, bays);
+  // a version-4 gallery hall: beams over its full-height cells (the kit clips them there), no vault reaching down over the gallery
+  if (a.galleried) return with_({kind: 'beams'});
   if (theme === 'cavern') {
     const rise = r2(Math.max(0, Math.min(width * 0.22, H - VAULT_MIN_SPRING, 3.2)));
     return rise >= 0.6 && closed ? with_({kind: 'rock', beam: 0, beamW: 0, rise, spring: r2(ceil - rise)}) : with_({kind: 'beams'});

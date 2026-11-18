@@ -18,6 +18,7 @@ import type {Level, LevelLink, LevelRole} from './levels';
 import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from './props';
 import {boxOverlap, doorClearVolumes, wallBacked, type DoorClearVolume} from './doorways';
 import type {Area, Door, Side, StationLayout} from './stationTypes';
+import {circulationMouths} from './subwayCirculation';
 
 // ---------------------------------------------------------------------------------------------
 // Levels (tolerant of layouts without the iteration-08 level fields)
@@ -149,6 +150,8 @@ export function makePlaceCtx(layout: StationLayout, rng: Rng, level = 0, win?: {
   const stand = (p: {x: number; z: number}) => { const [cx, cy] = g.cellOf(p.x, p.z); for (let oy = -2; oy <= 2; oy++) for (let ox = -2; ox <= 2; ox++) mark(cx + ox, cy + oy); };
   if (level === 0) for (const l of layout.traversal?.ladders ?? []) { stand(l.top); stand(l.bottom); }
   for (const k of levelLinksOf(layout)) { if (k.lower === level) stand(k.bottom); if (k.upper === level) stand(k.top); }
+  // Task studio-subway-vertical-layout-20261118-022131-01: a version-4 open stair bank's mouth onto its gallery (none elsewhere).
+  for (const m of circulationMouths(layout)) if (m.level === level) for (let y = m.y; y < m.y + m.h; y++) for (let x = m.x; x < m.x + m.w; x++) mark(x, y);
   // Task office-props-physics-scale-20261030: an office room under 16 m2 (closets, small offices) keeps a 1.5 m turning square
   // (3 x 3 cells) free just inside its main door. It held only by luck before; resized company props reshuffled a scrubber into it.
   if (levelRole(layout, level) === 'office') for (const a of layout.areas) { // (layout.office is set after dressing)

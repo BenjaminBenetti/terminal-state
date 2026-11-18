@@ -654,3 +654,9 @@ brain (pure) + skinned actor · `src/physics` cannon-es ragdolls + pooled casing
 movement + survival (hunger/thirst) · `src/ui` HUD/inventory · `src/audio` procedural spatial WebAudio ·
 `src/damage` material damage / breaking (craters, debris, per-instance prop damage, zombie wounds) · `src/game.ts` orchestration. Runtime assets: `public/assets/` (derivatives only, provenance in
 `public/assets/derivatives/`).
+
+### Spray paint
+
+Look for cans on crates and camp tables, or buy a colour for six Rail Ties at the **Colour Works** counter in the Survivor Market. Place a can in a quick slot, aim within 2.25 m and hold left click. The can, inventory tooltip and held-item readout identify the colour and remaining fill. Spraying into open air uses paint too.
+
+Paint adheres to train panels and sliding leaves, station architecture, fuel carts and supported furniture. A can holds 120 spray pulses. The campaign keeps up to 1,536 distinct dabs across 96 targets. At capacity the nozzle reports the limit and keeps the existing paint. Continue and imported saves restore the saved paint and cans. Retry restores their station-entry state.

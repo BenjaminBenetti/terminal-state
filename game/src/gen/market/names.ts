@@ -7,6 +7,7 @@ import type {MarketStallId} from './marketTypes';
 
 /** Per stall: candidate painted names, the trade line under the name, and the hand-painted board's colours / lettering. */
 export const STALL_SIGNS: Readonly<Record<MarketStallId, {names: readonly string[]; trade: string; style: SignStyle}>> = {
+  paint: {names: ['COLOUR WORKS'], trade: 'spray paint', style: {bg: 0x163e42, fg: 0xffecd1, accent: 0xff8129, font: 'condensed'}},
   gun: {names: ['IRONWORKS', 'BRASS & BARREL', 'THE ARMOURY', 'LONG SHOT'], trade: 'guns & ammo', style: {bg: 0x2d3a2c, fg: 0xe8dcc0, accent: 0xb5392b, font: 'condensed'}},
   medical: {names: ['PATCH-UP', 'THE MENDING POST', 'CLEAN HANDS', 'STITCH & SPLINT'], trade: 'medicine & dressings', style: {bg: 0xe6e1d3, fg: 0x9e1f1f, accent: 0x9e1f1f, font: 'sans'}},
   fuel: {names: ['RAILHEAD FUEL', 'LAST DROP', 'THE TANK LINE', 'SIDING SUPPLY'], trade: 'fuel & train supplies', style: {bg: 0xc98a1a, fg: 0x1c1a16, accent: 0x1c1a16, font: 'condensed'}},
