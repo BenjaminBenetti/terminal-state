@@ -33,9 +33,13 @@ export const CONNECTOR_LOOK = {
   flapIn: 0.09, rolled: 0.04, roll: 0.05,
   /** The work lamp: s = len * at, hanging this far under the crown. */
   lamp: {at: 0.5, drop: 0.32},
-  /** Self-glow (emissive x map) of the finishes: the lamp's dim light in their own colour. */
-  glow: {canvas: 0.32, floor: 0.3, steel: 0.22, sheet: 0.12},
-  colour: {canvas: 0x4f5139, floor: 0x5d4d3a, steel: 0x30332d, sheet: 0x24251c},
+  /**
+   * Self-glow (emissive x map) of the finishes: the lamp's dim light in their own colour. The colours TINT their maps (the maps carry
+   * the albedo: the tent's fabric ~mid grey, the charcoal painted steel, the dark creosote timber): canvas a little darker than the
+   * tent's own; the floor and hoops catch the lamp more than the walls; the groundsheet sits in the slats' shade.
+   */
+  glow: {canvas: 0.7, floor: 1.15, steel: 1.0, sheet: 0.3},
+  colour: {canvas: 0xb3b182, floor: 0xc9b597, steel: 0xb8bcaa, sheet: 0x6a6b55},
   /** The district's host-name plate (m: width, height, above the crown). */
   plate: {w: 1.9, h: 0.34, above: 0.42},
   /** How long a section build waits for the canvas texture before the fallback finish (ms). */
