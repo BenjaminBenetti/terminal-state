@@ -142,6 +142,12 @@ export interface Area extends Rect {
    * circulation spine. Absent on every other area (and on every version-1 / version-2 station).
    */
   hallSection?: HallSection;
+  /**
+   * Task studio-subway-vertical-layout-20261118-022131-01: a layout-version-4 GALLERY HALL (gen/subwayCirculation.ts) — double height, an
+   * overlook gallery at the upper level along one long wall (its strip's cells keep a ceiling a slab below the gallery). Its drawn ceiling is
+   * the beam / coffer family (clipped to the full-height cells), never a vault springing over the gallery. Absent everywhere else.
+   */
+  galleried?: true;
 }
 
 /**

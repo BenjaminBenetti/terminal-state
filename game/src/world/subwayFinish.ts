@@ -71,8 +71,11 @@ export interface FinishScheme {
   columnPaint?: readonly [number, number, number];
   /** The signature halls (grand ticket / waiting / interchange halls, gate galleries): their own field / upper / ceiling / floor / piers. */
   hall: {field: ZoneFinish; upper: ZoneFinish; ceil: ZoneFinish; floor: ZoneFinish; struct: ZoneFinish; pier: ZoneFinish};
-  /** The cavern family: painted rock walls (above the wainscot) and roof. */
-  rock?: {wall: ZoneFinish; ceil: ZoneFinish};
+  /**
+   * The cavern family: painted rock walls (above the wainscot) and roof. `bounceChroma` (absent = 1): the paint's chroma as the ENHANCED
+   * bounce takes it (its light-bake albedo, CAVERN_BOUNCE_CHROMA); the drawn paint is the tint either way.
+   */
+  rock?: {wall: ZoneFinish; ceil: ZoneFinish; bounceChroma?: number};
 }
 
 /** Wall zone heights above the face's floor (m). */
@@ -162,6 +165,18 @@ const SCHEMES: Readonly<Record<string, FinishScheme>> = {
 };
 
 /**
+ * The chroma (0..1) of a cavern paint as the enhanced bounce takes it (absent: 1, the paint as drawn). User (the green cavern "reads very
+ * green and strange"): its painted rock is nearly every surface a point in the station sees, so the gathered light (three bounces through
+ * the paint, GATHER_SATURATION) carries the paint's hue onto everything it lights. The blue / red / bone caverns' bounce stays near the
+ * white-light (Planckian) locus — a cooler or warmer white (measured on a green station's upper concourse: neutral granite floor Duv
+ * +0.008 / -0.013 / +0.008, Enhanced lighting off +0.007) — but green lies off it: the floor and wainscot were lit Duv +0.031, plainly
+ * green light (the paint's value is not the cause: 0.92 -> 0.70 moves it 0.002). At 0.4 the bounce lights them at Duv +0.017 (the
+ * stations' own aged tubes are +0.018) and the haze at +0.010 (was +0.015) while the drawn paint, the Off look and every other theme are
+ * unchanged. Render-only (no layout field): an existing green cavern bakes this on reload (the albedo bytes are a gather-digest input).
+ */
+const CAVERN_BOUNCE_CHROMA: Readonly<Record<string, number>> = {cavernGreen: 0.4};
+
+/**
  * The painted-rock scheme of a cavern theme (the theme's paint over the off-white painted shotcrete set). Task
  * studio-subway-rework-m2-finishing-20261117-111246-01 (user: the cavern "remains almost entirely the same red-orange rough surface. Keep
  * its strong identity hue, but use believable neutral stone / plinth / door / service / waiting accents and hierarchy"): the painted rock
@@ -169,19 +184,20 @@ const SCHEMES: Readonly<Record<string, FinishScheme>> = {
  * spring-line ledge, the cove troughs, door reveals) and the accents (portal frames) a light NEUTRAL precast, backing / service panels
  * vitreous enamel (world/subwayKitCavern.ts draws the relief).
  */
-function cavernScheme(wallTint: number): FinishScheme {
+function cavernScheme(wallTint: number, theme: string): FinishScheme {
   const wall = z('rockPainted', paintTint(wallTint, 0.92)), ceil = z('rockPainted', paintTint(wallTint, 0.78));
   const granite = z('floorGranite', greyTint('floorGranite', 0.5)), precast = z('concretePrecast', greyTint('concretePrecast', 0.62));
+  const bounceChroma = Object.hasOwn(CAVERN_BOUNCE_CHROMA, theme) ? CAVERN_BOUNCE_CHROMA[theme] : undefined;
   return {plinth: z('plinthGranite'), dado: granite, field: wall, band: null, upper: wall, ceil, floor: z('floorGranite'), trim: precast, struct: wall,
     pier: granite, accent: precast, panel: z('enamelPanel'),
-    hall: {field: wall, upper: wall, ceil, floor: z('floorGranite'), struct: wall, pier: granite}, rock: {wall, ceil}};
+    hall: {field: wall, upper: wall, ceil, floor: z('floorGranite'), struct: wall, pier: granite}, rock: bounceChroma === undefined ? {wall, ceil} : {wall, ceil, bounceChroma}};
 }
 
 /** The finish scheme of a station (null: no identity, a version-1 station drawn exactly as before). */
 export function finishSchemeOf(layout: Pick<StationLayout, 'identity'>): FinishScheme | null {
   const id = layout.identity;
   if (!id) return null;
-  if (id.walls === 'rock') return cavernScheme(id.wallTint);
+  if (id.walls === 'rock') return cavernScheme(id.wallTint, id.theme);
   return SCHEMES[id.theme] ?? (id.walls === 'concrete' ? SCHEMES.brutalist : SCHEMES.civic);
 }
 
