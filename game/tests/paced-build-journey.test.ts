@@ -178,8 +178,10 @@ describe('the journey builds the next station paced (lane BUILD)', async () => {
     // before the doors open (tests/surface-lift-ride.test.ts)
     expect(paced).toBe(2);
     const ride = src.slice(src.indexOf('  private async rideSurfaceLift('), src.indexOf('  private async recoverSurfaceCrossing('));
-    expect(ride).toContain('await this.buildSectionPaced(to, layout, {kind: \'surface\'}, false);');
-    expect(ride.slice(ride.indexOf('this.buildSectionPaced('))).toMatch(/await this\.backgroundCompile\(true\)[\s\S]*await R\.markReady\(\)/);
+    // (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01: the ride's build slices are LIFT_RIDE_WAIT.buildSliceMs, and
+    // its compile wait is bounded from the active time at the wait's start — tests/surface-lift-seal.test.ts)
+    expect(ride).toContain('await this.buildSectionPaced(to, layout, {kind: \'surface\'}, false, {sliceMs: LIFT_RIDE_WAIT.buildSliceMs});');
+    expect(ride.slice(ride.indexOf('this.buildSectionPaced('))).toMatch(/await this\.backgroundCompile\(true, since\)[\s\S]*await R\.markReady\(\)/);
     expect(sliced).toBe(6); // (tests/loading-build-sliced.test.ts: what that drain does; + the Surface Run crossing and its recovery, lane ACCESS)
     expect(sync).toBe(0); // (the game itself no longer builds a station in one block; tests and tools do, through the wrapper below)
     const journey = src.slice(src.indexOf('async travelToStation('), src.indexOf('private fuelCartsLike('));

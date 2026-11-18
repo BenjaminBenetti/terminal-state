@@ -2473,10 +2473,12 @@ export class Game {
    * shadow-map variants by off-screen draws nested at the real frame's depth. The arrival still waits at most 8 s for the scene-pass
    * phase; nothing holds a frame or hides the canvas. 'view' (software rasterizer): the representatives within 24 m only.
    */
-  private async backgroundCompile(full = false, since = this.frameBudget.activeMs): Promise<'done' | 'partial' | 'cancelled' | 'skipped' | 'arrived'> {
+  private async backgroundCompile(full = false, since?: number): Promise<'done' | 'partial' | 'cancelled' | 'skipped' | 'arrived'> {
     // (lane ACCESS follow-up) `full`: the Surface Run lift ride waits for the WHOLE job and is told how it ended (task studio-surface-run-lift-
-    // reliability-and-cab-20261118-023909-01: bounded — LIFT_RIDE_WAIT from `since`, active time: 'partial' = the budget / a stall)
+    // reliability-and-cab-20261118-023909-01: bounded — LIFT_RIDE_WAIT from `since` (default: now), active time: 'partial' = the budget /
+    // a stall; read only for `full`, so the train journey's route never touches the frame budget here)
     if (!this.world || !this.renderer.initialized || this.gpu?.deviceLost) return this.gpu?.deviceLost ? 'cancelled' : 'skipped';
+    const from = full ? since ?? this.frameBudget.activeMs : 0;
     const mode = warmupMode(location.search, this.softwareGl?.software === true);
     if (mode === 'off') return 'skipped';
     this.journeyCompile?.cancel();
@@ -2503,9 +2505,9 @@ export class Game {
       const job = (this.journeyCompile = new JourneyCompile({renderer: this.renderer as unknown as JourneyCompileOptions['renderer'], scheduler: this.frameBudget,
         scene: this.scene, camera: this.camera, target, depth, items, casters, receiver, frameNo: () => this.frameBudget.frame, ...(full ? LIFT_RIDE_COMPILE : {})}).start());
       if (full) {
-        const w = await waitForLiftCompile(job, () => this.frameBudget.activeMs, since);
+        const w = await waitForLiftCompile(job, () => this.frameBudget.activeMs, from);
         const st = job.stats;
-        this.surfaceLiftCompile = {end: w.end, why: w.why, ms: performance.now() - t0, activeMs: this.frameBudget.activeMs - since, scene: st.sceneDone, sceneItems: st.sceneItems,
+        this.surfaceLiftCompile = {end: w.end, why: w.why, ms: performance.now() - t0, activeMs: this.frameBudget.activeMs - from, scene: st.sceneDone, sceneItems: st.sceneItems,
           shadows: st.shadowDone, casters: st.casters, twoPass: st.twoPassDone, twoPassItems: st.twoPass, calls: st.sceneChunks, postStalls: st.postStalls, tries: (this.surfaceLiftCompile?.tries ?? 0) + 1};
         console.info(`Terminal State: lift ride compile ${w.end}${w.why ? ` (${w.why})` : ''} — scene ${st.sceneDone}/${st.sceneItems}, shadows ${st.shadowDone}/${st.casters}, two-pass ${st.twoPassDone}/${st.twoPass}, ${st.sceneChunks} calls, ${((performance.now() - t0) / 1000).toFixed(1)} s`);
         if (w.end === 'partial') job.cancel(); // (the rest in play pacing once the doors are open: rideSurfaceLift)
