@@ -180,7 +180,7 @@ describe('Surface lift cab finish: materials and the finished car', () => {
     const rects = Object.values(F.placards).map(l => l.uv);
     for (let q = 0; q < 4; q++) {
       const us = [0, 1, 2, 3].map(k => [pu.getX(q * 4 + k), pu.getY(q * 4 + k)]);
-      expect(rects.some(r => us.every(([u, v]) => Math.abs(u - r[0]) < 1e-6 || Math.abs(u - r[2]) < 1e-6) && us.every(([, v]) => Math.abs(v - r[1]) < 1e-6 || Math.abs(v - r[3]) < 1e-6)), `placard ${q}`).toBe(true);
+      expect(rects.some(r => us.every(([u]) => Math.abs(u - r[0]) < 1e-6 || Math.abs(u - r[2]) < 1e-6) && us.every(([, v]) => Math.abs(v - r[1]) < 1e-6 || Math.abs(v - r[3]) < 1e-6)), `placard ${q}`).toBe(true);
     }
     for (const v of [fin, lit, bunker]) for (const g of v.geometries) g.dispose();
   });
