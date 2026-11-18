@@ -127,7 +127,7 @@ export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?:
       await h.waitFrames(2);
       await walkTo(far, () => game.surfaceCrossCounts.done > done0 && !C.holding);
       expect(game.surfaceCrossCounts.done, `${label}: crossed ${diag()}`).toBe(done0 + 1);
-      expect(C.holding, `${label}: walked out of the far mouth`).toBe(false);
+      expect(C.holding, `${label}: walked out of the far mouth ${diag()}`).toBe(false);
       expect(game.run.current).not.toEqual(key0);
       const rs = samples.slice(n0);
       report.frames[dir] = rs.length;
