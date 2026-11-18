@@ -305,7 +305,7 @@ export class TowerRuntime {
       setExteriorFootprint(info.exterior);
       const models = this.exteriorModels();
       const top = info.storeys.length ? info.storeys[info.storeys.length - 1].baseY : info.groundY;
-      const plan = planExterior({foot: info.exterior, groundY: info.groundY, eyeAbove: top - info.groundY + 1.6, seed: info.seed});
+      const plan = planExterior({foot: info.exterior, groundY: info.groundY, eyeAbove: top - info.groundY + 1.6, seed: info.seed, ...(info.tube ? {cuts: [info.tube]} : {})}); // (+ the Office connector tube's open ground)
       const view = buildExterior(plan, models);
       root.add(view.root);
       o.exterior = {plan, view, checkT: 0, models};

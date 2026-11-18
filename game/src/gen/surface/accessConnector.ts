@@ -73,11 +73,16 @@ export function carveOfficeConnector(layout: StationLayout): SurfaceAccessInfo |
   return {...v1, v: 2, kind: 'connector', returnPose, connector: rec};
 }
 
-/** The Mall's tube doorway width: the leaves' span rounded to the half metre, at most the opening (m). */
+/**
+ * The Mall's tube doorway width: the leaves' span rounded DOWN to a whole metre — two cells, so the walk model's centre-sampled cells
+ * (gen/surface/connectorShape.ts connectorModel) give exactly this width, and the sidelights' mullions stay outside it: two leaf pairs'
+ * 3.7 m -> 3.0, one pair's 1.8 -> 1.0 — at most the opening (m).
+ */
 export function mallConnectorWidth(panels: readonly {kind: string; s0: number; s1: number}[], s0: number, s1: number): number {
   const doors = panels.filter(p => p.kind === 'door');
   const span = doors.length ? Math.max(...doors.map(p => p.s1)) - Math.min(...doors.map(p => p.s0)) : s1 - s0;
-  return r3(Math.min(Math.floor((s1 - s0) / CELL + 1e-6) * CELL, Math.round(span / CELL) * CELL));
+  const M = 2 * CELL;
+  return r3(Math.max(M, Math.min(Math.floor((s1 - s0) / M + 1e-6), Math.floor(span / M + 1e-6)) * M));
 }
 
 /** Version 2 Mall: the connector at the version-1 usable street exit. Null: the mall has no usable exit. */
