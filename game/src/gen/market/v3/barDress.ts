@@ -49,6 +49,9 @@ export const BAR_PLAN = {
   min: {modules: 2, shelves: 2, stools: 4, tables: 3},
   /** Pendant lamps: height above the deck (m). */
   lampY: 2.5,
+  /** (task studio-market-readable-shop-signs-20261118-022405-01) The name board's centre over the backbar (m above the deck): its lettering
+   *  above the counter's pendants from the customer's side (at 2.55 m it hung behind them). */
+  boardY: 3.35,
 } as const;
 
 /** Fixtures that show the bar's stock (their exposed shelf tiers: items/lootLayout.ts holderSurfaces). */
@@ -211,7 +214,7 @@ export function dressBar(layout: StationLayout, bc: BarCarve, rng: Rng, name: st
   for (const t of [0.4, 0.78]) light(U * t, P.tableV, 0.75);
   for (const t of [0.15, 0.6]) light(U * t, P.frontV + 0.4, 0.6); // (over the stools' aisle and the stair end)
   const style = STALL_SIGNS[BAR_STALL].style;
-  layout.signs.push({kind: 'info', text: name.split(' — ')[0], area: a.id, x: r3(x(0.55 + (uEnd - 0.55) / 2)), z: r3(z(1.05)), y: r3(B1 + 2.55), rot: 0, w: 2.6, hang: true, style, level: 1});
+  layout.signs.push({kind: 'info', text: name.split(' — ')[0], area: a.id, x: r3(x(0.55 + (uEnd - 0.55) / 2)), z: r3(z(1.05)), y: r3(B1 + P.boardY), rot: 0, w: 2.6, hang: true, style, level: 1});
 
   // --- the stall record (world metres; the record pass adds storeys / heights) ----------------------------------------------------
   const cxA = x(uc0), cxB = x(uc1);

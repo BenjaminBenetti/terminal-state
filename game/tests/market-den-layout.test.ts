@@ -43,10 +43,12 @@ const runs = SEEDS.map(seed => {
 });
 
 /** Version 3 fingerprints of the generator before this task (gen/market at 54ef3445, run from a `git archive` of it side by side with
- *  this branch: identical) — a recorded version 3 must keep regenerating exactly this. */
+ *  this branch: identical) — a recorded version 3 must keep regenerating exactly this. Re-pinned by task
+ *  studio-market-readable-shop-signs-20261118-022405-01: only the bar's name board rose above its pendants (everything else of a recorded market — grids, areas,
+ *  doors, props, lights, the market record — still byte for byte origin/main 1e08fa41's: market-sign-readability.test.ts). */
 const V3_SHIPPED: Record<number, string> = {
-  1: '8b8fdc3c3fd2e51a', 2: '8749b4e5e32cb0cf', 3: 'e9f029315e7527a8', 6: 'a1dd6758bc803a06', 42: 'c71dd428a42cf237',
-  777: '46a860c2524511cb', 4242: 'd5b31b34da0ccbc4', 9001: '2fa731ae871d3462', 31337: '0909ce98a9e84bc0',
+  1: '67f3e180e7d9112c', 2: '4c4e3b83bf41e166', 3: '0a33fb8cf19aa105', 6: '1a7f9ec27d7539d3', 42: 'e7e1e7818e1f8046',
+  777: '77b300f81bcfa734', 4242: '48ae9ea1b519edaa', 9001: '68822455313df292', 31337: 'aa36ec90f345556e',
 };
 function fingerprint(l: StationLayout): string {
   const g = l.levels.map(L => crypto.createHash('sha256').update(Buffer.from(L.grid.cells)).update(Buffer.from(L.grid.area.buffer)).update(Buffer.from(L.grid.floor.buffer)).update(Buffer.from(L.grid.ceil.buffer)).update(Buffer.from(L.grid.blocked)).update(Buffer.from(L.grid.sightBlocked)).digest('hex'));
