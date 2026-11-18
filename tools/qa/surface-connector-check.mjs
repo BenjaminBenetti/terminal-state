@@ -68,6 +68,22 @@ await withBrowserLock(async () => {
     const view = () => ev(() => window.__game.crossingView && {...window.__game.crossingView, job: undefined, plan: window.__game.crossingView.plan}).catch(e => String(e));
     const waitFor = async (fn, capS, arg) => { const r0 = Date.now(); while (Date.now() - r0 < capS * 1000 && !report.guard) { if (await ev(fn, arg).catch(() => false)) return true; await sleep(250); } return false; };
 
+    // the destination ready: walk on to the far flap (it rolls up for a player near it), a picture of it open, then on until the tube
+    // lets go of the walker (out of the far mouth). Frames are slow on a software driver: walk until released, bounded, not for a fixed time.
+    const walkOn = async (name, note) => {
+      const t0 = Date.now();
+      await page.keyboard.down('KeyW');
+      const opened = await waitFor(() => { const c = window.__LL.surface.connector(); return !!c && (!c.holding || Math.max(...c.flap) > 0.6); }, 120);
+      await page.keyboard.up('KeyW');
+      const openS = (Date.now() - t0) / 1000;
+      await frames(4);
+      await shot(name, note);
+      await page.keyboard.down('KeyW');
+      const released = await waitFor(() => !window.__LL.surface.connector()?.holding, 120);
+      await page.keyboard.up('KeyW');
+      return {opened, openS, released, releasedS: (Date.now() - t0) / 1000};
+    };
+
     if (!headroom('new campaign')) return;
     const t1 = Date.now();
     await ev((seed, host) => { window.__srNewGame = null; void window.__game.newCampaign(1, {overwrite: true, networkSeed: seed, dev: {level: host}}).then(r => { window.__srNewGame = r; }, e => { window.__srNewGame = {ok: false, error: String(e)}; }); }, NETWORK_SEED, HOST);
@@ -84,11 +100,11 @@ await withBrowserLock(async () => {
       const tick = () => { const r = w.__cc; if (!r || r.done) return; r.frames++;
         const g = w.__game, now = performance.now(), dtf = now - r.last; r.last = now; r.worst = Math.max(r.worst, dtf);
         const c = w.__LL.surface.connector?.(), l = w.__LL.surface.lift?.();
-        const ph = `${g.surfaceCrossing?.phase ?? 'none'}/${c?.phase ?? l?.phase ?? 'none'}`;
+        const ph = `${g.surfaceCrossing?.phase ?? 'none'}/${(c?.record ? c.phase : null) ?? l?.phase ?? 'none'}`; // (the runtime with an end here)
         r.gaps[ph] = Math.max(r.gaps[ph] ?? 0, Math.round(dtf));
         if (g.transitGap) { r.gapFrames++; if (r.gapFrames % 20 === 0 && g.state === 'playing') { g.input.dx = (r.looks++ % 2 ? -1 : 1) * 25; } } // (a mouse turn now and then in the gap)
-        if (r.phases[r.phases.length - 1]?.p !== ph) r.phases.push({p: ph, ms: Math.round(now - r.t0), held: c?.holding ?? l?.held ?? null, flap: c?.flap ?? null});
-        if (r.farOpenMs === null && c && c.reposed && c.flap.some(f => f > 0.05) && r.phases.some(x => x.p.startsWith('warmup') || x.p.startsWith('build'))) r.farOpenMs = Math.round(now - r.t0);
+        if (r.phases[r.phases.length - 1]?.p !== ph) r.phases.push({p: ph, ms: Math.round(now - r.t0), held: c?.record ? c.holding : l?.held ?? null, flap: c?.record ? c.flap : null});
+        if (r.farOpenMs === null && c?.record && c.reposed && c.flap.some(f => f > 0.05) && r.phases.some(x => x.p.startsWith('warmup') || x.p.startsWith('build'))) r.farOpenMs = Math.round(now - r.t0);
         if (r.farOpenMs === null && l && l.door > 0.05 && r.phases.some(x => /travel|waiting/.test(x.p))) r.farOpenMs = Math.round(now - r.t0);
         requestAnimationFrame(tick); };
       requestAnimationFrame(tick);
@@ -106,6 +122,7 @@ await withBrowserLock(async () => {
       const t2 = Date.now();
       const up = await ev(() => window.__LL.surface.cross('up')).catch(e => ({ok: false, error: String(e)}));
       end();
+      await frames(120); // (the frames after the doors opened: the first view in play)
       const tr = await stopTrace();
       step('rode up', {up, trace: tr, seconds: (Date.now() - t2) / 1000, firstView: await view()});
       await frames(30);
@@ -134,11 +151,9 @@ await withBrowserLock(async () => {
     const ready = await waitFor(() => { const c = window.__LL.surface.connector(); return !!c && c.ready && c.phase === 'idle'; }, 900);
     endOut();
     step('far side ready', {ready, seconds: (Date.now() - t2) / 1000, c: await con(), firstView: await view(), state: await ev(() => window.__LL.surface.state()).catch(e => String(e))});
-    await sleep(700);
-    await shot('tube-far-open', 'the far flap rolling up: the command tent beyond (no loading screen, no cut)');
-    await page.keyboard.down('KeyW'); await sleep(2200); await page.keyboard.up('KeyW');
+    const out = await walkOn('tube-far-open', 'the far flap rolled up: the command tent beyond (no loading screen, no cut)');
     await frames(10);
-    step('walked out', {trace: await stopTrace(), c: await con(), tent: await ev(() => window.__LL.surface.tent()).catch(e => String(e))});
+    step('walked out', {...out, trace: await stopTrace(), c: await con(), tent: await ev(() => window.__LL.surface.tent()).catch(e => String(e))});
     await shot('tent', 'in the command tent after the walk out');
     const rec = (await con())?.record;
     if (rec) {
@@ -153,6 +168,13 @@ await withBrowserLock(async () => {
       const okPlaza = await face(px, pz, hx, hz, rec.level); await frames(30);
       step('plaza pose', {ok: okPlaza, from: [px, pz], to: [hx, hz]});
       await shot('plaza-host', `outside: the ${HOST} building grounded at the tube, the tube to the tent (a side view)`);
+      // the same at night as a player sees it: the flashlight on (F), then the host's mouth and name plate from the plaza, closer
+      await page.keyboard.press('KeyF'); await frames(20);
+      await shot('plaza-host-torch', `outside with the flashlight: the ${HOST} building at the tube`);
+      const [qx, qz] = at(rec.len * 0.25, 4.5);
+      await face(qx, qz, hx, hz, rec.level); await frames(30);
+      await shot('plaza-host-mouth', `the ${HOST}'s mouth of the tube and its name plate (flashlight on)`);
+      await page.keyboard.press('KeyF'); await frames(5);
     }
     if (ONLY === 'out') return;
 
@@ -172,11 +194,9 @@ await withBrowserLock(async () => {
     const ready2 = await waitFor(() => { const c = window.__LL.surface.connector(); return !!c && c.ready && c.phase === 'idle'; }, 900);
     endBack();
     step('host side ready', {ready: ready2, seconds: (Date.now() - t3) / 1000, c: await con(), firstView: await view()});
-    await sleep(700);
-    await shot('tube-host-open', 'the host flap rolling up: the lobby beyond');
-    await page.keyboard.down('KeyW'); await sleep(2200); await page.keyboard.up('KeyW');
+    const back = await walkOn('tube-host-open', 'the host flap rolled up: the lobby beyond');
     await frames(10);
-    step('walked back', {trace: await stopTrace(), c: await con(), state: await ev(() => window.__LL.surface.state()).catch(e => String(e))});
+    step('walked back', {...back, trace: await stopTrace(), c: await con(), state: await ev(() => window.__LL.surface.state()).catch(e => String(e))});
     const r2 = (await con())?.record;
     if (r2) {
       const at = (s, t) => { const c = Math.cos(r2.yaw), sn = Math.sin(r2.yaw); return [r2.x - sn * s + c * t, r2.z - c * s - sn * t]; };
