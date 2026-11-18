@@ -8,7 +8,8 @@
 //  - THE FOOTPRINT (|t| <= width / 2 + ring, 0 <= s <= len) is SOLID on the district grid (nothing walks, spawns or is placed in it; the
 //    walk model carries the player): its clear width the tube's own (no ground drawn: its groundsheet), the ring its canvas margin
 //    (ground drawn). The tent's own wall cells beside the mouth (the ring's last cell row) stay the tent's canvas.
-//  - Its air is the tent's (world/surface/airMask.ts: sealed to the tent's top): no outdoor gas reads in it (one field for hurt + fog).
+//  - Its clear width is indoors to the tube's crown (world/surface/airMask.ts): no outdoor gas reads in it (one field for hurt + fog); the
+//    ring beside it is outdoor air.
 
 import {CELL, SOLID, type Grid} from '../grid';
 import {CONNECTOR, connectorToWorld, worldToConnector} from './connectorShape';
@@ -52,10 +53,10 @@ export function connectorCells(c: Pick<SurfaceConnector, 'x' | 'z' | 'yaw' | 'le
   return out;
 }
 
-/** The district's connector record at the plaza frame `pw` (plaza u / v metres -> world) with +v world heading `yaw`. */
+/** The district's connector record at the plaza frame `pw` (plaza u / v metres -> world) with +v world heading `yaw` (exact: a cardinal). */
 export function districtConnector(host: 'office' | 'mall', pw: (u: number, v: number) => {x: number; z: number}, yaw: number, y: number, area: number): SurfaceConnector {
   const a = pw(CONNECTOR_PLAZA.u, 0);
-  return {host, end: 'tent', x: r3(a.x), z: r3(a.z), y: r3(y), level: 0, yaw: r3(yaw), len: CONNECTOR.len, door: {...CONNECTOR_DISTRICT_DOOR}, area};
+  return {host, end: 'tent', x: r3(a.x), z: r3(a.z), y: r3(y), level: 0, yaw: yaw + 0, len: CONNECTOR.len, door: {...CONNECTOR_DISTRICT_DOOR}, area};
 }
 
 /** The district arrival (every loading-screen arrival): in the tent CONNECTOR_PLAZA.arrive m in front of the tent mouth, facing into it. */

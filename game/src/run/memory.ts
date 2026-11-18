@@ -79,6 +79,34 @@ export function propHolderKey(kind: string, p: {level?: number; x: number; z: nu
   return holderKey(kind, p.level, p.memAt?.x ?? p.x, p.memAt?.z ?? p.z);
 }
 
+/** (task studio-surface-host-ground-connectors-20261118-053602-01) The lane marking a section's loose items as rebased onto its moved pieces. */
+export const MOVED_PIECES_LANE = 'movedPieces';
+
+/**
+ * (task studio-surface-host-ground-connectors-20261118-053602-01) Rule "loot on a moved prop never floats": a section whose layout MOVED
+ * pieces aside (PropPlacement.memAt — the Surface Run's Office connector clearing its barricade) carries the remembered loose items still
+ * resting on a moved piece's top where it stood (a save taken before the move: within its old box, the top's -0.05 .. +0.6 band — the
+ * generator's own rule, gen/surface/accessDoor.ts applyMoves) along with it, ONCE per memory (MOVED_PIECES_LANE): later captures already
+ * hold the new spots. Every other item, and every memory of a layout without moved pieces, is untouched (no lane written). Call it before
+ * pickupPlan. Returns the items carried.
+ */
+export function rebaseMovedPieceItems(mem: SectionMemory, props: readonly {x: number; z: number; y: number; h: number; hx: number; hz: number; memAt?: {x: number; z: number}}[]): number {
+  const moved = props.filter(p => p.memAt);
+  if (!moved.length || mem.lanes[MOVED_PIECES_LANE]) return 0;
+  mem.lanes[MOVED_PIECES_LANE] = true;
+  let n = 0;
+  for (const rec of mem.pickups ?? []) {
+    const [x, y, z] = rec.anchor;
+    const p = moved.find(q => Math.abs(x - q.memAt!.x) <= q.hx && Math.abs(z - q.memAt!.z) <= q.hz && y >= q.y + q.h - 0.05 && y <= q.y + q.h + 0.6);
+    if (!p) continue;
+    const dx = p.x - p.memAt!.x, dz = p.z - p.memAt!.z;
+    rec.anchor = [x + dx, y, z + dz];
+    rec.pose = {p: [rec.pose.p[0] + dx, rec.pose.p[1], rec.pose.p[2] + dz], q: rec.pose.q};
+    n++;
+  }
+  return n;
+}
+
 /** Minimal holder-state shape (items/loot.ts HolderState) the memory reads / writes. */
 export interface HolderStateLike {
   lots: {id: number}[];

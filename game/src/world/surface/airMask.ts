@@ -30,6 +30,7 @@ import {CELL, FLOOR} from '../../gen/grid';
 import type {StationLayout} from '../../gen/stationTypes';
 import type {SurfaceBoundary, SurfaceInfo} from '../../gen/surface/surfaceTypes';
 import {connectorCells} from '../../gen/surface/connectorFootprint';
+import {CONNECTOR} from '../../gen/surface/connectorShape';
 import {GAS} from '../gas/field';
 import {ROOF_GAS_LOOK, type OutdoorGas} from '../gaslightRules';
 import {fogPressureAt} from './fogPressure';
@@ -111,9 +112,11 @@ function buildOutdoorMap(s: SurfaceInfo, g: {w: number; h: number; cells: ArrayL
     for (let y = bulk.y0; y < bulk.y1; y++) for (let x = bulk.x0; x < bulk.x1; x++) top[y * W + x] = Math.max(t, tb);
   }
   fillRect(s.checkpoint.tent.rect, byte(SURFACE_AIR.TENT_TOP));
-  // (task studio-surface-host-ground-connectors-20261118-053602-01) an Office / Mall connector tube's footprint holds the tent's air: the
-  // walk from the host's door to the tent never reads outdoor gas (the one field exposure and the fog march read)
-  if (s.portal.connector) for (const {i} of connectorCells(s.portal.connector, W, H)) { top[i] = Math.max(top[i], byte(SURFACE_AIR.TENT_TOP)); mark[i] = 1; }
+  // (task studio-surface-host-ground-connectors-20261118-053602-01) an Office / Mall connector tube's clear width is indoors to its crown:
+  // the walk from the host's door to the tent never reads outdoor gas (the one field exposure and the fog march read); its canvas ring
+  // beside it stays an outdoor column (the green air hugs the tube from outside; nothing walks there: SOLID)
+  const con = s.portal.connector;
+  if (con) for (const {i, role} of connectorCells(con, W, H)) if (role === 'clear') { top[i] = Math.max(top[i], byte(con.y + CONNECTOR.crownH)); mark[i] = 1; }
   const outdoor = new Set(s.outdoorAreas);
   const tentArea = s.checkpoint.tent.area;
   const tent = cellRect(s.checkpoint.tent.rect);

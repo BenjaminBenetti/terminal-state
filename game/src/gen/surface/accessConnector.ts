@@ -27,8 +27,8 @@ const wrap = (a: number) => { let v = a; while (v <= -Math.PI) v += 2 * Math.PI;
 /** The return pose: how far inside the doorway's inner face (m), and the nearer / deeper fallbacks (m) and across offsets tried. */
 export const CONNECTOR_RETURN = {inside: 1.5, steps: [0, 0.25, -0.25, 0.5, 0.75, 1.0, 1.5, 2.0], across: [0, 0.25, -0.25, 0.5, -0.5, 1, -1]} as const;
 
-/** The heading (camera yaw: forward = (-sin, -cos)) that walks along the outward normal (ox, oz). */
-const yawOut = (ox: number, oz: number) => r3(Math.atan2(-ox, -oz));
+/** The heading (camera yaw: forward = (-sin, -cos)) that walks along the outward normal (ox, oz): exact (a cardinal; never rounded, -0 -> 0). */
+const yawOut = (ox: number, oz: number) => Math.atan2(-ox, -oz) + 0;
 
 /**
  * The host's loading-screen pose: on the host grid `CONNECTOR_RETURN.inside` m inside the doorway's inner face (tube-local s = -depth -
@@ -38,7 +38,7 @@ const yawOut = (ox: number, oz: number) => r3(Math.atan2(-ox, -oz));
 function returnPoseOf(layout: StationLayout, g: Grid, rec: SurfaceConnector, out: [number, number]): SPose | null {
   const [ox, oz] = out, alongX = oz !== 0;
   const props = layout.props.filter(p => (p.level ?? 0) === rec.level && !p.mounted && p.host === undefined && !p.cargoGone && p.h > 0.05);
-  const yaw = r3(wrap(rec.yaw + Math.PI));
+  const yaw = wrap(rec.yaw + Math.PI) + 0;
   for (const ds of CONNECTOR_RETURN.steps) for (const t of CONNECTOR_RETURN.across) {
     const d = rec.door.depth + CONNECTOR_RETURN.inside + ds;
     const x = alongX ? rec.x + t : rec.x - ox * d, z = alongX ? rec.z - oz * d : rec.z + t;
