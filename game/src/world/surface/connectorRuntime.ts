@@ -46,7 +46,7 @@ export const CONNECTOR_WALK = {
   seam: 1.0,
   /** Re-arm: a disarmed walk (just arrived / refused) arms again within this distance of the walk-in flap's plane. */
   rearm: 1.0,
-  /** How often (s) a disarmed-by-refusal walk re-reads the refusal. */
+  /** How often (s) an armed walk at the seam re-reads a 'busy' gate (any other refusal disarms it). */
   refusalEvery: 0.3,
 } as const;
 
@@ -358,7 +358,7 @@ export class SurfaceConnectorRuntime {
       // the seam: armed, the walk-in flap down behind them, a metre in
       const into = wi === 0 ? L.s - pw : pw - L.s;
       if (this.phase === 'idle') {
-        if (!this.armed && into < CONNECTOR_WALK.rearm && this.flap[wi] > 0) { this.armed = true; this.refusal = null; }
+        if (!this.armed && into < CONNECTOR_WALK.rearm && this.flap[wi] > 0) { this.armed = true; this.refusal = null; this.refusalT = 0; }
         if (this.armed && this.flap[wi] <= 0 && into >= CONNECTOR_WALK.seam) this.fireSeam(dt);
       }
       this.foldLook(e);
@@ -380,17 +380,23 @@ export class SurfaceConnectorRuntime {
     return s > r.len + W.release || (s > r.len + 0.05 && Math.abs(t) > CONNECTOR.width / 2 + W.releaseSide);
   }
 
-  /** The seam fired: ask the Game to cross (a refusal disarms the walk with its reason; re-read now and then). */
+  /**
+   * The seam fired: ask the Game to cross. A refusal DISARMS the walk with its reason (shown while held; the player walks back out, or
+   * comes back to the walk-in flap to try again: tick's re-arm), so a cause that clears later never crosses a player who turned back;
+   * only 'busy' (a moment's lifecycle step) is re-read now and then.
+   */
   private fireSeam(dt: number): void {
     const g = this.game as unknown as {surfaceCrossRefusal(): {code: string; text: string} | null; crossSurface(): Promise<{ok: boolean; error?: string}>; surfaceCrossing: unknown};
     if (g.surfaceCrossing) return;
     this.refusalT -= dt;
-    if (this.refusal && this.refusalT > 0) return;
+    if (this.refusalT > 0) return;
     this.refusalT = CONNECTOR_WALK.refusalEvery;
     const r = g.surfaceCrossRefusal();
     if (r) {
-      if (this.refusal !== r.text) this.counts.refusals++;
-      this.refusal = r.code === 'busy' ? null : r.text;
+      if (r.code === 'busy') return;
+      this.counts.refusals++;
+      this.refusal = r.text;
+      this.armed = false;
       return;
     }
     this.refusal = null;
@@ -418,6 +424,7 @@ export class SurfaceConnectorRuntime {
     this.holding = true;
     this.armed = true;
     this.refusal = null;
+    this.refusalT = 0;
     this.counts.takes++;
   }
 
