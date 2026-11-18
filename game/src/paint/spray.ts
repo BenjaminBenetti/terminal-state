@@ -4,12 +4,13 @@ import {CAN_IDS, INK, isSprayCan, paintLeft, type CanId} from '../items/sprayPai
 import {sectionId} from '../levels/types';
 import type {PropPlacement} from '../gen/props';
 import {raycastWorld} from '../combat/hitscan';
+import {ridesHost} from '../damage/materials';
 import {PaintBatch} from './batch';
 import {BRUSH, PaintRecord, PAINT_PARTICIPANT, type Dab} from './record';
 
 type Owner = {key: string; frame: THREE.Matrix4};
 const identity = new THREE.Matrix4(), up = new THREE.Vector3(0,1,0);
-const origin = new THREE.Vector3(), direction = new THREE.Vector3(), transform = new THREE.Matrix4();
+const origin = new THREE.Vector3(), direction = new THREE.Vector3(), bodyPosition = new THREE.Vector3(), transform = new THREE.Matrix4();
 const probe = new THREE.Mesh(), normMat = new THREE.Matrix3();
 const idleGeometry = probe.geometry, idleMaterial = probe.material;
 const rounds = (v: THREE.Vector3) => v.toArray().map(n => Math.round(n*1000));
@@ -95,9 +96,9 @@ export class SprayPaint {
     else if (key.startsWith('cart/')) o=g.fuelCarts.viewOf(key.slice(5));
     else if (key.startsWith('prop/')) {
       const p=this.props.get(key);
-      if (p && !p.cargoGone && p.h>0 && !g.damage.props.states.get(p)?.broken) {
-        if (!g.physics.dynamicItems.propMatrix(p,transform)) transform.makeRotationY(p.rot).setPosition(p.x,p.y,p.z);
-        return transform;
+      if (p && !p.cargoGone && !g.damage.props.states.get(p)?.broken) {
+        if (g.physics.dynamicItems.propMatrix(p,transform)) return transform;
+        if (p.h>0) return transform.makeRotationY(p.rot).setPosition(p.x,p.y,p.z);
       }
       const ride=g.trainPropCargo.riding.find(r=>r.rec.id===key.slice(5));
       if (ride?.obj && v) {
@@ -157,17 +158,32 @@ export class SprayPaint {
       if (!this.indexed.has(mesh)) test(mesh as THREE.Mesh, mesh.userData.paintSurface ? this.section : null);
     });
     for (const [key, p] of this.props) {
-      if (p.cargoGone || Math.abs(p.x - origin.x) > BRUSH.range + p.hx || Math.abs(p.z - origin.z) > BRUSH.range + p.hz
+      if (p.cargoGone) continue;
+      // Hung garments travel as part of their rail, including when the cargo system rebuilds its riders.
+      const host = p.host !== undefined && ridesHost(p.kind) ? g.layout.props[p.host] : undefined;
+      if (p.h<=0) {
+        // Going loose clears the placement collider. The body can tip and can ride above its source floor.
+        const dynamic = g.physics.dynamicItems;
+        const body = host ?? p;
+        if (!dynamic.propMatrix(body, transform)) continue;
+        const reach = BRUSH.range + Math.hypot(body.hx, body.hz, dynamic.restHeight(body)) + (host ? dynamic.restHeight(p) : 0);
+        if (bodyPosition.setFromMatrixPosition(transform).distanceToSquared(origin)>reach*reach) continue;
+      } else if (Math.abs(p.x - origin.x) > BRUSH.range + p.hx || Math.abs(p.z - origin.z) > BRUSH.range + p.hz
         || origin.y < p.y - BRUSH.range || origin.y > p.y + p.h + BRUSH.range) continue;
       const state = g.damage.props.states.get(p);
+      const hostId = host && g.trainPropCargo.idOf(host);
+      const paintKey = state?.broken || (host && !hostId) ? null : hostId ? 'prop/'+hostId : key;
       for (const entry of g.damage.props.index.inst.get(p) ?? []) {
         const matrix = new THREE.Matrix4();
         entry.mesh.getMatrixAt(entry.index, matrix);
         if (matrix.determinant() === 0) continue;
-        test(entry.mesh, state?.broken ? null : key, matrix.premultiply(entry.mesh.matrixWorld));
+        test(entry.mesh, paintKey, matrix.premultiply(entry.mesh.matrixWorld));
       }
       for (const part of state?.parts ?? []) {
-        if (part.mesh.parent) test(part.mesh, part.moving || state?.broken ? null : key);
+        if (part.mesh.parent) {
+          part.mesh.updateWorldMatrix(true, false);
+          test(part.mesh, part.created ? paintKey : null);
+        }
       }
     }
 
@@ -177,6 +193,7 @@ export class SprayPaint {
       roots.set(train.fixed, 'train');
       if (g.trainArmor?.group) roots.set(g.trainArmor.group, 'train');
       train.leaves.forEach((pair, i) => pair.forEach((leaf, k) => roots.set(leaf, `door/${i}/${k}`)));
+      for (const ride of g.trainPropCargo.riding) if (ride.obj) roots.set(ride.obj, 'prop/'+ride.rec.id);
     }
     const carts: THREE.Object3D[] = [];
     for (const cart of g.fuelCarts.bodies()) {

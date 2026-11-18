@@ -40,7 +40,7 @@ describe('finite paint and campaign ownership',()=>{
   it('hits the nearest surface within reach and follows a rotating prop onto a different station and back',()=>{
     const inv = new Inventory(), can = inv.makeStack('spray_green',1);
     inv.set({bar:'hotbar',index:0},can);
-    const grid = new Grid(24,24); grid.cells.fill(FLOOR);
+    const grid = new Grid(24,24); grid.cells.fill(FLOOR);grid.ceil.fill(10);
     const scene = new THREE.Scene(), group = new THREE.Group(), camera = new THREE.PerspectiveCamera();
     camera.position.set(4,1.2,4);
     const wall = new THREE.Mesh(new THREE.PlaneGeometry(3,2),new THREE.MeshBasicMaterial());
@@ -53,11 +53,17 @@ describe('finite paint and campaign ownership',()=>{
     const scope = {station:'st-01',section:'main',level:'subway'};
     const hooks: {build():void;teardown():void}[]=[];
     const layout = {props:[prop],trench:{floorY:-2}};
+    const body = new THREE.Matrix4();
+    const dynamicItems = {restHeight:()=>.7, propMatrix:(_p:typeof prop,out:THREE.Matrix4)=>{
+      if (prop.h>0) return false;
+      out.copy(body); return true;
+    }};
+    const parts = new Map<typeof prop,{parts:{mesh:THREE.Mesh;created:boolean;moving:boolean}[]}>();
     const g = {scene,world:{group},camera,inv,levels:singleLevel(grid),layout,run:{current:scope},
       sectionHooks:hooks,runParticipants:[],trainRuntime:{view:null},
       trainPropCargo:{idOf:()=> 'st-01:main#8',riding:[]},fuelCarts:{bodies:()=>[]},
-      damage:{props:{index:{inst:new Map([[prop,[{mesh:bin,index:0}]]])},states:new Map()}},
-      physics:{dynamicItems:{propMatrix:()=>false}},zombies:[],pickups:{list:[]}};
+      damage:{props:{index:{inst:new Map([[prop,[{mesh:bin,index:0}]]])},states:parts}},
+      physics:{dynamicItems},zombies:[],pickups:{list:[]}};
     const spray=new SprayPaint(g as never);hooks[0].build();spray.tick(.1,true);
     expect([...spray.record.targets.keys()]).toEqual(['prop/st-01:main#8']);
     const mark=spray.record.save();
@@ -77,6 +83,18 @@ describe('finite paint and campaign ownership',()=>{
     expect(spray.record.save()[0]).toEqual(mark[0]);
     hooks[0].teardown();scope.station='st-01';hooks[0].build();
     expect(spray.batches.has('station/st-01:main')).toBe(true);
+    // DynamicItems clears the static collider as it detaches the real parts, and can lift and tilt them far above their source.
+    prop.h=0;bin.setMatrixAt(0,new THREE.Matrix4().makeScale(0,0,0));
+    body.makeRotationZ(.32).setPosition(4,6,3);
+    const detached = new THREE.Mesh(bin.geometry,bin.material);
+    detached.matrixAutoUpdate=false;detached.matrix.copy(body).multiply(new THREE.Matrix4().makeTranslation(0,.35,0));
+    detached.matrixWorldNeedsUpdate=true;scene.add(detached);parts.set(prop,{parts:[{mesh:detached,created:true,moving:true}]});
+    camera.position.set(4,6.35,4);
+    spray.tick(.1,true);
+    const batch=spray.batches.get('prop/st-01:main#8')!;
+    expect(batch.mesh.visible).toBe(true);expect(batch.mesh.matrix.equals(body)).toBe(true);
+    expect(spray.record.targets.get('prop/st-01:main#8')).toHaveLength(2);
+    expect(spray.record.targets.get('prop/st-01:main#8')![0]).toEqual(mark[0][1][0]);
   });
   it('retains the same can through payment, resale, empty stock, chest, loose pickups and cargo',()=>{
     const inv=new Inventory(), make=(id:string,n:number)=>inv.makeStack(id,n);
