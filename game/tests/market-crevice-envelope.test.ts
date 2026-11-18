@@ -47,16 +47,19 @@ const runs = SEEDS.map(seed => {
 });
 
 /** Version 6 fingerprints of origin/main dc27a8d4's generator (task studio-market-irregular-settlement-20261117-003819-01: computed on it
- *  before that change and on its branch: identical). */
+ *  before that change and on its branch: identical). Re-pinned (with version 5's) by task studio-market-readable-shop-signs-20261118-022405-01: some
+ *  wall lamps slid along their wall off the shop signs, a blade took its door's other side, the bar's board rose above its lamps — the
+ *  rest of a recorded market is still origin/main 1e08fa41's (market-sign-readability.test.ts). */
 const V6_SHIPPED: Record<number, string> = {
-  1: 'af7ac93a3e6f6c35', 2: '1d50e14a587812dc', 3: 'c70fafd688bc1431', 6: '76abe82e05fe3045', 7: '7a38172bb2e344d3', 16: 'bc406c2d97f01697',
-  42: '95f48d1cedf20ce4', 777: 'f3d95b73d37fb219', 4242: '6f79c5853a3b20e2', 9001: '1f07e5d21262b140', 31337: '4462e2950f2182d3',
-  20261116: '1891406ce66fc2d0',
+  1: '00c12d2e7c10f5c4', 2: '89f60b43807011c9', 3: '2772c8f8159d00b8', 6: 'b0a5afecc32312c6', 7: '5117ede88b787979', 16: '2192cfaf4c82fd0f',
+  42: '34b24004659e893c', 777: 'c35b434fc770bac7', 4242: 'c4df052e073781b6', 9001: '663037ea38550067', 31337: 'fdad12ee61dc79bb',
+  20261116: '5356cc3956337168',
 };
-/** Version 5 fingerprints of origin/main aeec54a4's generator (computed on it before this change and on this branch: identical). */
+/** Version 5 fingerprints of origin/main aeec54a4's generator (computed on it before this change and on this branch: identical; re-pinned
+ *  as version 6's above). */
 const V5_SHIPPED: Record<number, string> = {
-  1: 'e946af16c107f1da', 2: '3e7b8ddd81c598b9', 3: 'eff544739592b5ea', 6: '2211edd83cf39d40', 7: 'da986df4ae039cc9', 16: 'fbbe3127697223e4',
-  42: 'b276a550a65a0781', 777: 'd128f2bb54d272f9', 4242: '34dca8edc6773f2a', 9001: '6f0e84ceea6b7ef7', 31337: '9179d1efdfb2372b',
+  1: '50bea7c5e083b9ac', 2: '51f293a34a085a74', 3: '049f43a761c6fea8', 6: '77f3f4192590378e', 7: '61fcf394805012e5', 16: 'b3aaa546a549e28f',
+  42: '451c667ee7454aa4', 777: 'fb4a29c19c2272b5', 4242: '090d50b0ee4bf97c', 9001: 'fd27077a86643fd6', 31337: '444ac26058f802da',
 };
 function fingerprint(l: StationLayout): string {
   const g = l.levels.map(L => crypto.createHash('sha256').update(Buffer.from(L.grid.cells)).update(Buffer.from(L.grid.area.buffer)).update(Buffer.from(L.grid.floor.buffer)).update(Buffer.from(L.grid.ceil.buffer)).update(Buffer.from(L.grid.blocked)).update(Buffer.from(L.grid.sightBlocked)).digest('hex'));
