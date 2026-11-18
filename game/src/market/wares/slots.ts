@@ -248,6 +248,8 @@ export function stallSurfaces(layout: Layoutish, stall: MarketStall): WareSurfac
   const t = stall.trader, ty = (t?.y ?? 0) + 1.2;
   const far = (s: WareSurface) => (t && fin(t.x) && fin(t.z) ? Math.hypot(s.x - t.x, s.z - t.z, s.y - ty) : 0);
   const all = allStallSurfaces(layout, stall);
+  // The unmanned paint counter reserves its front lip for one row of owned cans.
+  if (stall.id === 'paint') return all;
   let use = all.filter(s => !isCustomerCounter(layout, stall, s));
   if (!use.length) use = all.filter(s => isCustomerCounter(layout, stall, s)).flatMap(s => counterEnds(stall, s));
   return use.map((s, i) => ({s, i, k: far(s)})).sort((a, b) => a.k - b.k || a.i - b.i).map(e => e.s);

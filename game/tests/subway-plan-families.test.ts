@@ -61,20 +61,22 @@ function layoutHash(l: unknown): string {
 const m2 = (a: {w: number; h: number}) => a.w * a.h * CELL * CELL;
 
 describe('layout version policy', () => {
-  // (task studio-subway-architecture-materials-rework-20261117-072826-01: version 3 — the sectioned grand hall — is the new build; a
-  // recorded version 2 stays version 2: tests/subway-hall-v3.test.ts)
-  it('a visited station without a record stays version 1; a recorded version is kept; a new / never-entered station builds 3', () => {
-    expect(SUBWAY_LAYOUT_VERSION).toBe(3);
-    expect(subwayLayoutVersionFor(undefined)).toBe(3);
-    expect(subwayLayoutVersionFor({visits: 0, lanes: {}})).toBe(3);
+  // (task studio-subway-architecture-materials-rework-20261117-072826-01: version 3 — the sectioned grand hall; a recorded version 2 stays
+  // version 2: tests/subway-hall-v3.test.ts. Task studio-subway-vertical-layout-20261118-022131-01: version 4 — the circulation plans — is
+  // the new build; a recorded version 3 stays version 3: tests/subway-circulation.test.ts)
+  it('a visited station without a record stays version 1; a recorded version is kept; a new / never-entered station builds 4', () => {
+    expect(SUBWAY_LAYOUT_VERSION).toBe(4);
+    expect(subwayLayoutVersionFor(undefined)).toBe(4);
+    expect(subwayLayoutVersionFor({visits: 0, lanes: {}})).toBe(4);
     expect(subwayLayoutVersionFor({visits: 3, lanes: {}})).toBe(1);
     expect(subwayLayoutVersionFor({visits: 3, lanes: {[SUBWAY_LAYOUT_LANE]: {v: 2}}})).toBe(2);
     expect(subwayLayoutVersionFor({visits: 3, lanes: {[SUBWAY_LAYOUT_LANE]: {v: 3}}})).toBe(3);
+    expect(subwayLayoutVersionFor({visits: 3, lanes: {[SUBWAY_LAYOUT_LANE]: {v: 4}}})).toBe(4);
     expect(subwayLayoutVersionFor({visits: 0, lanes: {[SUBWAY_LAYOUT_LANE]: {v: 1}}})).toBe(1);
     for (const bad of [{v: 0}, {v: 9}, {v: 1.5}, {v: '2'}, null]) expect(subwayLayoutVersionFor({visits: 2, lanes: {[SUBWAY_LAYOUT_LANE]: bad}})).toBe(1);
   });
 
-  it('a campaign station: an old visited station rebuilds its exact version-1 layout; a new one records version 3 (Game.generateSection)', () => {
+  it('a campaign station: an old visited station rebuilds its exact version-1 layout; a new one records version 4 (Game.generateSection)', () => {
     const run = createRun({seeds: {subway: 1, office: 2, mall: 3, market: 4, bunker: 7, skyways: 5, reactor: 6}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
     const oldKey = {level: 'subway' as const, section: 'main', station: 'st-old'}, newKey = {level: 'subway' as const, section: 'main', station: 'st-new'};
     run.memory(oldKey).visits = 2;
@@ -83,10 +85,10 @@ describe('layout version policy', () => {
       if (run.laneStore(SUBWAY_LAYOUT_LANE, k) === undefined) run.setLaneStore(SUBWAY_LAYOUT_LANE, {v}, k);
       return v;
     };
-    expect([version(oldKey), version(newKey)]).toEqual([1, 3]);
+    expect([version(oldKey), version(newKey)]).toEqual([1, 4]);
     run.memory(newKey).visits++;
-    expect([version(oldKey), version(newKey)]).toEqual([1, 3]);
-    expect([run.laneStore(SUBWAY_LAYOUT_LANE, oldKey), run.laneStore(SUBWAY_LAYOUT_LANE, newKey)]).toEqual([{v: 1}, {v: 3}]);
+    expect([version(oldKey), version(newKey)]).toEqual([1, 4]);
+    expect([run.laneStore(SUBWAY_LAYOUT_LANE, oldKey), run.laneStore(SUBWAY_LAYOUT_LANE, newKey)]).toEqual([{v: 1}, {v: 4}]);
     // the visited station (a new-family seed): its version-1 rebuild is the build it was saved with (the generator before this task)
     const s = FAMILY_SEEDS.cavern;
     const before = generateStation(s), rebuilt = generateStation(s, {layoutVersion: 1});

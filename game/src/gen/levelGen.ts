@@ -38,6 +38,7 @@ import type {Level, LevelLink} from './levels';
 import {STAIR, STAIR_CLASS, layStairRun, stairRunCells, type StairFlight} from './traversal';
 import type {Kit, TrackBlock} from './stationKit';
 import {TRENCH_DEPTH, type Area, type Rect, type RailRun, type StationLayout} from './stationTypes';
+import type {CirculationRec, PlanRun} from './subwayCirculation';
 
 // ---------------------------------------------------------------------------------------------
 // Dimensions
@@ -92,6 +93,13 @@ export interface LevelPlan {
   crossing: number; gallery: number; lowerRooms: number[];
   spawnEnd: 'W' | 'E';
   notes: string[];
+  /**
+   * Task studio-subway-vertical-layout-20261118-022131-01 (layout version 4, gen/subwayCirculation.ts): stair runs outside the cores (a
+   * gallery hall's open stair bank, a pedestrian subway's stairs), one LevelLink each after the cores', and the circulation plan carved.
+   * Area / flight ids only (nothing to shift at the crop). Absent on every earlier station.
+   */
+  runs?: PlanRun[];
+  circ?: CirculationRec;
 }
 
 export interface ProgramOpts {
@@ -408,6 +416,13 @@ export function buildLevelLinks(plan: LevelPlan | null, stairs: readonly StairFl
       const first = stairs[c.downFlights[0]], last = stairs[c.downFlights[c.downFlights.length - 1]];
       out.push({id: out.length, kind: 'stairs', lower: LEVEL_LOWER, upper: LEVEL_MAIN, ramp: first.ramp, bottom: {...last.bottom}, top: {...first.top}, traversalId: first.id});
     }
+  }
+  // (layout version 4: the circulation plan's runs, after every core's — a core's link ids are unchanged)
+  for (const r of plan.runs ?? []) {
+    const fl = r.flights.map(id => stairs[id]);
+    if (!fl.length) continue;
+    const lo = fl.reduce((a, f) => (f.bottom.y < a.bottom.y ? f : a)), hi = fl.reduce((a, f) => (f.top.y > a.top.y ? f : a));
+    out.push({id: out.length, kind: 'stairs', lower: r.lower, upper: r.upper, ramp: fl[0].ramp, bottom: {...lo.bottom}, top: {...hi.top}, traversalId: fl[0].id});
   }
   return out;
 }

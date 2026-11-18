@@ -34,7 +34,8 @@ import {lootProfile, type LootProfile} from '../items/lootTables'; // Task loot-
 // Track 2 (lane GEN): tunnels past the bed ends + service annexes (gen/trackExt), planned before the crop, attached after every core pass.
 import {dropExtensions, extendTracks, extensionIssues, finishExtensions, isExtensionArea, reserveTunnelRoom, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from './trackExt/index';
 import {populateExtensions} from './annexContent'; // Track 2 (lane CONTENT): the extensions' appended content
-import {SUBWAY_PLANS_MIN_VERSION} from './subwayLayoutVersion'; // task studio-subway-station-variety-20261117-043926-01
+import {SUBWAY_CIRCULATION_MIN_VERSION, SUBWAY_PLANS_MIN_VERSION} from './subwayLayoutVersion'; // task studio-subway-station-variety-20261117-043926-01
+import {carveCirculation, circulationOf, circulationRails, dressCirculation} from './subwayCirculation'; // task studio-subway-vertical-layout-20261118-022131-01
 import {buildPlanFamily, isPlanFamily, planFamilyOf, stationIdentityOf} from './stationPlans';
 import {planHallLights} from './subwayHallLights'; // task studio-subway-architecture-materials-rework-20261117-072826-01
 
@@ -141,6 +142,10 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   // Track 2 (lane GEN): CORE-CHANGING option only (coreReserveM > 0; 0 keeps the station byte-identical to main). GEN-2: the
   // Subway's TRACK_EXT enables it (authorized incidence change: 40 m of rock kept past every bed end still open here).
   if (trackExt !== 'none' && trackExt.coreReserveM > 0) reserveTunnelRoom(k, trackExt);
+  // Task studio-subway-vertical-layout-20261118-022131-01: layout version 4's CIRCULATION PLAN (gen/subwayCirculation.ts: a gallery hall, a
+  // pedestrian subway, both or neither), carved into the skeleton before the exits / rooms / storefronts grow round it. Its own fork (no
+  // main-stream draw) and its own roll; a compact roll carves nothing, so that station is its version-3 layout exactly.
+  if ((layoutVersion ?? 1) >= SUBWAY_CIRCULATION_MIN_VERSION && k.levelPlan) carveCirculation(k, plan, circulationOf(seed), rng.fork('circulation-v4'));
 
   // --- Sealed street exits: dead-end stair halls with a locked grille (no outside, no travel) ---
   const EXL = 20; // 4 m landing + 6 m stair
@@ -427,10 +432,13 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   layout.levelLinks = buildLevelLinks(lplan, layout.traversal.stairs);
   registerApertures(layout.levels);
   layout.rails = deriveRails(layout.levels);
+  // (version 4: + the open stair banks' balustrades and the drops the circulation opened — no earlier station has a run)
+  if (lplan?.runs?.length) layout.rails = circulationRails(layout);
   layout.traversal.ladders = placeLadders(layout);
   dress(layout, rng.fork('dress'));
   // Lane A: wayfinding on and between the levels, high-bay lights over the wells (absolute y, after the dressing lift).
   dressLevels(layout, rng.fork('levels'));
+  dressCirculation(layout); // (version 4: the circulation plan's wayfinding; RNG-free, nothing on a compact / earlier station)
   placeSpawns(layout, rng.fork('spawns'), loot, spawns);
   // Lane A: a weighted share of the zombies / loose supplies onto the upper and lower levels (totals kept).
   placeLevelSpawns(layout, rng.fork('levelSpawns'), spawns);

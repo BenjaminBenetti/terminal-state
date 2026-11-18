@@ -1,3 +1,4 @@
+import {CAN_ITEMS, CAN_DIMS} from './sprayPaint';
 // Item catalogue. Weapons reference WEAPONS by id; everything else is ammo or a consumable.
 // Consumables restore health (medical) or food/water (player/survival.ts); values are tuned so a
 // short slice never forces eating, but each item visibly moves its bar.
@@ -28,7 +29,7 @@ export type IconKey =
   | 'filter' // mask lane: gas-mask filter canister
   | GearIconKey | MedicalIconKey // Iteration 16 (lanes GEAR / INJURY)
   | MaterialIconKey // lane RACK (office-props-physics-scale-20261030): crafting materials
-  | 'fuelCan' // task train-fuel-system-20261106-024923: the train's fuel can
+  | 'sprayCan' | 'fuelCan' // task train-fuel-system-20261106-024923: the train's fuel can
   | SkywaysFoodIconKey // task studio-skyways-level-20261106-054448 (lane FOOD): ramen bowls, sushi bento, bubble tea (items/skywaysFood.ts)
   | PantryIconKey // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): the 24 pantry foods / drinks (items/pantryFood.ts)
   | 'reactorKey' | 'fuseCartridge' // task reactor-build-20261101 (lane RESTART): the reactor restart parts
@@ -142,6 +143,7 @@ export const ITEMS: Record<string, ItemDef> = {
   gas_filter: {id: 'gas_filter', name: 'Gas mask filter canister', short: 'Filter', kind: 'supply', stackMax: 6, icon: 'filter',
     description: 'Screw-in 40 mm respirator filter, seal intact. Nothing to use by hand: a gas mask on your face fits a spare by itself when its filter runs out (from your pockets or quick slots — never from a worn backpack). One lasts 37.5 seconds on the face.'}, // (task train-fuel-system: corrected — FILTER_LIFE_S is 37.5 s since PR #52)
   // --- Task studio-beta-train-fuel-system-20261106-024923-01: the TRAIN's fuel (fuel/fuel.ts): one can = a quarter of the tank, 2 a slot ---
+  ...CAN_ITEMS,
   fuel_can: {id: 'fuel_can', name: 'Fuel can', short: 'Fuel', kind: 'supply', stackMax: 2, icon: 'fuelCan',
     description: 'A small steel jerrycan of diesel: a quarter of the train\'s tank (one tank = one stop). Pour it in at the train\'s fuel cap (E), or leave it in the train chest — the train burns chest fuel by itself when it departs. One can also refills a worn Flamethrower fuel tank (R with the flamethrower in your hands).'}, // (+ the tank: task studio-flamethrower-fire-20261114-031614-01)
   // --- Iteration 16: character gear (lane GEAR, items/gear.ts) and limb-treatment items (lane INJURY, items/medical.ts) ---
@@ -264,6 +266,7 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   flare: {w: 0.255, d: 0.033, h: 0.033, shape: 'flat'},
   // mask lane: the authored filter canister (world/authoredItems.ts FILTER_DIMS) standing on its base, thread up
   gas_filter: {w: 0.096, d: 0.096, h: 0.072, shape: 'cylinder'},
+  ...CAN_DIMS,
   fuel_can: {w: 0.2015, d: 0.105, h: 0.30, shape: 'box'}, // a ~5 l can standing upright, med-kit sized (user feedback, task fuel-feedback: assets/models/train-fuel-can.glb bounds)
   // Iteration 16: gear / limb-treatment items (lanes GEAR / INJURY)
   ...GEAR_DIMS,

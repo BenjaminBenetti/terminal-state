@@ -168,6 +168,7 @@ export class TradeSystem {
     const m = layout?.market;
     if (!m || !Array.isArray(m.stalls)) return;
     this.stalls = m.stalls.filter(s => isMarketStallId(s.id)); // (the six; layout version 3: + the bar — task studio-market-bar-20261108-225231-01)
+    if (m.paintShop) this.stalls.push(m.paintShop);
     if (!this.stalls.length) return;
     const run = this.host.run, key: SectionKey = {...run.current};
     this.key = key;
@@ -179,7 +180,8 @@ export class TradeSystem {
       // task studio-flamethrower-fire-20261114-031614-01: a record remembered from before the additive lots (stock.ts STOCK_EXTRAS: the
       // flamethrower, its fuel tank) gets them ONCE — fresh uids above every stock uid, and the record with its marker written at once
       inv.reserveUids(this.stock.maxUid());
-      if (this.stock.addExtras((id, n) => inv.makeStack(id, n), ids)) this.write();
+      const extras = this.stock.addExtras((id, n) => inv.makeStack(id, n), ids);
+      if (this.stock.stockPaint((id, n) => inv.makeStack(id, n), ids) || extras) this.write();
     } else {
       this.stock = MarketStock.seed(run.scopeOf(key), run.seedFor(key), (id, n) => inv.makeStack(id, n), ids);
       this.counts.seeded++;

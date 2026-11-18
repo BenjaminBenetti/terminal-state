@@ -1,3 +1,7 @@
+import {SprayPaint} from './paint/spray';
+import {fitPaintShop, placePaintFinds} from './gen/paintSupplies';
+import {CAN_IDS, isSprayCan, fillText} from './items/sprayPaint';
+import {preloadSprayCan} from './world/sprayCanModel';
 // Game orchestration: state machine (title/playing/paused/inventory/dead/won), the frame loop,
 // combat resolution, zombie updates, pickups and the station lifecycle (new seed per run).
 
@@ -643,6 +647,7 @@ export class Game {
   /** How the player arrived in the current section (lane TOWER: kind 'elevator' starts inside the cab, doors closed). */
   arrival: Arrival = {kind: 'start'};
   /** Run-scoped lane state (INJURY / GEAR): saved at level entry (Retry), restored by Retry level, reset by NewGame — never by travel. */
+  readonly sprayPaint: SprayPaint;
   readonly runParticipants: RunParticipant[] = [];
   /**
    * Task player-train-shell-20261101-202805 (lane PLACE): the current level's parked player train (gen/playerTrain.ts; null = the level
@@ -1098,6 +1103,7 @@ export class Game {
     // seven world-space markers at the parked train until the player first walks 10 m from it (world/trainOnboarding.ts); warm pool
     // 'train-onboarding'; nothing collides, casts or takes [E]
     this.onboarding = new OnboardingStore(browserOnboardingStorage());
+    this.sprayPaint = new SprayPaint(this);
     this.trainOnboarding = installTrainOnboarding(this, this.onboarding);
     hookName('trainOnboarding');
     // (keep it the LAST install that unshifts a section hook: its teardown must run FIRST — a melt in progress completes, spilling into the
@@ -1275,6 +1281,7 @@ export class Game {
     // Food/drink use the generated item models when the manifest has them (else stand-ins).
     await preloadMedicalModels(); // Iteration 16 (lane INJURY): Meshy splint / sling (null urls / failures -> authored models)
     await preloadReactorItemModels(); // task reactor-build-20261101 (lane RESTART): startup key / fuse cartridge kit GLBs (failures -> procedural stand-ins)
+    await preloadSprayCan();
     await preloadFuelCanModel(); // task train-fuel-system (lane PORT): the fuel-can GLB before item templates / icons (a failure -> the fallback box)
     await preloadGrenadeModels(); // task studio-refinement-batch-20261113-035659-01: the acid / lure grenade GLBs (a failure -> the fallback cylinder)
     await preloadBeerLabels(); // task studio-market-bar-20261108-225231-01 (lane BEER): the beer bottles' Codex label atlas (a failure -> plain paper labels)
@@ -1295,6 +1302,11 @@ export class Game {
     // Lane KNIFE (knife-melee-20261030): the user's knife joins the held models (viewmodel, item icon, dropped pickup).
     const guns = {rifle: m.rifle, shotgun: m.shotgun, ...(pistolGltf ? {pistol: pistolGltf} : {}), ...(m.knife ? {knife: m.knife} : {})};
     this.viewmodel = new Viewmodel(guns, consumables);
+    for (const id of CAN_IDS) {
+      const can = makeSupplyMesh(id);
+      can.position.y -= .11;
+      this.viewmodel.addHeldItem(id, can, {hip: [.12, -.13, -.35], pitch: -.2, roll: -.08});
+    }
     // Lane D (iteration 04): eat/drink/apply with the real item model in hand, and inventory icons
     // rendered once from the runtime models through this renderer (ui/itemIcons.ts).
     this.consumeView = new ConsumeView(this.viewmodel, makeSupplyMesh);
@@ -1400,8 +1412,12 @@ export class Game {
    * other world is generated while this one is prepared (behind its loading screen: surfaceAnticipateOther). Same inputs rule as
    * `pregenerated`; only the current station's pair is kept (another station / run drops them).
    */
-  private surfaceAnticipation = new Map<string, {run: RunState; station: string; inputs: string; layout: StationLayout}>();
-  readonly surfaceAnticipationCounts = {stored: 0, hits: 0, misses: 0, others: 0, othersMs: 0};
+  // (created on first use: test shells built on Game.prototype run the journey's pre-generation without the constructor's fields)
+  private surfaceAnticipationMap?: Map<string, {run: RunState; station: string; inputs: string; layout: StationLayout}>;
+  private surfaceAnticipationTally?: {stored: number; hits: number; misses: number; others: number; othersMs: number};
+  private get surfaceAnticipation(): NonNullable<Game['surfaceAnticipationMap']> { return (this.surfaceAnticipationMap ??= new Map()); }
+  /** (QA / tests) The anticipation's counts: copies stored, crossings served from a copy / not (inputs changed), other worlds made. */
+  get surfaceAnticipationCounts(): NonNullable<Game['surfaceAnticipationTally']> { return (this.surfaceAnticipationTally ??= {stored: 0, hits: 0, misses: 0, others: 0, othersMs: 0}); }
 
   /** A fresh copy of the anticipated layout made for exactly this run, section and inputs (null: none). */
   private anticipated(key: SectionKey, run: RunState, ctx: SectionGenContext): StationLayout | null {
@@ -1429,7 +1445,8 @@ export class Game {
   private surfaceAnticipateOther(key: SectionKey, run: RunState, layout: StationLayout): void {
     const kind = isSurfaceKey(key) ? layout.surface?.portal.kind : layout.surfaceAccess?.kind;
     if (kind !== 'connector' && kind !== 'lift') return;
-    const other = this.surfaceCrossTarget(key);
+    // (the layout being prepared, not the current world's: surfaceCrossTarget reads the live one, still the previous world here)
+    const other = isSurfaceKey(key) ? hostKeyOf(key) : key.section === 'main' && isSurfaceHost(key.level) && layout.surfaceAccess ? surfaceKeyOf(key) : null;
     if (!other) return;
     try {
       const {ctx} = this.sectionGenInputs(other, run);
@@ -1655,6 +1672,8 @@ export class Game {
     this.lifecycleCounts.build++;
     const t0 = performance.now();
     this.layout = layout;
+    placePaintFinds(layout);
+    fitPaintShop(layout);
     this.currentSeed = layout.seed >>> 0;
     this.rand = mulberry32(layout.seed ^ 0x5bd1e995);
     // task train-all-cargo: the carried props exactly as the installed run has them (Retry / Load installed theirs after the prepare)
@@ -2353,6 +2372,7 @@ export class Game {
     }
     this.updateCamera(dt);
     this.trainRide.tiltCamera(this.camera);
+    this.sprayPaint.sync();
   }
 
   /**
@@ -4562,6 +4582,7 @@ export class Game {
     this.shake = Math.max(0, this.shake - dt * 2.5);
     this.updateCamera(dt);
 
+    this.sprayPaint.tick(dt, !!inp.mouse[0] && !flareOwns && !rideHolster && !vmBusy && !p.climbing && !p.sprinting && !this.gear?.readied);
     prof.lap(SPAN.targets);
     // (task studio-perf-ao-train-continuity-20261110-022206-01, lane PLAY: the frame's eye / look in scratch vectors, no new ones a frame)
     const eye = this.camera.getWorldPosition(this.frameEye);
@@ -4736,6 +4757,7 @@ export class Game {
       else if ((st.mag ?? 0) === 0) hint = reserveFor(wdef, this.inv) ? 'Empty — press R' : `No ${caliberLabel(wdef)} ammo`;
       else if ((st.mag ?? 0) <= wdef.magazine * 0.25 && reserveFor(wdef, this.inv)) hint = 'Low — R to reload';
     } else if (def?.kind === 'consumable') hint = def.treats?.length ? this.injuries.treatmentHint(def) : useHint(def); // Iteration 16 (lane INJURY)
+    else if (st && isSprayCan(st.itemId)) hint = st.paint ? 'Hold click to spray' : 'Select another can';
     else if (def?.kind === 'throwable') hint = throwHint(def); // Iteration 12 (LIGHT)
     if (this.gear?.readied) hint = '6 slings it back on · 1-5 / ~ switch'; // Task office-overhaul-20261030 (INTERACT, #1); SLOT: ~ too
     let prompt = '';
@@ -4762,7 +4784,7 @@ export class Game {
       hp: p.hp, maxHp: p.maxHp, stamina: p.stamina,
       // lane AMMO: a gun shows the caliber it loads ("Pistol · 9mm"); the reserve counts that caliber's pool.
       // INTERACT (#1): slot 6 (the readied backpack) in the hands overrides the weapon panel.
-      weaponName: this.gear?.readied ? 'Backpack · click sets it down' : def ? (wdef?.caliber ? `${def.short} · ${caliberLabel(wdef)}` : wdef?.stream ? `${def.short} · fuel` : def.short) : 'Empty hands',
+      weaponName: this.gear?.readied ? 'Backpack · click sets it down' : st && isSprayCan(st.itemId) ? `${def!.short} · ${fillText(st.paint)}` : def ? (wdef?.caliber ? `${def.short} · ${caliberLabel(wdef)}` : wdef?.stream ? `${def.short} · fuel` : def.short) : 'Empty hands',
       // (task studio-flamethrower-fire-20261114-031614-01) a stream weapon: the worn tank's fuel units / the fuel cans carried
       mag: wdef && st && !wdef.melee && !this.gear?.readied ? (wdef.stream ? tankFuel(wornFuelTank(this.inv)) : st.mag ?? 0) : null, reserve: wdef?.stream ? this.inv.count(FLAME_FUEL_CAN) : wdef ? reserveFor(wdef, this.inv) : 0,
       melee: !!wdef?.melee && !this.gear?.readied, // lane KNIFE: MELEE tag, no rounds

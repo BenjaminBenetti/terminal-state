@@ -199,7 +199,8 @@ export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?:
       await h.waitFrames(2);
       await walkTo(rec.len - 1, () => C.qa().refusal !== null, 900);
       expect(C.qa().refusal, `refused at the seam ${diag()}`).toBe('qa: that cannot come along');
-      expect(qa.surface.access().prompt ?? '', 'the prompt says why').toContain('qa: that cannot come along');
+      const hudLine = () => { for (const f of game.promptProviders) { const l = f(); if (l) return l; } return ''; }; // (the HUD's lane prompt, as Game.updateHud reads it)
+      expect(hudLine(), 'the HUD line says why').toContain('qa: that cannot come along');
       expect(game.surfaceCrossCounts.started, 'nothing started').toBe(started0);
       expect(C.qa().phase).toBe('idle');
       refuse.mockRestore();

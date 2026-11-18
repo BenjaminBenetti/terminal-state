@@ -283,7 +283,7 @@ export class TrainPropCargo {
   // Records
 
   /** The canonical identity of a live prop: its carried id, else '<section id>#<generated index>' (null: not a generated placement). */
-  private idOf(prop: PropPlacement): string | null {
+  idOf(prop: PropPlacement): string | null {
     if (prop.cargo) return prop.cargo;
     const w = this.here, i = w ? this.genIndex.get(w.layout)?.get(prop) : undefined;
     return w && i !== undefined ? `${sectionId(w.key)}#${i}` : null;

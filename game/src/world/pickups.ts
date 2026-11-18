@@ -1,3 +1,5 @@
+import {sprayCanModel, sprayCanSource} from './sprayCanModel';
+import {isSprayCan} from '../items/sprayPaint';
 // World pickups and item models. Gun pickups reuse the gun derivatives; med kit / bandage are simple procedural boxes (per the
 // asset-method rule for primitive shapes); the ammo boxes are Meshy T2.5 models per caliber (lane AMMO; procedural box fallback). Food and drink use the
 // generated item models (`models.item_water` … `models.item_noodles`, lane A) when the manifest
@@ -292,6 +294,9 @@ export function itemTemplate(itemId: string): THREE.Object3D {
     // Iteration 12 (LIGHT): battery / road flare are authored procedural geometry (world/authoredItems.ts), never generated.
     t = authoredItemModel(itemId);
     templateSource.set(itemId, 'authored procedural geometry (world/authoredItems.ts)');
+  } else if (isSprayCan(itemId)) {
+    t = sprayCanModel(itemId);
+    templateSource.set(itemId, sprayCanSource());
   } else if (itemId === 'fuel_can') {
     // task train-fuel-system-20261106 (lane PORT): the delivered Meshy fuel-can GLB (preloaded; Meshy maps kept), else the labelled fallback box
     t = fuelCanModel();

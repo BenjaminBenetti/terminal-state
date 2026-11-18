@@ -1,3 +1,5 @@
+import {validPaint, PAINT_PARTICIPANT} from '../paint/record';
+import {isSprayCan, CAN_FILL} from '../items/sprayPaint';
 // Task studio-alpha-campaign-foundation-20261102-230708-01 (lane SAVE): STRICT validation of untrusted save DATA — an imported
 // .json file or a localStorage value (campaign/types.ts SaveFileV1; save/serialize.ts SerializedRunV1). Data only: nothing here
 // evaluates code, follows a URL or touches the game. Invalid -> {ok: false, error: <human-readable>} and the caller applies NOTHING.
@@ -37,7 +39,7 @@ import {EQUIPMENT, STATION_EQUIPMENT_LANE, equipmentSeqOf, stationEquipmentProbl
 import {SURFACE_CARGO_LANE, surfaceCargoProblem} from '../world/surface/cargoStore'; // task surface-run (lane CARGO): a district's cargo record (pure)
 import {PROP_DEFS} from '../gen/props'; // task train-all-cargo: carried props are of real kinds
 import {trainUpgradesProblem} from '../run/trainUpgrades'; // task studio-refinement-batch-20261113-035659-01 (lane ARMOR): the train's fitted upgrades
-import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL} from '../gen/market/marketTypes'; // task studio-survivor-market-20261108-005807-01 (lane TRADE): the stalls' stock + the Rail Ties wallet
+import {MARKET_STALLS, TRADE_STALL_IDS} from '../gen/market/marketTypes'; // task studio-survivor-market-20261108-005807-01 (lane TRADE): the stalls' stock + the Rail Ties wallet
 import {MARKET_STOCK_LANE, STOCK_EXTRAS_VERSION, STOCK_MAX} from '../market/trade/stock';
 import {BUNKER_LANE, bunkerStateProblem} from '../world/bunker/objectiveState'; // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE)
 import {MARKET_HOSTILITY_LANE, marketHostilityProblem} from '../market/combat/record'; // task studio-market-rework-20261108-074144-01 (lane COMBAT): a market station's hostility
@@ -209,7 +211,7 @@ function itemOf(v: unknown, path: string): ItemDef {
   return ITEMS[canon];
 }
 
-const STACK_KEYS = ['uid', 'itemId', 'count', 'mag', 'spent', 'bag', 'filter', 'air', 'armor', 'fuel'] as const; // (+ armor: task studio-general-armor-20261107-231448-01; + spent: task studio-turnstile-reload-visuals-20261112-063646-01; + fuel: task studio-flamethrower-fire-20261114-031614-01)
+const STACK_KEYS = ['uid', 'itemId', 'count', 'mag', 'spent', 'bag', 'filter', 'air', 'armor', 'fuel', 'paint'] as const; // (+ armor: task studio-general-armor-20261107-231448-01; + spent: task studio-turnstile-reload-visuals-20261112-063646-01; + fuel: task studio-flamethrower-fire-20261114-031614-01)
 /**
  * Task filter-tension-airtank-20261104-072836: the largest fitted-filter charge a stack of the run being validated may hold = the
  * filter life that run was written with (run.filterLifeS; absent = LEGACY_FILTER_LIFE_S, a save from before 37.5 s filters).
@@ -315,6 +317,10 @@ function stack(v: unknown, path: string, o: {uid: boolean; inBag: boolean; seen?
   if (has(s, 'air')) { // task filter-tension-airtank: an Airtank Backpack's air (s)
     if (!isAirtank(def.id)) bad(`${path}.air`, `${def.id} holds no air`);
     num(s.air, `${path}.air`, 0, (gearSpec(def.id)?.airLife ?? 0) + 1e-6);
+  }
+  if (has(s, 'paint')) {
+    if (!isSprayCan(def.id)) bad(`${path}.paint`, 'only a spray can holds paint');
+    int(s.paint, `${path}.paint`, 0, CAN_FILL);
   }
   if (has(s, 'fuel')) { // task studio-flamethrower-fire-20261114-031614-01: a Fuel Tank's flamethrower fuel (whole units; absent = empty)
     if (!isFuelTank(def.id)) bad(`${path}.fuel`, `${def.id} holds no fuel`);
@@ -539,6 +545,7 @@ function participants(v: unknown, path: string, seen: Set<number>): void {
   for (const k of keys) str(k, path, 48, LANE_ID, 'a participant id');
   if (o[WALLET_PARTICIPANT] !== undefined) { const wp = walletProblem(o[WALLET_PARTICIPANT]); if (wp) bad(`${path}.${WALLET_PARTICIPANT}`, wp); } // lane TRADE: an old Rail Ties balance still owed ({v: 1}) or settled ({v: 2})
   if (o[BEER_PARTICIPANT] !== undefined) { const bp = beerSaveProblem(o[BEER_PARTICIPANT]); if (bp) bad(`${path}.${BEER_PARTICIPANT}`, bp); } // (task studio-market-bar-20261108-225231-01, lane BEER) the timed beer + the Pilsner's rolls
+  if (has(o, PAINT_PARTICIPANT) && !validPaint(o[PAINT_PARTICIPANT])) bad(`${path}.${PAINT_PARTICIPANT}`, 'invalid spray paint record');
   const t = o[PLAYER_TRAIN_PARTICIPANT];
   if (t !== undefined && t !== null) {
     const p = `${path}.${PLAYER_TRAIN_PARTICIPANT}`, r = obj(t, p);
@@ -609,8 +616,8 @@ function marketStock(v: unknown, path: string): void {
   // task studio-flamethrower-fire-20261114-031614-01: the additive lots' marker (absent: a record from before them — it gets them once)
   if (has(o, 'extras')) int(o.extras, `${path}.extras`, 1, STOCK_EXTRAS_VERSION);
   const st = obj(o.stalls, `${path}.stalls`);
-  only(st, `${path}.stalls`, MARKET_STALLS_ALL, MARKET_STALLS);
-  for (const id of [...MARKET_STALLS, ...(has(st, BAR_STALL) ? [BAR_STALL] : [])]) {
+  only(st, `${path}.stalls`, TRADE_STALL_IDS, MARKET_STALLS);
+  for (const id of TRADE_STALL_IDS.filter(id => has(st, id))) {
     arr(st[id], `${path}.stalls.${id}`, STOCK_MAX).forEach((s, i) => {
       const p = `${path}.stalls.${id}[${i}]`;
       stack(s, p, {uid: true, inBag: false, seen: uidScope, needBag: true});
@@ -682,7 +689,9 @@ function lanes(v: unknown, path: string): void {
 function pickup(v: unknown, path: string): void {
   const t = arr(v, path, 14, 11);
   if (t.length === 13) bad(path, 'malformed loose item');
-  stack(t[0], `${path}[0]`, {uid: false, inBag: false});
+  const item = obj(t[0], `${path}[0]`);
+  const can = has(item, 'uid') && typeof item.itemId === 'string' && isSprayCan(item.itemId);
+  stack(item, `${path}[0]`, {uid: can, inBag: false, seen: can ? uidScope : undefined});
   for (let i = 1; i <= 10; i++) {
     const q = i >= 4 && i <= 7;
     num(t[i], `${path}[${i}]`, q ? -1.0001 : -1e5, q ? 1.0001 : 1e5);

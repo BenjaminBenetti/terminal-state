@@ -127,7 +127,9 @@ describe('version 2 keeps every record but its hall lights', () => {
 
 describe('version 3 changes only the grand-hall family', () => {
   it('the version-3 roll is version 2\'s; cavern, hub and classic seeds build their version-2 layouts exactly (lights included)', () => {
-    expect(SUBWAY_LAYOUT_VERSION).toBe(SUBWAY_HALL_V3_MIN_VERSION);
+    // (version 4 — task studio-subway-vertical-layout-20261118-022131-01 — builds on version 3: tests/subway-circulation.test.ts)
+    expect(SUBWAY_HALL_V3_MIN_VERSION).toBe(3);
+    expect(SUBWAY_LAYOUT_VERSION).toBeGreaterThanOrEqual(SUBWAY_HALL_V3_MIN_VERSION);
     for (const s of [2, 16, 1, 6]) {
       const a = gen(s, 2), b = gen(s, 3);
       expect(b.archetype, `seed ${s}`).toBe(a.archetype);

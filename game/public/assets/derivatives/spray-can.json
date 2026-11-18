@@ -1,0 +1,16 @@
+{
+  "source": "User-supplied spray can GLB; private master",
+  "sourceSha256": "002d9b64225000605a66cad95c4ba2b9e1a842d105fffbb30a265578ac9e1f55",
+  "sourceBytes": 9813092,
+  "sourceTriangles": 106773,
+  "recipe": "tools/asset-pipeline/props/cook-spray-can.mjs",
+  "finish": "Shared simplified geometry, seven runtime enamel finishes, neutral steel rims and shoulder. Source maps omitted.",
+  "runtime": {
+    "path": "assets/models/spray-can.glb",
+    "sha256": "3483c6ed54bb0beb1f6bd33b9fc2cd067d379568bb89ab18bf00200529f2bde3",
+    "bytes": 29084,
+    "triangles": 1600,
+    "vertices": 763
+  },
+  "rights": "User-supplied for this project. No blanket redistribution or commercial clearance implied."
+}
