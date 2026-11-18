@@ -1412,8 +1412,12 @@ export class Game {
    * other world is generated while this one is prepared (behind its loading screen: surfaceAnticipateOther). Same inputs rule as
    * `pregenerated`; only the current station's pair is kept (another station / run drops them).
    */
-  private surfaceAnticipation = new Map<string, {run: RunState; station: string; inputs: string; layout: StationLayout}>();
-  readonly surfaceAnticipationCounts = {stored: 0, hits: 0, misses: 0, others: 0, othersMs: 0};
+  // (created on first use: test shells built on Game.prototype run the journey's pre-generation without the constructor's fields)
+  private surfaceAnticipationMap?: Map<string, {run: RunState; station: string; inputs: string; layout: StationLayout}>;
+  private surfaceAnticipationTally?: {stored: number; hits: number; misses: number; others: number; othersMs: number};
+  private get surfaceAnticipation(): NonNullable<Game['surfaceAnticipationMap']> { return (this.surfaceAnticipationMap ??= new Map()); }
+  /** (QA / tests) The anticipation's counts: copies stored, crossings served from a copy / not (inputs changed), other worlds made. */
+  get surfaceAnticipationCounts(): NonNullable<Game['surfaceAnticipationTally']> { return (this.surfaceAnticipationTally ??= {stored: 0, hits: 0, misses: 0, others: 0, othersMs: 0}); }
 
   /** A fresh copy of the anticipated layout made for exactly this run, section and inputs (null: none). */
   private anticipated(key: SectionKey, run: RunState, ctx: SectionGenContext): StationLayout | null {
