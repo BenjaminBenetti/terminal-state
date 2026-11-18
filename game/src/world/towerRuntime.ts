@@ -603,6 +603,9 @@ export class TowerRuntime {
     const fix = (b: {x: number; z: number; y: number}, r: number): void => {
       for (const p of plans) {
         if (Math.abs(b.y - p.baseY) > 2.6) continue; // that span's own storey only
+        // (task studio-surface-host-ground-connectors-20261118-053602-01) the Office connector's open doorway keeps nothing out
+        const D = p.doorway, al = p.along === 'x' ? b.x : b.z;
+        if (D && al > D.a0 && al < D.a1 && b.y < D.y1) continue;
         const c = p.collider;
         if (b.x < c.x0 - r - 0.5 || b.x > c.x1 + r + 0.5 || b.z < c.z0 - r - 0.5 || b.z > c.z1 + r + 0.5) continue;
         const q = pushOutRect(b.x, b.z, r, c, [-p.n[0], -p.n[1]]);

@@ -35,6 +35,7 @@ import {districtName} from './cityNames';
 import {KERB, SLAB, SURFACE_LEVELS, deepStoreyPlans, guaranteeCounts, planBlocks, repairGuarantees, type BlockPlans, type BuildingPlan} from './cityBlocks';
 import {SKY_CEIL, carveGround, type GroundMap} from './cityCarve';
 import {carvePortal, dressCheckpoint, reserveCheckpoint} from './checkpoint';
+import {carveConnectorFootprint} from './connectorFootprint';
 import {exposedSides, floorsOf, heightOf, planInteriors, roofOf, type DepotDoors} from './cityInteriors';
 import {OutdoorProps, type PlannedProp} from './outdoorKinds';
 import {dressOutdoors, reserveFronts} from './outdoorDress';
@@ -176,7 +177,8 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
   const outdoor = new Set(gm.outdoor);
   const compoundLot = plans.lots.find(l => l.use === 'compound')!;
   const compoundArea = [...gm.lotOfArea].find(([, l]) => l === compoundLot)![0];
-  const pc = carvePortal(kit, f, plans, gm, host, rng.fork('portal'), dn.root, {lift: surfaceFeatures(version).tentArrival}); // (v2: the cargo lift in the tent)
+  // (v2: the cargo lift in the tent — the Subway's; an Office / Mall host's way back is the connector tube into it: no car)
+  const pc = carvePortal(kit, f, plans, gm, host, rng.fork('portal'), dn.root, {lift: surfaceFeatures(version).tentArrival, connector: surfaceFeatures(version).connector});
   const portalDoor: number[] = [];
   for (const d of pc.doors) { d.id = kit.doors.length; portalDoor.push(d.id); kit.doors.push(d); }
   if (pc.head) for (const fl of pc.head.flights) { fl.id = kit.flights.length; kit.flights.push(fl); }
@@ -226,6 +228,9 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
 
   // (lane FOG) v2: the open rubble apron out to the edge (after the dressing: nothing is placed on it)
   const apron: FogApron | null = fog ? carveFogApron(kit, f, fog, gm, plans.lots.length) : null;
+  // (task studio-surface-host-ground-connectors-20261118-053602-01) the connector tube's footprint: SOLID (after every placement: the
+  // compound's dressing, reserves and draws are the lift era's exactly; nothing stood on the strip — tests/surface-connector-pins.test.ts)
+  if (pc.portal.connector) carveConnectorFootprint(kit.g, pc.portal.connector);
 
   // --- 7. levels, apertures, rails, stairs, links -------------------------------------------------------------------------------
   const grids = kit.levelGrids;

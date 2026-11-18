@@ -70,6 +70,15 @@ export function holderKey(kind: string, level: number | undefined, x: number, z:
   return `${kind}@${level ?? 0}:${Math.round(x * 100)},${Math.round(z * 100)}`;
 }
 
+/**
+ * A placed holder's key: holderKey at its MEMORY ANCHOR — the placement's position, or (task studio-surface-host-ground-connectors-
+ * 20261118-053602-01) the position a piece the Surface Run's Office connector moved aside stood at (gen/props.ts PropPlacement.memAt), so
+ * a save taken before the move keeps its contents. Every holder-key reader of a placed prop uses this.
+ */
+export function propHolderKey(kind: string, p: {level?: number; x: number; z: number; memAt?: {x: number; z: number}}): string {
+  return holderKey(kind, p.level, p.memAt?.x ?? p.x, p.memAt?.z ?? p.z);
+}
+
 /** Minimal holder-state shape (items/loot.ts HolderState) the memory reads / writes. */
 export interface HolderStateLike {
   lots: {id: number}[];

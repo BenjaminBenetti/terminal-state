@@ -8,7 +8,7 @@ import {fitBagContents, type Inventory, type ItemStack} from '../items/inventory
 import {canonicalItemId} from '../items/calibers';
 import type {ContainerManager} from '../world/containers';
 import type {Pickup, PickupManager} from '../world/pickups';
-import {applyHolderRecord, captureHolder, holderKey, type HolderRecord, type PickupRecord, type StackRecord} from './memory';
+import {applyHolderRecord, captureHolder, propHolderKey, type HolderRecord, type PickupRecord, type StackRecord} from './memory';
 import {holderTable, isSalvageLotId} from '../items/loot'; // task studio-base-salvage-20261108-073314-01
 import {BASELINE_PROFILE, type LootProfile} from '../items/lootTables';
 import {holderFoodOrigin, isNaturalFood, keepNaturalFood} from '../items/naturalFood'; // task studio-food-drink-half-20261109-201124-01
@@ -64,7 +64,7 @@ export function restorePickup(pm: PickupManager, inv: Inventory, rec: PickupReco
 type HolderLike = ContainerManager['all'][number];
 
 export function holderKeyOf(h: HolderLike): string {
-  return holderKey(h.kind, h.prop.level, h.prop.x, h.prop.z);
+  return propHolderKey(h.kind, h.prop);
 }
 
 export function captureHolders(cm: ContainerManager): Record<string, HolderRecord> {

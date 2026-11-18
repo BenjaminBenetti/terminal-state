@@ -63,6 +63,11 @@ export interface WindowSpan extends Rect2 {
   /** Storey (layout.levels index) and its floor (absolute y). */
   level: number;
   baseY: number;
+  /**
+   * Task studio-surface-host-ground-connectors-20261118-053602-01: the OPEN DOORWAY cut through this span's boarding (the Surface Run
+   * version-2 Office connector's doorway: layout.surfaceAccess.connector) — its range along the span's axis and its head (absolute y).
+   */
+  doorway?: {a0: number; a1: number; y1: number};
 }
 
 /** LIFT's view of layout.office (v2, normalised). */
@@ -126,6 +131,20 @@ export interface TowerLayoutLike {
   mall?: unknown;
   /** Task studio-bunker-rework-20261109-205115-01: a version-2 Bunker's record (its cargo lift rides the same runtime). */
   bunker?: unknown;
+  /** (task studio-surface-host-ground-connectors-20261118-053602-01) The Surface Run access (an Office connector's doorway: WindowSpan.doorway). */
+  surfaceAccess?: unknown;
+}
+
+/**
+ * The Office connector's doorway through the lobby's boarded street doors (gen/surface/accessConnector.ts): its level, its range along
+ * the facade and its head (absolute y). Null: no Office connector.
+ */
+export function officeConnectorDoorway(layout: Pick<TowerLayoutLike, 'surfaceAccess'>): {level: number; along: 'x' | 'z'; a0: number; a1: number; y1: number} | null {
+  const a = layout.surfaceAccess as {kind?: string; connector?: {host?: string; end?: string; x: number; z: number; y: number; yaw: number; level: number; door: {width: number; height: number}}} | undefined;
+  const c = a?.kind === 'connector' ? a.connector : undefined;
+  if (!c || c.host !== 'office' || c.end !== 'host') return null;
+  const along: 'x' | 'z' = Math.abs(Math.sin(c.yaw)) < 0.5 ? 'x' : 'z', mid = along === 'x' ? c.x : c.z, h = c.door.width / 2;
+  return {level: c.level, along, a0: mid - h, a1: mid + h, y1: c.y + c.door.height};
 }
 
 /**
@@ -204,6 +223,10 @@ export function readTowerInfo(layout: TowerLayoutLike): TowerInfo | null {
     const baseY = num(w.baseY, lv(level)?.baseY ?? storeys.find(s => s.levelId === level)?.baseY ?? 0);
     return [{...r, side: w.side, sill, head, kind: w.kind === 'entrance' ? 'entrance' as const : 'window' as const, level, baseY}];
   }) : [];
+  // (task studio-surface-host-ground-connectors-20261118-053602-01) the Office connector's doorway, on its entrance span
+  const dw = officeConnectorDoorway(layout);
+  const ent = dw && windows.find(w => w.kind === 'entrance' && w.level === dw.level && (dw.along === 'x' ? w.x0 <= dw.a0 + 1e-6 && w.x1 >= dw.a1 - 1e-6 : w.z0 <= dw.a0 + 1e-6 && w.z1 >= dw.a1 - 1e-6));
+  if (dw && ent) ent.doorway = {a0: dw.a0, a1: dw.a1, y1: dw.y1};
   const exterior = normRect(o.exterior) ?? boundsOf(layout.grid, windows, cab);
   const st = (o.stairs ?? {}) as Record<string, unknown>;
   const landings = Array.isArray(st.landings) ? (st.landings as Record<string, unknown>[]).flatMap(l => {

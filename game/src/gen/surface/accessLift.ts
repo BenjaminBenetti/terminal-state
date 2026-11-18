@@ -134,6 +134,15 @@ export function carveLiftRoom(g: Grid, f: LiftFrame, y: number, area: number, ga
       g.cells[i] = FLOOR; g.area[i] = car ? area : gateArea; g.floor[i] = car ? y - C.sink : y; g.ceil[i] = y + (car ? C.cabH + C.ceilGap : C.gateH + C.ceilGap);
     } else { g.cells[i] = SOLID; g.area[i] = -1; g.floor[i] = 0; g.ceil[i] = 0; }
   }
+  return liftRoomShape(f);
+}
+
+/**
+ * The car room's shape on a frame — what carveLiftRoom returns, nothing carved (pure). Task studio-surface-host-ground-connectors-20261118-
+ * 053602-01: an Office / Mall district's command tent keeps the lift era's interior layout (gen/surface/checkpoint.ts) without the car.
+ */
+export function liftRoomShape(f: LiftFrame): {cab: SRect; along: number; doorSide: Side} {
+  const C = LIFT_CAR, g0 = Math.floor((C.width + 2 - C.gateCells) / 2);
   const r = liftRect(f, 1, LIFT_FOOT.u, 1, 1 + C.width);
   const cab = {x0: r.x * CELL, z0: r.y * CELL, x1: (r.x + r.w) * CELL, z1: (r.y + r.h) * CELL};
   const doorSide = sideOfNormal(-f.dx, -f.dy);
