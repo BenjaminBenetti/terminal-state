@@ -12,7 +12,7 @@ import {generateNetwork} from '../../src/campaign/network';
 import {SURFACE_VERSION, surfacePresent, type SurfaceHost} from '../../src/gen/surface/surfaceRun';
 import {connectorToWorld, worldToConnector} from '../../src/gen/surface/connectorShape';
 import type {SurfaceConnector} from '../../src/gen/surface/surfaceTypes';
-import type {SectionKey} from '../../src/levels/types';
+import {sectionId, type SectionKey} from '../../src/levels/types';
 
 function pickNetwork(host: SurfaceHost): {seed: number; station: string} {
   for (let seed = 1; seed < 500; seed++) {
@@ -190,6 +190,12 @@ export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?:
     await h.waitFrames(30);
     const snap = () => { G.saveSectionMemory(); const m = canon(game.run.peekMemory(hostKey)!) as Record<string, unknown>; return JSON.stringify([m.pickups, m.holders, m.killed, m.cleared]); };
     const host0 = snap();
+    // the run participants travel along (main's persistent spray paint: a mark on the host's own surfaces, kept by the run's record)
+    const paint = game.runParticipants.find(p => p.id === 'spray-paint');
+    expect(paint, 'the spray paint participant').toBeTruthy();
+    paint!.load([[`station/${sectionId(hostKey)}`, [[0, Math.round(P.x * 1000), Math.round((P.y + 1.2) * 1000), Math.round(P.z * 1000), ...new Array(24).fill(12)]]]]);
+    const paint0 = JSON.stringify(paint!.save());
+    expect(paint0, 'the mark recorded').toContain(`station/${sectionId(hostKey)}`);
     await crossing('walk out', 'out');
     mark('out');
     expect(game.run.current).toEqual(surfKey);
@@ -208,6 +214,7 @@ export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?:
     expect(s, 'back in the lobby / hall, in front of the doorway').toBeLessThan(-rec.door.depth);
     await h.waitFrames(20);
     expect(snap(), 'the host exactly as left').toBe(host0);
+    expect(JSON.stringify(paint!.save()), 'the paint record kept both ways').toBe(paint0);
     expect(tubeViews(), 'one tube: the host\'s').toBe(1);
     expect(seal.leaks, `nothing else drawn while sealed (${seal.worst})`).toBe(0);
     expect(report.looks.moved, 'mouse turns in the gap').toBeGreaterThan(0);
