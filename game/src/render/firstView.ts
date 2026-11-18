@@ -85,8 +85,11 @@ export interface FirstViewPlan {
   /** The first view's shadow casters within the torch's reach, nearest first (empty without `casters`). */
   casters: WarmItem[];
   stats: {
-    /** Eligible renderables (shown, with geometry, on the camera's layers or culled); within the far plane of the exit. */
-    candidates: number; inRange: number;
+    /**
+     * Eligible renderables (shown, with geometry, on the camera's layers or culled); within the far plane of the exit (or drawn by every
+     * frame wherever they are: `always`, beyond it).
+     */
+    candidates: number; inRange: number; always: number;
     /** In the first view: by the near radius, by the culler sweep (beyond the radius), on the camera's layers now (neither). */
     near: number; swept: number; current: number;
     items: number; reps: number; casters: number;
@@ -98,10 +101,13 @@ export interface FirstViewPlan {
 const CULLED_MASK = (1 << CULL_LAYER) >>> 0;
 const _sphere = new THREE.Sphere();
 
-/** Distance (m) from `p` to a renderable's world bounding sphere (0 inside; Infinity without one) — render/warmup.ts's rule. */
-function sphereDistance(o: THREE.Object3D, p: THREE.Vector3): number {
+/**
+ * Distance (m) from `p` to a renderable's world bounding sphere (0 inside; Infinity without one) — render/warmup.ts's rule; an instanced
+ * mesh's own sphere as three culls it (computed when it has none).
+ */
+export function exitDistance(o: THREE.Object3D, p: THREE.Vector3): number {
   const im = o as THREE.InstancedMesh;
-  if (im.isInstancedMesh) { im.computeBoundingSphere(); if (!im.boundingSphere) return Infinity; _sphere.copy(im.boundingSphere).applyMatrix4(o.matrixWorld); }
+  if (im.isInstancedMesh) { if (!im.boundingSphere) im.computeBoundingSphere(); if (!im.boundingSphere) return Infinity; _sphere.copy(im.boundingSphere).applyMatrix4(o.matrixWorld); }
   else {
     const g = (o as THREE.Mesh).geometry as THREE.BufferGeometry | undefined;
     if (!g) return Infinity;
@@ -135,7 +141,7 @@ export function* planFirstViewSteps(scene: THREE.Object3D, o: FirstViewPlanOptio
   // eligible: shown (no hidden ancestor — pools wait for their first use, the scene lane compiles them), with geometry, on the camera's
   // layers or culled (the level culler shows it from somewhere else)
   const cand: {o: THREE.Mesh; d: number}[] = [];
-  let candidates = 0;
+  let candidates = 0, alwaysN = 0;
   const walk = (x: THREE.Object3D): void => {
     if (!x.visible) return;
     if (isRenderable(x)) {
@@ -143,8 +149,12 @@ export function* planFirstViewSteps(scene: THREE.Object3D, o: FirstViewPlanOptio
       const hasGeo = !!geo && (!!geo.attributes.position || (x as THREE.Sprite).isSprite);
       if (hasGeo && ((x.layers.mask & mask) !== 0 || x.layers.mask === CULLED_MASK)) {
         candidates++;
-        const d = sphereDistance(x, exit);
+        const d = exitDistance(x, exit);
+        // (drawn by every frame wherever it is — no frustum test — once on the camera's layers: the scene-wide singletons, the pools of
+        // instanced effects with no instance yet; measured on the Subway lift ride: six of them first drawn by the real-view frame)
+        const always = x.frustumCulled === false && (x.layers.mask & mask) !== 0;
         if (d <= far) cand.push({o: x as THREE.Mesh, d});
+        else if (always) { cand.push({o: x as THREE.Mesh, d: far}); alwaysN++; }
       }
     }
     for (const c of x.children) walk(c);
@@ -181,7 +191,7 @@ export function* planFirstViewSteps(scene: THREE.Object3D, o: FirstViewPlanOptio
     }
   }
   for (let k = 0; k < cand.length; k++) if (pick[k] === 3) current++;
-  const chosen = cand.filter((_, k) => pick[k] !== 0).sort((a, b) => a.d - b.d);
+  const chosen = cand.filter((_, k) => pick[k] !== 0).sort((a, b) => (a.d - b.d) || 0);
   const share = o.shareInstanced ?? sharedInstancing();
   const seen = new Set<string>();
   const reps: WarmItem[] = [], others: WarmItem[] = [], dist = new Map<WarmItem, number>();
@@ -192,7 +202,7 @@ export function* planFirstViewSteps(scene: THREE.Object3D, o: FirstViewPlanOptio
     if (fresh.length) { for (const k of fresh) seen.add(k); reps.push(item); } else others.push(item);
   }
   const casters = o.casters ? [...reps, ...others].filter(i => i.caster && dist.get(i)! <= FIRST_VIEW.torchReach).sort((a, b) => dist.get(a)! - dist.get(b)!) : [];
-  return {reps, others, casters, stats: {candidates, inRange: cand.length, near, swept, current, items: reps.length + others.length, reps: reps.length, casters: casters.length, poses, sweepMs, ms: own + now() - t0}};
+  return {reps, others, casters, stats: {candidates, inRange: cand.length, always: alwaysN, near, swept, current, items: reps.length + others.length, reps: reps.length, casters: casters.length, poses, sweepMs, ms: own + now() - t0}};
 }
 
 /**

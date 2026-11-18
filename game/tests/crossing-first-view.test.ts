@@ -314,17 +314,26 @@ describe('crossing readiness: the exit\'s first view (render/firstView.ts, the j
 
   it('planFirstView: what a frame can draw from the exit (any yaw), one representative per program group, casters in reach, the culler put back', () => {
     const k = rig({reps: 5, copies: 3});
+    // drawn by every frame wherever it is (no frustum test; an effect pool with no instance yet): in, past the far plane too
+    const fx = new THREE.InstancedMesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshStandardMaterial(), 16);
+    fx.count = 0;
+    fx.frustumCulled = false;
+    k.scene.add(fx);
+    fx.position.set(0, 0, -200);
     const before = new Map<THREE.Object3D, number>();
     k.scene.traverse(x => before.set(x, x.layers.mask));
     const plan = k.fvPlan();
     const all = new Set([...plan.reps, ...plan.others].map(i => i.object));
+    expect(all.has(fx), 'an always-drawn renderable on the camera\'s layers, past the far plane').toBe(true);
+    expect(plan.stats.always).toBe(1);
+    expect(plan.reps.at(-1)!.object, 'the farthest (sorted at the far plane)').toBe(fx);
     expect(all.has(k.culledNear), 'culled within the radius').toBe(true);
     expect(all.has(k.sweptFar), 'beyond the radius, shown by the culler from the exit').toBe(true);
     expect(all.has(k.pastFar), 'past the far plane').toBe(false);
     expect(all.has(k.pooled), 'hidden (a pool: its first use)').toBe(false);
     for (const m of k.farItems) expect(all.has(m), 'culled beyond the radius, shown from nowhere').toBe(false);
-    // a group's caster is its own program group (the shadow flags are part of the key): 5 x 2 + the culled near + the swept far
-    expect(plan.reps.length).toBe(5 * 2 + 2);
+    // a group's caster is its own program group (the shadow flags are part of the key): 5 x 2 + the culled near + the swept far + fx
+    expect(plan.reps.length).toBe(5 * 2 + 3);
     expect(plan.others.length).toBe(5 * 2);
     const d = (o: THREE.Object3D) => o.position.length();
     for (let i = 1; i < plan.reps.length; i++) expect(d(plan.reps[i].object)).toBeGreaterThanOrEqual(d(plan.reps[i - 1].object) - 1);
