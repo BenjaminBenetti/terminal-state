@@ -12,6 +12,8 @@ import {foreignTo, levelWorkingSet, selectLevelKeys} from './assets/levelAssets'
 import {SURFACE_LANE, hostKeyOf, isSurfaceHost, isSurfaceKey, sectionAssetLevel, surfaceKeyOf, surfaceVersionFor} from './gen/surface/surfaceRun';
 import {abortCrossers, arriveCrossers, departCrossers, surfaceCrossRefusal, surfaceCrossers, type SurfaceCrosser, type SurfaceCrossGate, type SurfaceCrossRefusal, type SurfaceCrossResult} from './world/surface/crossing'; // (lane ACCESS: Game.crossSurface)
 import {LIFT_RIDE_COMPILE, LIFT_RIDE_WAIT, liftOfLayout, waitForLiftCompile, type SurfaceLiftRuntime} from './world/surface/liftRuntime'; // (lane ACCESS follow-up: the v2 crossing is a cargo-lift ride)
+import {connectorOfLayout, type SurfaceConnectorRuntime} from './world/surface/connectorRuntime'; // (task studio-surface-host-ground-connectors-20261118-053602-01: the Office / Mall connector tube)
+import {cloneLayoutDeep} from './gen/cloneLayout'; // (the Surface anticipation's pristine copies)
 import {installSurfaceRun} from './world/surface/install'; // task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN // Task track3-eaton-centre-20261031 (lane PACKAGE): level-scoped lazy assets
 import {adoptStationName} from './campaign/stationName';
 import {LevelResources} from './assets/levelResources'; // lane PACKAGE (track3): level textures / GPU resources released with their level
@@ -961,7 +963,9 @@ export class Game {
     // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): seated in an ENCLOSED vehicle (the Surface Run truck's cab: the
     // vehicle controller's `enclosed`) the eye breathes clean air — exposure 0; the gas still renders round it (beyond the cab's glass:
     // world/surface/air.ts). Open vehicles: no.
-    this.gas.shelter = () => this.skywaysCar?.enclosed === true;
+    // (task studio-surface-host-ground-connectors-20261118-053602-01) and in the connector tube proper: sealed canvas — no gas drawn inside it
+    // either (off the host's grid; the district's footprint is sealed on the same field: world/surface/air*.ts)
+    this.gas.shelter = () => this.skywaysCar?.enclosed === true || this.surfaceConnector?.sheltered() === true;
     this.gas.hintFor = protectedNow => {
       const m = this.gasMask;
       if (protectedNow || m.state === 'donning') return '';
@@ -1335,7 +1339,8 @@ export class Game {
       : key.level === 'subway' && key.section === 'main' ? SUBWAY_LAYOUT_LANE : null;
     const {layoutVersion, ctx} = this.sectionGenInputs(key, run);
     // (campaign: the node's own seed; lane BUILD: a journey's destination comes pre-generated from the same inputs — takePregenerated)
-    const layout = this.takePregenerated(key, run, ctx) ?? LEVELS[key.level].generate(key.section, ctx);
+    // (task studio-surface-host-ground-connectors-20261118-053602-01: a Surface world comes from its anticipated pristine copy — anticipated)
+    const layout = this.takePregenerated(key, run, ctx) ?? this.anticipated(key, run, ctx) ?? this.anticipate(key, run, ctx, LEVELS[key.level].generate(key.section, ctx));
     if (layoutVersion !== undefined && versionLane && run.laneStore(versionLane, key) === undefined) run.setLaneStore(versionLane, {v: layoutVersion}, key);
     // (task studio-screacher-production-20261110-221858-01) every level: the enemy-roster version this station was first built with
     // (ai/enemyRoster.ts: a station visited before the roster existed stays at 0 — its enemies and kills exact; an unvisited one gets the current)
@@ -1381,8 +1386,58 @@ export class Game {
     this.pregenerated = null;
     try {
       const {ctx} = this.sectionGenInputs(key, run);
-      this.pregenerated = {run, key: `${key.level}/${sectionId(key)}`, inputs: JSON.stringify(ctx), layout: LEVELS[key.level].generate(key.section, ctx)};
+      const layout = this.anticipated(key, run, ctx) ?? this.anticipate(key, run, ctx, LEVELS[key.level].generate(key.section, ctx));
+      this.pregenerated = {run, key: `${key.level}/${sectionId(key)}`, inputs: JSON.stringify(ctx), layout};
     } catch (err) { console.warn('journey: pre-generating', key, 'failed (the prepare generates it again)', err); }
+  }
+
+  /**
+   * (task studio-surface-host-ground-connectors-20261118-053602-01: "real preparation/pre-warming anticipated/paced during approach/
+   * crossing") THE SURFACE ANTICIPATION: a pristine deep copy (gen/cloneLayout.ts) of each world of the current Surface Run station whose
+   * crossing is walked / ridden (a version-2 connector or cargo lift), kept from its generation; a crossing takes a fresh copy (tens of ms)
+   * instead of generating in play (the generator is one synchronous block: ~0.6 s a district, ~1.6-1.9 s an Office / Mall host). The
+   * other world is generated while this one is prepared (behind its loading screen: surfaceAnticipateOther). Same inputs rule as
+   * `pregenerated`; only the current station's pair is kept (another station / run drops them).
+   */
+  private surfaceAnticipation = new Map<string, {run: RunState; station: string; inputs: string; layout: StationLayout}>();
+  readonly surfaceAnticipationCounts = {stored: 0, hits: 0, misses: 0, others: 0, othersMs: 0};
+
+  /** A fresh copy of the anticipated layout made for exactly this run, section and inputs (null: none). */
+  private anticipated(key: SectionKey, run: RunState, ctx: SectionGenContext): StationLayout | null {
+    const a = this.surfaceAnticipation.get(`${key.level}/${sectionId(key)}`);
+    if (!a) return null;
+    if (a.run !== run || a.inputs !== JSON.stringify(ctx)) { this.surfaceAnticipationCounts.misses++; return null; }
+    this.surfaceAnticipationCounts.hits++;
+    return cloneLayoutDeep(a.layout);
+  }
+
+  /** Keep a pristine copy of a just-generated Surface world with a walked / ridden crossing (returns the layout itself). */
+  private anticipate(key: SectionKey, run: RunState, ctx: SectionGenContext, layout: StationLayout): StationLayout {
+    const kind = isSurfaceKey(key) ? layout.surface?.portal.kind : layout.surfaceAccess?.kind;
+    if (kind !== 'connector' && kind !== 'lift') return layout;
+    const station = key.station ?? key.level;
+    for (const [k, a] of this.surfaceAnticipation) if (a.run !== run || a.station !== station) this.surfaceAnticipation.delete(k);
+    try {
+      this.surfaceAnticipation.set(`${key.level}/${sectionId(key)}`, {run, station, inputs: JSON.stringify(ctx), layout: cloneLayoutDeep(layout)});
+      this.surfaceAnticipationCounts.stored++;
+    } catch (err) { console.warn('Surface Run: keeping a copy of', key, 'failed (a crossing generates it)', err); }
+    return layout;
+  }
+
+  /** While a Surface world is prepared (behind its loading screen / a crossing's gap): its other world generated and kept, if not yet. */
+  private surfaceAnticipateOther(key: SectionKey, run: RunState, layout: StationLayout): void {
+    const kind = isSurfaceKey(key) ? layout.surface?.portal.kind : layout.surfaceAccess?.kind;
+    if (kind !== 'connector' && kind !== 'lift') return;
+    const other = this.surfaceCrossTarget(key);
+    if (!other) return;
+    try {
+      const {ctx} = this.sectionGenInputs(other, run);
+      if (this.surfaceAnticipation.get(`${other.level}/${sectionId(other)}`)?.inputs === JSON.stringify(ctx)) return;
+      const t0 = performance.now();
+      this.anticipate(other, run, ctx, LEVELS[other.level].generate(other.section, ctx));
+      this.surfaceAnticipationCounts.others++;
+      this.surfaceAnticipationCounts.othersMs += performance.now() - t0;
+    } catch (err) { console.warn('Surface Run: anticipating', key, 'failed (a crossing generates it)', err); }
   }
 
   /** The pre-generated layout when it was made for exactly this run, section and inputs (taken once; null otherwise). */
@@ -1402,6 +1457,7 @@ export class Game {
     this.propModels.sealed = this.levelResources.sealed = false; // lane PACKAGE (track3): the loading screen fetches the level's assets
     this.levelResources.beginSection(); // (task train-all-cargo: a carried prop's art, whatever its level, stays with this section)
     const layout = this.generateSection(key, run);
+    if (!this.transitGap) this.surfaceAnticipateOther(key, run, layout); // (behind the loading screen: the other world of a Surface station, kept)
     for (const f of this.sectionLayoutHooks) { try { f(layout, key, run, 'prepare'); } catch (err) { console.warn('train-all-cargo: a layout hook failed', err); } }
     const lazyKeys = this.modelKeysFor(layout, sectionAssetLevel(key)); // (Surface Run: the district loads as its own asset family)
     await this.propModels.ensure(lazyKeys, onProgress);
@@ -1764,6 +1820,7 @@ export class Game {
     if (fresh) this.trainRide?.reset();
     if (this.trainRide?.riding) { /* the car drives into this station; TrainRide.arrive() parks it at trainPlacement */ }
     else if (this.surfaceLiftRide?.holding) { /* (lane ACCESS follow-up) riding the cargo lift: the ride already placed the player in this end's car */ }
+    else if (this.surfaceConnector?.holding) { /* (the connector tube: the walk already placed the player in this world's tube) */ }
     else if (fresh) this.player.spawn(pose.x, pose.z, pose.yaw, y); else this.player.place(pose.x, pose.z, pose.yaw, y);
     this.ladderAim = null;
     this.recoilPitch = this.recoilYaw = this.bloom = this.shake = 0;
@@ -2286,6 +2343,13 @@ export class Game {
       if (this.surfaceLiftRide.holding) this.surfaceLiftRide.stepPlayer(dt, inp, {aiming: false, speedMult: 1, canSprint: false});
       this.hud.setPrompt(this.surfaceLiftRide.statusLine() ?? ''); // (no HUD update runs in the gap: the ride's status line alone)
     }
+    // (task studio-surface-host-ground-connectors-20261118-053602-01) the connector tube: its flaps and the player walking in it
+    const con = this.surfaceConnector;
+    if (con && con.phase !== 'idle') {
+      if (con.holding) con.stepPlayer(dt, inp, {aiming: false, speedMult: 1, canSprint: false});
+      con.tick(dt);
+      this.hud.setPrompt(con.statusLine() ?? '');
+    }
     this.updateCamera(dt);
     this.trainRide.tiltCamera(this.camera);
   }
@@ -2743,6 +2807,9 @@ export class Game {
   /** (lane ACCESS follow-up) The Surface Run's cargo lift runtime (world/surface/liftRuntime.ts installs itself); the last ride's [E]-press generation (ms). */
   surfaceLiftRide: SurfaceLiftRuntime | null = null;
   surfaceLiftGenMs = 0;
+  /** (task studio-surface-host-ground-connectors-20261118-053602-01) The Office / Mall connector tube's runtime (world/surface/connectorRuntime.ts installs itself). */
+  surfaceConnector: SurfaceConnectorRuntime | null = null;
+  surfaceConnectorGenMs = 0;
   /** Set only while a crossing's loading screen replaces play: the [E] press keeps the pointer captured (enterPlay resumes with it). */
   private holdPointerLock = false;
 
@@ -2781,6 +2848,14 @@ export class Game {
       if (lift?.canRide() && lift.inCar()) {
         const r = await this.rideSurfaceLift(from, to);
         if (r) return r;
+      }
+      // (task studio-surface-host-ground-connectors-20261118-053602-01) an Office / Mall connector: the player walked into the tube — the
+      // WALK is the crossing (walkSurfaceConnector; null = the destination has no tube: the loading screen below)
+      const con = this.surfaceConnector;
+      if (con?.canCross()) {
+        const r = await this.walkSurfaceConnector(from, to);
+        if (r) return r;
+        con.reset();
       }
       this.surfaceCrossCounts.started++;
       const up = !isSurfaceKey(from), station = this.surfaceStationName(up ? from : hostKeyOf(from));
@@ -2935,6 +3010,110 @@ export class Game {
       this.surfaceCrossing = null;
       R.progress = null;
     }
+  }
+
+  /**
+   * (task studio-surface-host-ground-connectors-20261118-053602-01) THE CONNECTOR WALK — the Office / Mall crossing on foot, without a
+   * loading screen or a ride (world/surface/connectorRuntime.ts). The seam fired: the player walked a metre into the tube with its walk-in
+   * flap down behind them, both flaps latched down (the tube is sealed). The destination's layout comes from the anticipation cache (made
+   * when this world was prepared) or is generated now (one synchronous block, measured: surfaceConnectorGenMs); the participants depart
+   * (the old world intact); the transit gap: the old world is left (the tube's view kept and drawn), the destination prepared, its tube
+   * placed where the player walks (identical inside) with the player carried over in the tube's frame, the destination built PACED (frames
+   * drawn: the player keeps walking and looking in the tube), the participants arrive, the destination's view prepared; only then the far
+   * flap — the destination's walk-in flap — may roll up (markReady). A failure before the old world was left releases the walk where it
+   * is; after, the tube is reset and the left section rebuilt (recoverSurfaceCrossing, behind the loading screen; the error screen if that
+   * fails too). Null: the destination has no connector (the caller crosses by loading screen).
+   */
+  private async walkSurfaceConnector(from: SectionKey, to: SectionKey): Promise<SurfaceCrossResult | null> {
+    const C = this.surfaceConnector!, up = !isSurfaceKey(from), station = this.surfaceStationName(up ? from : hostKeyOf(from));
+    const t0 = performance.now();
+    this.pregenerateSection(to, this.run);
+    this.surfaceConnectorGenMs = performance.now() - t0;
+    if (!connectorOfLayout(this.pregenerated?.layout)) { this.pregenerated = null; return null; }
+    this.surfaceCrossCounts.started++;
+    const crossers = surfaceCrossers(this).slice();
+    this.surfaceCrossing = {from, to, phase: 'depart'};
+    let departed: SurfaceCrosser[] = [], left: BuiltWorld | null = null;
+    C.begin(up);
+    C.progress = () => this.connectorStatusText(up ? 'the street' : station);
+    try {
+      try { departed = departCrossers(crossers, from, to); } catch (err) {
+        console.error('Surface Run: a participant could not depart', err);
+        this.lastError = String((err as Error)?.stack ?? err);
+        this.surfaceCrossCounts.failed++;
+        this.pregenerated = null;
+        C.reset();
+        return {ok: false, reason: 'failed', error: 'Something you carry cannot come along right now.'};
+      }
+      this.surfaceCrossing.phase = 'prepare';
+      this.cancelUse('surface');
+      this.cancelFlareHold();
+      this.aiming = false;
+      await this.warmRun;
+      this.surfaceCrossing.phase = 'build';
+      left = this.world;
+      this.transitGap = true;
+      C.holdForLeave();
+      this.leaveSection(true);
+      const layout = await this.prepareSection(to, this.run);
+      if (layout.surface) $('#station-intro').textContent = layout.surface.name;
+      const dest = connectorOfLayout(layout);
+      if (!dest || !C.repose(dest)) throw new Error('the destination has no connector');
+      await this.warmRun;
+      await this.buildSectionPaced(to, layout, {kind: 'surface'}, false, {sliceMs: LIFT_RIDE_WAIT.buildSliceMs}); // (only the sealed tube is drawn)
+      this.liftBuilt = true;
+      this.surfaceCrossing.phase = 'arrive';
+      const failed = arriveCrossers(departed, to);
+      departed = [];
+      this.surfaceCrossing.phase = 'warmup';
+      this.glassMirror?.prime();
+      this.surfaceLiftCompile = null;
+      const since = this.frameBudget.activeMs;
+      let c = await this.backgroundCompile(true, since);
+      if (c === 'cancelled' && !this.gpu?.deviceLost && this.world) c = await this.backgroundCompile(true, since);
+      if (this.gpu?.deviceLost) { C.reset(); this.transitGap = this.liftBuilt = false; return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'}; }
+      this.transitGap = this.liftBuilt = false;
+      this.settleRtScene();
+      const rest = c === 'partial' || c === 'cancelled';
+      const lc = this.surfaceLiftCompile as Game['surfaceLiftCompile'];
+      if (rest) console.warn(`Terminal State: the connector opens with the graphics preparation incomplete (${c}${lc?.why ? `: ${lc.why}` : ''}); the rest compiles in play`);
+      C.markReady();
+      if (rest) void this.backgroundCompile(false).then(() => this.flushRetired());
+      else this.flushRetired();
+      this.hud.toast(up ? `${layout.surface?.name ?? 'The street'} — through the passage to the command tent` : `${station} — back inside`);
+      if (rest) this.hud.toast('Graphics are still being prepared — brief stutters are possible.', true);
+      if (failed.length) this.hud.toast(`Something you carried did not come with you (${failed.join(', ')})`, true);
+      this.surfaceCrossCounts.done++;
+      return {ok: true, to};
+    } catch (err) {
+      this.transitGap = this.liftBuilt = false;
+      C.reset();
+      if (err instanceof PacedBuildCancelled) return {ok: false, reason: 'cancelled', error: 'The crossing was interrupted.'};
+      console.error('Surface Run: the connector crossing failed', err);
+      this.lastError = String((err as Error)?.stack ?? err);
+      this.surfaceCrossCounts.failed++;
+      if (!left) {
+        abortCrossers(departed, from);
+        this.hud.toast(`${up ? 'The way out' : 'The way back'} is blocked — you are still here.`, true);
+        return {ok: false, reason: 'failed', error: String((err as Error)?.message ?? err).slice(0, 120)};
+      }
+      this.holdPointerLock = true;
+      const ui = this.showLoading(up ? `${station} · the street` : station, 'The passage is blocked — going back…');
+      this.holdPointerLock = false;
+      return await this.recoverSurfaceCrossing(from, up, departed, left, ui, err);
+    } finally {
+      this.surfaceCrossing = null;
+      C.progress = null;
+    }
+  }
+
+  /** The held walker's status line while the far flap waits for the destination: what is actually happening (truthful). */
+  private connectorStatusText(where: string): string {
+    if (this.transitGap && !this.liftBuilt) return `The passage — securing the way to ${where}…`;
+    const st = this.journeyCompile?.stats;
+    if (!this.transitGap || !st || (st.phase !== 'scene' && st.phase !== 'shadow')) return '';
+    const total = st.sceneItems + st.casters + st.twoPass, done = st.sceneDone + st.shadowDone + st.twoPassDone;
+    return `The passage — preparing ${where}: graphics ${Math.min(99, Math.floor((100 * done) / Math.max(1, total)))} %`;
   }
 
   /**
@@ -3615,8 +3794,9 @@ export class Game {
     this.rtTraceFrame = true; // (RT Flashlight: this frame traces the bounce; the warm-up's hidden frames do not)
     // (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01) a sealed cargo-lift car: its own view only (the world crossing
     // the virtual shaft is not drawn through the rider; layers restored right after this draw — liftRuntime.ts drawSealed)
-    const lift = this.surfaceLiftRide;
+    const lift = this.surfaceLiftRide, con = this.surfaceConnector;
     if (lift?.sealed) lift.drawSealed(this.scene, [this.camera, this.fx.group], () => this.drawFrame());
+    else if (con?.sealed) con.drawSealed(this.scene, [this.camera, this.fx.group], () => this.drawFrame()); // (the connector's sealed tube, likewise)
     else this.drawFrame();
     return true;
   }
@@ -4160,7 +4340,10 @@ export class Game {
     const laneOwns = this.inputOwners.some(f => f()); // Iteration 16 (lane GEAR): a readied / open backpack owns the mouse buttons
     // (lane RIDE) riding the moving train: no gunfire / melee / flare throws (the world's hitscan / bodies would not match the moving
     // car); aiming, reloading, consumables, gear, inventory, the flashlight and the Lockbox stay usable
-    const rideHolster = this.trainRide.blocksWeapons;
+    // (task studio-surface-host-ground-connectors-20261118-053602-01) in the connector tube likewise: it stands off the host's grid / on the
+    // district's sealed footprint, where the world's hitscan and thrown bodies have no floor or walls that match it
+    const tubeHolster = this.surfaceConnector?.holding === true;
+    const rideHolster = this.trainRide.blocksWeapons || tubeHolster;
     // task fuel-feedback: a lane giving the mouse back with the left button still held (a fuel pour ends / is cancelled, a backpack is
     // put away) never bleeds into the gun — the button is released first (as after a flare)
     if (this.laneOwnedLast && !laneOwns && inp.mouse[0]) this.lmbLatch = true;
@@ -4183,7 +4366,7 @@ export class Game {
       if ((e.type === 'release' || e.type === 'cancel') && inp.mouse[0]) this.lmbLatch = true; // never bleeds into the gun
     }
     const flareOwns = this.flareHold.active || this.lmbLatch || laneOwns;
-    if (rideHolster && !flareOwns && ((inp.mousePressed[0] && (wdef || heldDef?.kind === 'throwable')) || inp.hit('KeyG') || inp.hit('KeyT'))) this.trainRide.refuseFire(); // (lane RIDE) the note
+    if (rideHolster && !flareOwns && ((inp.mousePressed[0] && (wdef || heldDef?.kind === 'throwable')) || inp.hit('KeyG') || inp.hit('KeyT'))) { if (tubeHolster) this.hud.toast('Not in the passage — step out first', true); else this.trainRide.refuseFire(); } // (lane RIDE) the note
     // A fresh sprint (Shift while moving forward) interrupts a timed use. Until the consume view has
     // brought the gun back up it stays lowered: no aiming, firing or reloading.
     if (this.use && (inp.hit('ShiftLeft') || inp.hit('ShiftRight')) && (inp.down('KeyW') || inp.down('ArrowUp'))) this.cancelUse('sprint');
@@ -4193,7 +4376,8 @@ export class Game {
     // (lane RIDE) riding: car pose -> the player's car-local step -> the world pose (TrainRide.stepPlayer); else the world body as ever
     // (lane CAR) driving the Skyways prize car: the car's step puts the player in the driver seat (world/skywaysCar.ts stepPlayer)
     // (lane ACCESS follow-up) held in the Surface Run's cargo lift car while its doors close / open: the car's own model (liftRuntime.ts)
-    const step = this.surfaceLiftRide?.holding ? this.surfaceLiftRide.stepPlayer(dt, inp, moveOpts) : this.trainRide.riding ? this.trainRide.stepPlayer(dt, inp, moveOpts) : this.skywaysCar.driving ? this.skywaysCar.stepPlayer(dt, inp) : p.update(dt, inp, this.levels, this.propIndex, moveOpts);
+    // (task studio-surface-host-ground-connectors-20261118-053602-01) walking in the Office / Mall connector tube: the tube's own model
+    const step = this.surfaceLiftRide?.holding ? this.surfaceLiftRide.stepPlayer(dt, inp, moveOpts) : this.surfaceConnector?.holding ? this.surfaceConnector.stepPlayer(dt, inp, moveOpts) : this.trainRide.riding ? this.trainRide.stepPlayer(dt, inp, moveOpts) : this.skywaysCar.driving ? this.skywaysCar.stepPlayer(dt, inp) : p.update(dt, inp, this.levels, this.propIndex, moveOpts);
     if (step) this.sfx.footstep(p.sprinting, p.crouched);
     if (p.justJumped) this.sfx.jump();
     if (p.justLanded) this.sfx.land(Math.min(1, p.landSpeed / 6));

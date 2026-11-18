@@ -16,6 +16,14 @@ import type {SBox} from '../../gen/surface/surfaceTypes';
 import {hostKeyOf} from '../../gen/surface/surfaceRun';
 import {buildAccessDoor} from './accessView';
 import {setSurfaceWayAimed} from './crossing';
+import {connectorToWorld} from '../../gen/surface/connectorShape';
+import type {SurfaceConnector} from '../../gen/surface/surfaceTypes';
+
+/** A connector's focus: its host doorway's middle (the host world) / its tent mouth (the district). */
+function connectorFocus(c: SurfaceConnector): {x: number; z: number} {
+  const [x, z] = connectorToWorld(c, c.end === 'host' ? -c.door.depth : c.len, 0);
+  return {x, z};
+}
 
 /** How the player must stand at a way: inside its box (feet within y0..y1), looking within `look` rad of its focus (or right at it). */
 export const ACCESS_AIM = {look: 1.0, near: 0.8};
@@ -31,6 +39,11 @@ export interface SurfaceWay {
   label: string;
   /** (version 2, lane ACCESS follow-up) A cargo lift's car: standing anywhere in it aims at it (whatever the facing). */
   inside?: boolean;
+  /**
+   * (task studio-surface-host-ground-connectors-20261118-053602-01) An Office / Mall connector tube: WALKED through, never [E]
+   * (world/surface/connectorRuntime.ts) — the prompt only names it.
+   */
+  walk?: boolean;
 }
 
 const runtimes = new WeakMap<object, SurfaceAccessRuntime>();
@@ -67,7 +80,8 @@ export class SurfaceAccessRuntime {
       const host = hostKeyOf(g.run.current), name = g.surfaceStationName(host);
       p.label = p.kind === 'lift' ? `Ride down to ${name}` : p.kind === 'stair' ? `Back down to ${name}` : `Back inside ${name}`;
       const t = p.trigger;
-      this.way = {dir: 'down', trigger: t, focus: {x: (t.x0 + t.x1) / 2, z: (t.z0 + t.z1) / 2}, label: p.label, ...(p.kind === 'lift' ? {inside: true} : {})};
+      this.way = {dir: 'down', trigger: t, focus: p.connector ? connectorFocus(p.connector) : {x: (t.x0 + t.x1) / 2, z: (t.z0 + t.z1) / 2}, label: p.kind === 'connector' ? `The passage back inside ${name}` : p.label,
+        ...(p.kind === 'lift' ? {inside: true} : {}), ...(p.kind === 'connector' ? {walk: true} : {})};
     } else if (layout.surfaceAccess) {
       const a = layout.surfaceAccess, t = a.trigger;
       let focus = {x: (t.x0 + t.x1) / 2, z: (t.z0 + t.z1) / 2};
@@ -76,8 +90,11 @@ export class SurfaceAccessRuntime {
         const e = layout.mall?.exits?.find(x => x.id === a.exit);
         if (e) focus = e.side === 'N' || e.side === 'S' ? {x: (e.door.s0 + e.door.s1) / 2, z: e.door.plane} : {x: e.door.plane, z: (e.door.s0 + e.door.s1) / 2};
       }
-      this.way = {dir: 'up', trigger: t, focus, label: a.kind === 'lift' ? 'Ride up to the street' : a.kind === 'subway-stair' ? 'Go up to the street' : 'Go out to the street', ...(a.kind === 'lift' ? {inside: true} : {})};
-      if (a.door && g.world && g.mats) {
+      if (a.connector) focus = connectorFocus(a.connector);
+      this.way = {dir: 'up', trigger: t, focus, label: a.kind === 'lift' ? 'Ride up to the street' : a.kind === 'subway-stair' ? 'Go up to the street' : a.kind === 'connector' ? 'The passage to the street' : 'Go out to the street',
+        ...(a.kind === 'lift' ? {inside: true} : {}), ...(a.kind === 'connector' ? {walk: true} : {})};
+      // (the connector's doorway is open: the tube beyond it is world/surface/connectorView.ts — no closed street door)
+      if (a.door && a.kind !== 'connector' && g.world && g.mats) {
         this.door = buildAccessDoor(g.mats, a.door, a.kind === 'subway-stair');
         g.world.group.add(this.door);
       }
@@ -115,11 +132,12 @@ export class SurfaceAccessRuntime {
     if (!this.aimed || !this.way) return null;
     const r = this.game.surfaceCrossRefusal();
     if (r?.code === 'busy') return null;
+    if (this.way.walk) return r ? `${this.way.label} — ${r.text}` : `${this.way.label} ▸`;
     return r ? `${this.way.label} — ${r.text}` : `<b>[E]</b> ${this.way.label}`;
   }
 
   interact(): boolean {
-    if (!this.aimed || !this.way) return false;
+    if (!this.aimed || !this.way || this.way.walk) return false;
     this.counts.presses++;
     const r = this.game.surfaceCrossRefusal();
     if (r) {
