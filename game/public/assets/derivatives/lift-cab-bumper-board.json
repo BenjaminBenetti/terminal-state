@@ -1,0 +1,169 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "lift-cab-bumper-board",
+ "task": "studio-surface-run-lift-reliability-and-cab-20261118-023909-01",
+ "status": "runtime derivative (crop / seam feather / resize / derived normal + ORM / JPEG; deterministic processing only) of an ORIGINAL texture source generated for this project with Codex native image_gen (owned Codex CLI) under the user's authorization for the Surface Run cargo-lift cab retexture; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Surface Run cargo-lift cab: the bumper rails along the walls",
+ "subject": "worn oiled hardwood bumper board, horizontal grain, cart gouges",
+ "cls": "wood",
+ "rebuild": "node tools/asset-pipeline/props/build-lift-cab-textures.mjs",
+ "rawStorage": "reference/tasks/surface-run-lift-reliability-and-cab-20261118-023909/gen/{LEDGER.jsonl, raw/codex-<n>-<id>-exec-<uuid>.png, prompts/frozen/<id>-c<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 2,
+  "session": "01a1ecaf-4a38-70c0-892c-0c6360978104",
+  "requested": "2026-11-18T03:24:32.895609Z",
+  "finished": "2026-11-18T03:25:07.807854Z",
+  "seconds": 34.9,
+  "imageGenGenerations": 1
+ },
+ "prompt": {
+  "file": "frozen/bumper-board-c2.txt",
+  "sha256": "68081bf0ba5029d3d4abffcbbea5cfa2eb26737aac810e90d021a68a224b3610"
+ },
+ "source": {
+  "file": "codex-2-bumper-board-exec-357b3b9c-f105-4a78-b5d2-37429dd46808.png",
+  "sha256": "866867963bb6a1fd0525ed4d49f242371a8d15be7ccb43a8ef2a02a1f474388f",
+  "bytes": 3046541,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "crop": {
+   "x": 64,
+   "y": 64,
+   "w": 1126,
+   "h": 1126,
+   "u": {
+    "mode": "free",
+    "cropStart": 64,
+    "cropSize": 1126,
+    "periods": 1,
+    "periodPx": 1126,
+    "mmPerPx": 0.9569,
+    "why": "free axis: the frame inside a 64 px feather margin"
+   },
+   "v": {
+    "mode": "free",
+    "cropStart": 64,
+    "cropSize": 1126,
+    "periods": 1,
+    "periodPx": 1126,
+    "mmPerPx": 0.9569,
+    "why": "free axis: the frame inside a 64 px feather margin"
+   }
+  },
+  "seam": {
+   "featherPx": 64,
+   "method": "the last featherPx columns / rows cross-fade (cosine) into the source pixels just before the crop start (the true wrap neighbours; a whole number of periods earlier on a periodic axis)"
+  },
+  "lighting": "none (the sources are evenly lit material scans)",
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill",
+   "wrap": "3 x 3 tiled, centre extract"
+  },
+  "height": {
+   "bands": [
+    {
+     "blurPx": 1,
+     "basePx": 4,
+     "metresPerSd": 0.0002
+    },
+    {
+     "blurPx": 2,
+     "basePx": 12,
+     "metresPerSd": 0.0005
+    }
+   ],
+   "note": "luminance band-passes (output texels), clamped at 3 standard deviations"
+  },
+  "normal": {
+   "convention": "tangent space, R = -dh/dx, G = +dh/dy (image y down), B = z (build-reactor-kit.mjs)",
+   "slopes": "metres per metre from the height (m) and the span per texel"
+  },
+  "orm": {
+   "r": "ambient occlusion from cavity (blur 8 px, 0.2 per height sd, floor 0.6)",
+   "g": "roughness 0.5-0.82 (darker than the 12 px surroundings = rougher)",
+   "b": "metalness 0"
+  },
+  "encode": {
+   "color": {
+    "quality": 85,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:2:0"
+   },
+   "normal": {
+    "quality": 90,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "orm": {
+    "quality": 88,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) + plain JS via tools/asset-pipeline/props/build-lift-cab-textures.mjs"
+ },
+ "tileCheck": {
+  "plainCrop": {
+   "seamLR": 4.664,
+   "seamTB": 14.549,
+   "interiorLR": 4.713,
+   "interiorTB": 15.657,
+   "ratioLR": 0.99,
+   "ratioTB": 0.929
+  },
+  "after": {
+   "seamLR": 6.821,
+   "seamTB": 14.413,
+   "interiorLR": 3.365,
+   "interiorTB": 15.128,
+   "ratioLR": 2.027,
+   "ratioTB": 0.953
+  },
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs interior neighbours along the same axis (1024 buffers); plainCrop = the crop without the feather"
+ },
+ "spanM": {
+  "u": 1.0775,
+  "v": 1.0775
+ },
+ "meanLinearAlbedo": [
+  0.1262,
+  0.0448,
+  0.0152
+ ],
+ "meanRoughness": 0.667,
+ "meanMetalness": 0.002,
+ "outputs": {
+  "color": {
+   "url": "assets/textures/lift/lift-cab-bumper-board-color.jpg",
+   "bytes": 233977,
+   "sha256": "ba5c658aaa0f27532da8fd61e4c17a43b471a73de0a10b014641ebe4531edc55",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "normal": {
+   "url": "assets/textures/lift/lift-cab-bumper-board-normal.jpg",
+   "bytes": 275794,
+   "sha256": "5c7a33e686bb5c58084523a31537bf96315e84e02e46bd4e34c9b2fc1bf9a485",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "orm": {
+   "url": "assets/textures/lift/lift-cab-bumper-board-orm.jpg",
+   "bytes": 275468,
+   "sha256": "23ae96b94ebf78327b1a43131718bb3900109ad3b764c4d311bb6721b4235a35",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  }
+ }
+}

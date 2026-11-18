@@ -895,3 +895,16 @@ Original tileable surface textures generated for this project with Codex native 
 - `assets/textures/subway/arch/subway-arch-ceiling-plaster-{color,normal,orm}.jpg` — painted cement-render ceiling soffit, off-white (Codex call 3)
 - `assets/textures/subway/arch/subway-arch-rock-painted-{color,normal,orm}.jpg` — off-white painted shotcrete over blasted rock (tinted at runtime) (Codex call 8)
 <!-- END subway-arch-20261117 -->
+
+<!-- BEGIN lift-cab-20261118 (build-lift-cab-textures.mjs) -->
+## Surface Run cargo-lift cab: surface sets (painted steel, tread plate, hazard striping, shaft concrete, bumper boards) and placards
+
+Original textures generated for this project with Codex native image generation (the owned Codex CLI's built-in image_gen tool), one ledgered call per texture (6 accepted calls, each accepted at its first call), under the user's authorization for the Surface Run cargo-lift cab retexture (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01). Runtime derivatives by `tools/asset-pipeline/props/build-lift-cab-textures.mjs` (deterministic processing only: a crop to whole measured pattern periods, a seam feather from the source's own pixels, resize, and normal / ORM maps derived locally from the colour source; provenance: `assets/derivatives/lift-cab-<name>.json`). The placard wording is fictional signage. Provider terms apply; unapproved prototypes, no licence or commercial clearance implied. Raw masters, prompts and the generation ledger are kept outside Git.
+
+- `assets/textures/lift/lift-cab-wall-paint-{color,normal,orm}.jpg` — painted steel freight-cab wall lining: grey-green enamel, one bolted lap seam, cart scuffs and chips (Codex call 1)
+- `assets/textures/lift/lift-cab-floor-tread-{color,normal,orm}.jpg` — worn steel diamond tread plate (raised lentil lugs, grime between them) (Codex call 6)
+- `assets/textures/lift/lift-cab-hazard-stripe-{color,normal,orm}.jpg` — worn yellow / black 45 degree hazard striping on steel (100 mm stripes) (Codex call 3)
+- `assets/textures/lift/lift-cab-shaft-concrete-{color,normal,orm}.jpg` — smooth cast-in-place concrete shaft wall (bug holes, faint stains) (Codex call 5)
+- `assets/textures/lift/lift-cab-bumper-board-{color,normal,orm}.jpg` — worn oiled hardwood bumper board, horizontal grain, cart gouges (Codex call 2)
+- `assets/textures/lift/lift-cab-placards-color.jpg` — four cab placards (capacity plate, stand clear of gate, inspection certificate, load evenly) (Codex call 4)
+<!-- END lift-cab-20261118 -->

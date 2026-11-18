@@ -11,7 +11,7 @@ import {PropModelLibrary, loadAssets, type AssetBundle} from './assets/loader';
 import {foreignTo, levelWorkingSet, selectLevelKeys} from './assets/levelAssets';
 import {SURFACE_LANE, hostKeyOf, isSurfaceHost, isSurfaceKey, sectionAssetLevel, surfaceKeyOf, surfaceVersionFor} from './gen/surface/surfaceRun';
 import {abortCrossers, arriveCrossers, departCrossers, surfaceCrossRefusal, surfaceCrossers, type SurfaceCrosser, type SurfaceCrossGate, type SurfaceCrossRefusal, type SurfaceCrossResult} from './world/surface/crossing'; // (lane ACCESS: Game.crossSurface)
-import {LIFT_RIDE_COMPILE, liftOfLayout, type SurfaceLiftRuntime} from './world/surface/liftRuntime'; // (lane ACCESS follow-up: the v2 crossing is a cargo-lift ride)
+import {LIFT_RIDE_COMPILE, LIFT_RIDE_WAIT, liftOfLayout, waitForLiftCompile, type SurfaceLiftRuntime} from './world/surface/liftRuntime'; // (lane ACCESS follow-up: the v2 crossing is a cargo-lift ride)
 import {installSurfaceRun} from './world/surface/install'; // task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN // Task track3-eaton-centre-20261031 (lane PACKAGE): level-scoped lazy assets
 import {adoptStationName} from './campaign/stationName';
 import {LevelResources} from './assets/levelResources'; // lane PACKAGE (track3): level textures / GPU resources released with their level
@@ -2284,6 +2284,7 @@ export class Game {
     if (this.surfaceLiftRide && this.surfaceLiftRide.phase !== 'idle') {
       this.surfaceLiftRide.tick(dt);
       if (this.surfaceLiftRide.holding) this.surfaceLiftRide.stepPlayer(dt, inp, {aiming: false, speedMult: 1, canSprint: false});
+      this.hud.setPrompt(this.surfaceLiftRide.statusLine() ?? ''); // (no HUD update runs in the gap: the ride's status line alone)
     }
     this.updateCamera(dt);
     this.trainRide.tiltCamera(this.camera);
@@ -2296,9 +2297,9 @@ export class Game {
    * the level culler alone); the identical steps as buildSection. A teardown meanwhile (stationGen moved: the journey's single flight never
    * lets one start) abandons it (PacedBuildCancelled). `genMs` = its main-thread work, not the ride's wall time.
    */
-  private async buildSectionPaced(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean): Promise<void> {
+  private async buildSectionPaced(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean, pacing: PacedBuildOptions = {}): Promise<void> {
     const gen = this.stationGen, stats = (this.journeyBuild = newPacedStats());
-    await runPaced(this.buildSectionSteps(key, layout, arrival, fresh, true), {...this.buildPacing, stats, alive: () => gen === this.stationGen});
+    await runPaced(this.buildSectionSteps(key, layout, arrival, fresh, true), {...pacing, ...this.buildPacing, stats, alive: () => gen === this.stationGen});
     this.genMs = stats.workMs;
   }
   /**
@@ -2472,8 +2473,9 @@ export class Game {
    * shadow-map variants by off-screen draws nested at the real frame's depth. The arrival still waits at most 8 s for the scene-pass
    * phase; nothing holds a frame or hides the canvas. 'view' (software rasterizer): the representatives within 24 m only.
    */
-  private async backgroundCompile(full = false): Promise<'done' | 'cancelled' | 'skipped' | 'arrived'> {
-    // (lane ACCESS follow-up) `full`: the Surface Run lift ride waits for the WHOLE job (no cap) and is told how it ended
+  private async backgroundCompile(full = false, since = this.frameBudget.activeMs): Promise<'done' | 'partial' | 'cancelled' | 'skipped' | 'arrived'> {
+    // (lane ACCESS follow-up) `full`: the Surface Run lift ride waits for the WHOLE job and is told how it ended (task studio-surface-run-lift-
+    // reliability-and-cab-20261118-023909-01: bounded — LIFT_RIDE_WAIT from `since`, active time: 'partial' = the budget / a stall)
     if (!this.world || !this.renderer.initialized || this.gpu?.deviceLost) return this.gpu?.deviceLost ? 'cancelled' : 'skipped';
     const mode = warmupMode(location.search, this.softwareGl?.software === true);
     if (mode === 'off') return 'skipped';
@@ -2501,9 +2503,13 @@ export class Game {
       const job = (this.journeyCompile = new JourneyCompile({renderer: this.renderer as unknown as JourneyCompileOptions['renderer'], scheduler: this.frameBudget,
         scene: this.scene, camera: this.camera, target, depth, items, casters, receiver, frameNo: () => this.frameBudget.frame, ...(full ? LIFT_RIDE_COMPILE : {})}).start());
       if (full) {
-        await job.done;
-        console.info(`Terminal State: lift ride compile ${job.stats.phase} — scene ${job.stats.sceneDone}/${job.stats.sceneItems}, shadows ${job.stats.shadowDone}/${job.stats.casters}, ${((performance.now() - t0) / 1000).toFixed(1)} s`);
-        return job.stats.phase === 'done' ? 'done' : 'cancelled';
+        const w = await waitForLiftCompile(job, () => this.frameBudget.activeMs, since);
+        const st = job.stats;
+        this.surfaceLiftCompile = {end: w.end, why: w.why, ms: performance.now() - t0, activeMs: this.frameBudget.activeMs - since, scene: st.sceneDone, sceneItems: st.sceneItems,
+          shadows: st.shadowDone, casters: st.casters, twoPass: st.twoPassDone, twoPassItems: st.twoPass, calls: st.sceneChunks, postStalls: st.postStalls, tries: (this.surfaceLiftCompile?.tries ?? 0) + 1};
+        console.info(`Terminal State: lift ride compile ${w.end}${w.why ? ` (${w.why})` : ''} — scene ${st.sceneDone}/${st.sceneItems}, shadows ${st.shadowDone}/${st.casters}, two-pass ${st.twoPassDone}/${st.twoPass}, ${st.sceneChunks} calls, ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+        if (w.end === 'partial') job.cancel(); // (the rest in play pacing once the doors are open: rideSurfaceLift)
+        return w.end;
       }
       // the arrival waits for the scene-pass phase at most 8 s, as before; the job keeps going in spare frame time after that
       await Promise.race([job.sceneDone, new Promise(r => setTimeout(r, 8000))]);
@@ -2513,6 +2519,9 @@ export class Game {
     } catch (err) { console.warn('campaign: background compile failed', err); if (full) return 'cancelled'; }
     return 'arrived';
   }
+
+  /** (QA / tests) How the last lift ride's compile wait ended (null: none yet). */
+  surfaceLiftCompile: {end: string; why: string; ms: number; activeMs: number; scene: number; sceneItems: number; shadows: number; casters: number; twoPass: number; twoPassItems: number; calls: number; postStalls: number; tries: number} | null = null;
 
   /** Lane RENDER-CPU: the journey's background preparation of the next station (render/journeyCompile.ts; QA / tests). */
   get journeyCompileStats(): JourneyCompile['stats'] | null {
@@ -2848,6 +2857,7 @@ export class Game {
     const crossers = surfaceCrossers(this).slice();
     this.surfaceCrossing = {from, to, phase: 'depart'};
     let departed: SurfaceCrosser[] = [], left: BuiltWorld | null = null;
+    R.progress = () => this.liftStatusText(up, up ? 'the street' : station);
     try {
       if (!(await R.begin(up))) { this.pregenerated = null; return {ok: false, reason: 'cancelled', error: 'The ride was interrupted.'}; }
       try { departed = departCrossers(crossers, from, to); } catch (err) {
@@ -2873,20 +2883,33 @@ export class Game {
       const dest = liftOfLayout(layout);
       if (!dest || !R.repose(dest)) throw new Error('the destination has no lift');
       await this.warmRun;
-      await this.buildSectionPaced(to, layout, {kind: 'surface'}, false);
+      await this.buildSectionPaced(to, layout, {kind: 'surface'}, false, {sliceMs: LIFT_RIDE_WAIT.buildSliceMs}); // (only the sealed car is drawn)
       this.liftBuilt = true;
       this.surfaceCrossing.phase = 'arrive';
       const failed = arriveCrossers(departed, to);
       departed = [];
       this.surfaceCrossing.phase = 'warmup';
       this.glassMirror?.prime();
-      const c = await this.backgroundCompile(true);
-      if (c === 'cancelled') { R.reset(); this.transitGap = this.liftBuilt = false; return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'}; }
+      // (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01) the compile, bounded like the loading screen's warm-up
+      // (LIFT_RIDE_WAIT); a job that ended early on a live device (replaced under the ride, a failed step) once more within the same
+      // budget. Only a lost device ends the ride here (nothing can draw: the error screen). Otherwise the doors open on the built, live
+      // destination — never before it is built — and what is left compiles in play pacing, reported.
+      this.surfaceLiftCompile = null;
+      const since = this.frameBudget.activeMs;
+      let c = await this.backgroundCompile(true, since);
+      if (c === 'cancelled' && !this.gpu?.deviceLost && this.world) c = await this.backgroundCompile(true, since);
+      if (this.gpu?.deviceLost) { R.reset(); this.transitGap = this.liftBuilt = false; return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'}; }
       this.transitGap = this.liftBuilt = false;
       this.settleRtScene();
+      const rest = c === 'partial' || c === 'cancelled';
+      const lc = this.surfaceLiftCompile as Game['surfaceLiftCompile']; // (set by backgroundCompile: TypeScript keeps the null above)
+      if (rest) console.warn(`Terminal State: the lift opens with the graphics preparation incomplete (${c}${lc?.why ? `: ${lc.why}` : ''}); the rest compiles in play`);
       if (!(await R.markReady())) return {ok: false, reason: 'cancelled', error: 'The ride was interrupted.'};
-      this.flushRetired(); // the left section's queued releases (its programs are re-used by now)
+      // the left section's queued releases (its programs are re-used by now; with work left, once the play-paced job has had its scene pass)
+      if (rest) void this.backgroundCompile(false).then(() => this.flushRetired()); // (the journey's play pacing: compiled items are cache hits)
+      else this.flushRetired();
       this.hud.toast(up ? `${layout.surface?.name ?? 'The street'} — street level` : `${station} — back underground`);
+      if (rest) this.hud.toast('Graphics are still being prepared — brief stutters are possible.', true);
       if (failed.length) this.hud.toast(`Something you carried did not come with you (${failed.join(', ')})`, true);
       this.surfaceCrossCounts.done++;
       return {ok: true, to};
@@ -2908,7 +2931,21 @@ export class Game {
       return await this.recoverSurfaceCrossing(from, up, departed, left, ui, err);
     } finally {
       this.surfaceCrossing = null;
+      R.progress = null;
     }
+  }
+
+  /**
+   * (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01) The held rider's status line while the car waits for the
+   * destination: what is actually happening (the destination being generated / built; then the compile's real share of its items done).
+   */
+  private liftStatusText(up: boolean, where: string): string {
+    const go = up ? 'Going up' : 'Going down';
+    if (this.transitGap && !this.liftBuilt) return `${go} — preparing ${where}…`;
+    const st = this.journeyCompile?.stats;
+    if (!this.transitGap || !st || (st.phase !== 'scene' && st.phase !== 'shadow')) return '';
+    const total = st.sceneItems + st.casters + st.twoPass, done = st.sceneDone + st.shadowDone + st.twoPassDone;
+    return `${go} — preparing graphics ${Math.min(99, Math.floor((100 * done) / Math.max(1, total)))} %`;
   }
 
   /**
@@ -3574,7 +3611,11 @@ export class Game {
     if (!this.transitGap || this.liftBuilt) this.world?.culler.update(this.camera); // Iteration 08 (Lane G): level / fog culling (cheap; skipped while still); (lane BUILD) never in the transit gap: no station is live (a paced build is in progress)
     this.prof.lap(SPAN.draw); // lane MEASURE
     this.rtTraceFrame = true; // (RT Flashlight: this frame traces the bounce; the warm-up's hidden frames do not)
-    this.drawFrame();
+    // (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01) a sealed cargo-lift car: its own view only (the world crossing
+    // the virtual shaft is not drawn through the rider; layers restored right after this draw — liftRuntime.ts drawSealed)
+    const lift = this.surfaceLiftRide;
+    if (lift?.sealed) lift.drawSealed(this.scene, [this.camera, this.fx.group], () => this.drawFrame());
+    else this.drawFrame();
     return true;
   }
 

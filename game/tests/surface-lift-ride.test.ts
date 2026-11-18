@@ -11,6 +11,12 @@
 //  4. [E] in the tent's car rides down: back in the station's car, the station exactly as left, no district objects / resources / frame
 //     hooks / lift views left over.
 //  5. A ride whose destination cannot be prepared (QA failure injection) returns the player to the car they left (recovered).
+//  6. (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01: "the lift never opens … and so you are stuck") a ride whose
+//     compile job is cancelled under it (retried once) and whose retry never progresses (QA injections) opens BOUNDED — the stall rule of
+//     LIFT_RIDE_WAIT, active time — on the BUILT district, never before; the rest compiles in play (a new job); no loading screen.
+//  Every ride: the mouse turns the held rider in the transit gap ("you cannot look left and right when in the lift"), and a SEALED frame
+//  (the shut car between its stops) draws nothing of the world but the car's own view ("a black plane passes through you": the world's
+//  geometry crossing the virtual shaft); the held rider's status line says what is being prepared.
 //  Resource teardown, every world: exactly one live light field and one decay field on the device — the left world's released, never
 //  re-created (render/bindingRefresh.ts syncNewBindings: three r186 alone re-uploaded the left station's disposed decay / light field for
 //  the first draw of an object of a material built there, one more of each per crossing); and after a full GC no render object three
@@ -57,10 +63,13 @@ interface Priv {
   transitGap: boolean;
   prepareSection(key: SectionKey, run: unknown): Promise<StationLayout>;
   render(): boolean;
+  drawFrame(): void;
+  liftBuilt: boolean;
+  fx: {group: import('three').Object3D};
 }
 
 describe('Surface Run v2: the cargo lift ride (real Game, validating device)', () => {
-  it('rides up and down with no loading screen; doors shut until the destination is compiled; the tent walk-through; recovery', async () => {
+  it('rides up and down with no loading screen; doors shut until the destination is compiled; the tent walk-through; recovery; bounded', async () => {
     const T0 = performance.now(), marks: string[] = [];
     const mark = (s: string) => marks.push(`${s} ${((performance.now() - T0) / 1000).toFixed(1)} s`);
     const quiet = () => {};
@@ -159,9 +168,42 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       expect(R, 'the lift runtime is installed').toBeTruthy();
       const liftViews = () => { let n = 0; game.scene.traverse(o => { if (o.name === 'cargo-lift-surface') n++; }); return n; };
       // every drawn frame: the ride's phase / doors, the transit gap, the compile, the state
-      const samples: {gap: boolean; phase: string; door: number; compile: string | null; job: object | null; state: string}[] = [];
+      const samples: {gap: boolean; phase: string; door: number; compile: string | null; job: object | null; state: string; built: boolean}[] = [];
+      // the held rider's look: a mouse turn armed after a frame's input reset (applied by the next frame's update), checked at its draw
+      const look = {armed: false, yaw: 0, moved: 0, lost: 0, gap: 0};
+      const status = new Set<string>();
       const render0 = G.render.bind(game);
-      G.render = () => { const r = render0(); const j = game.journeyCompileStats; samples.push({gap: G.transitGap, phase: R.phase, door: R.door, compile: j?.phase ?? null, job: j, state: game.state}); return r; };
+      G.render = () => {
+        if (look.armed) { look.armed = false; if (Math.abs(game.player.yaw - look.yaw) > 1e-6) look.moved++; else look.lost++; }
+        const r = render0(); const j = game.journeyCompileStats;
+        samples.push({gap: G.transitGap, phase: R.phase, door: R.door, compile: j?.phase ?? null, job: j, state: game.state, built: G.liftBuilt});
+        const line = R.statusLine(); if (line) status.add(line.replace(/\d+ %/, 'N %'));
+        return r;
+      };
+      const endFrame0 = game.input.endFrame.bind(game.input);
+      game.input.endFrame = () => {
+        endFrame0();
+        if (R.holding && G.transitGap && game.state === 'playing' && samples.length % 15 === 0) { game.input.dx = 40; look.yaw = game.player.yaw; look.armed = true; look.gap++; }
+      };
+      // sealed draws: what of the world is still on the camera's layers (renderables outside the car's view / the camera / the fx group)
+      const seal = {draws: 0, builtDraws: 0, leaks: 0, worst: ''};
+      const drawFrame0 = G.drawFrame.bind(game);
+      G.drawFrame = () => {
+        if (R.sealed && seal.draws++ % 10 === 0) {
+          const stack: import('three').Object3D[] = [...game.scene.children];
+          let leaks = 0;
+          while (stack.length) {
+            const o = stack.pop()!;
+            if (o.name === 'cargo-lift-surface' || o === game.camera || o === G.fx.group) continue;
+            const r = o as import('three').Mesh & {isPoints?: boolean; isLine?: boolean; isSprite?: boolean};
+            if ((r.isMesh || r.isPoints || r.isLine || r.isSprite) && o.layers.test(game.camera.layers)) { leaks++; if (!seal.worst) seal.worst = o.name; }
+            stack.push(...o.children);
+          }
+          if (G.liftBuilt) seal.builtDraws++;
+          seal.leaks += leaks;
+        }
+        drawFrame0();
+      };
 
       // ---- 1. the station's cargo lift -------------------------------------------------------------------------------------------
       expect(await game.newCampaign(1, {overwrite: true, networkSeed: pick.seed, dev: {level: 'subway'}})).toMatchObject({ok: true, saved: true});
@@ -172,6 +214,10 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       expect(acc).toMatchObject({v: 2, kind: 'lift'});
       expect(R.site?.lift, 'the station end is drawn').toEqual(acc.lift);
       expect(liftViews()).toBe(1);
+      // the car's PBR finish (world/surface/liftCabFinish.ts: fetched by the section preload before the build)
+      const finishOf = () => { const n: string[] = []; R.site?.view.cab.traverse(o => { const m = o as import('three').Mesh; if (m.isMesh) n.push((m.material as import('three').Material).name); }); return n; };
+      expect(R.site?.finished, 'the station car finished').toBe(true);
+      expect(finishOf()).toEqual(expect.arrayContaining(['cargo-cab-wall@pbr', 'cargo-cab-deck@pbr', 'cargo-cab-bumper@pbr', 'cargo-cab-placard@pbr']));
       await h.waitFrames(30);
       expect(await teardown(), 'the station: one light field, one decay field; nothing released still reachable').toEqual(clean);
       G.saveSectionMemory();
@@ -218,6 +264,14 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       expect(game.lifecycleCounts.leave - c0.leave).toBe(1);
       expect(game.lifecycleCounts.build - c0.build).toBe(1);
       expect(gapFrames, 'frames drawn while the old world was left and the new one built').toBeGreaterThan(10);
+      marks.push(`ride up: look ${JSON.stringify(look)}; sealed ${JSON.stringify(seal)}; status ${[...status].join(' / ')}; compile ${JSON.stringify(game.surfaceLiftCompile)}`);
+      expect(look.gap, 'mouse turns tried in the transit gap').toBeGreaterThan(5);
+      expect(look.lost, 'every mouse turn in the transit gap turned the rider').toBe(0);
+      expect(seal.builtDraws, 'sealed draws checked with the destination built').toBeGreaterThan(0);
+      expect(seal.leaks, `nothing of the world drawn in a sealed car (${seal.worst})`).toBe(0);
+      expect([...status].some(x => x.includes('preparing the street')), 'status: the street being prepared').toBe(true);
+      expect([...status].some(x => x.includes('preparing graphics N %')), 'status: the compile\'s real share').toBe(true);
+      expect(game.surfaceLiftCompile, 'the compile completed').toMatchObject({end: 'done', tries: 1});
       const shut = ride.findIndex(s => s.phase === 'travel');
       expect(shut).toBeGreaterThan(0);
       for (const s of ride.slice(shut)) if (s.door > 0) expect(s.compile, `doors opening only after the compile: ${JSON.stringify(s)}`).toBe('done');
@@ -231,6 +285,8 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       expect(R.holding).toBe(false);
       expect(R.door).toBe(1);
       expect(liftViews(), 'one lift view: the tent\'s').toBe(1);
+      expect(R.site?.finished, 'the tent\'s car: the origin\'s finish').toBe(true);
+      expect(finishOf()).toEqual(expect.arrayContaining(['cargo-cab-wall@pbr', 'cargo-cab-deck@pbr']));
       // the tent is gas-free with its flap shut
       const air = surfaceAirRuntime()!;
       const flap = air.air!.doors.find(d => d.plan.tent)!;
@@ -266,13 +322,18 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       await h.waitFrames(2);
       expect(qa.surface.access().prompt).toBe(`<b>[E]</b> Ride down to ${game.run.node(pick.station)!.name}`);
       const c1 = {...game.lifecycleCounts}, n1 = samples.length, done1 = game.surfaceCrossCounts.done, staleJob = game.journeyCompileStats;
+      Object.assign(seal, {draws: 0, builtDraws: 0, leaks: 0, worst: ''});
+      Object.assign(look, {armed: false, moved: 0, lost: 0, gap: 0});
       await press();
       expect(await ridden(() => game.surfaceCrossCounts.done === done1 + 1 && R.phase === 'idle', 'ride down'), diag()).toBe(true);
       mark('[E] down');
       const down = samples.slice(n1), shut2 = down.findIndex(s => s.phase === 'travel');
       expect(shut2).toBeGreaterThan(0);
       for (const s of down.slice(shut2)) if (s.door > 0) { expect(s.job, 'the station\'s own compile (not the last ride\'s)').not.toBe(staleJob); expect(s.compile).toBe('done'); }
-      marks.push(`ride down: ${down.length} frames drawn, ${down.filter(s => s.gap).length} in the transit gap; generation at the press ${game.surfaceLiftGenMs.toFixed(0)} ms`);
+      marks.push(`ride down: ${down.length} frames drawn, ${down.filter(s => s.gap).length} in the transit gap; generation at the press ${game.surfaceLiftGenMs.toFixed(0)} ms; look ${JSON.stringify(look)}; sealed ${JSON.stringify(seal)}`);
+      expect(look.lost, 'ride down: every mouse turn turned the rider').toBe(0);
+      expect(seal.builtDraws, 'ride down: sealed draws checked with the station built (its hall ceiling over the stop)').toBeGreaterThan(0);
+      expect(seal.leaks, `ride down: nothing of the world drawn in a sealed car (${seal.worst})`).toBe(0);
       expect(game.lifecycleCounts.loading - c1.loading).toBe(0);
       expect(game.lifecycleCounts.warmup - c1.warmup).toBe(0);
       expect(game.run.current).toEqual(hostKey);
@@ -317,6 +378,49 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       marks.push(`field textures created ${fieldTextures.length}; render objects ${roRefs.length}, render pipelines ${pipeRefs.length} created`);
       const sl2 = game.layout.surfaceAccess!.lift!;
       expect(P.x > sl2.cab.x0 && P.x < sl2.cab.x1 && P.z > sl2.cab.z0 && P.z < sl2.cab.z1, 'back in the car').toBe(true);
+
+      // ---- 6. a compile that cannot finish: bounded — the doors open on the BUILT district, the rest compiles in play -----------------
+      {
+        const {JourneyCompile} = await import('../src/render/journeyCompile');
+        const {LIFT_RIDE_WAIT} = await import('../src/world/surface/liftRuntime');
+        const W = LIFT_RIDE_WAIT as unknown as {stallMs: number}, stallMs0 = W.stallMs;
+        const start0 = JourneyCompile.prototype.start;
+        const jobs: InstanceType<typeof JourneyCompile>[] = [];
+        // job 1: cancelled under the ride (a replaced job) -> retried; job 2: never progresses -> the stall bound; job 3 on: the real job
+        const startSpy = vi.spyOn(JourneyCompile.prototype, 'start').mockImplementation(function (this: InstanceType<typeof JourneyCompile>) {
+          jobs.push(this);
+          if (jobs.length === 1) { start0.call(this); this.cancel(); return this; }
+          if (jobs.length === 2) return this;
+          return start0.call(this);
+        });
+        W.stallMs = 2500;
+        try {
+          const c2 = {...game.lifecycleCounts}, s2 = states.length, n2 = samples.length, done2 = game.surfaceCrossCounts.done;
+          expect(qa.surface.go()).toBe(true);
+          await h.waitFrames(2);
+          await press();
+          expect(await ridden(() => game.surfaceCrossCounts.done === done2 + 1 && R.phase === 'idle', 'bounded ride'), diag()).toBe(true);
+          mark('bounded ride');
+          const ride6 = samples.slice(n2), shut6 = ride6.findIndex(s => s.phase === 'travel'), open6 = ride6.findIndex((s, i) => i > shut6 && s.door > 0);
+          marks.push(`bounded ride: ${ride6.length} frames, opened at ${open6}; compile ${JSON.stringify(game.surfaceLiftCompile)}; jobs ${jobs.length}`);
+          expect(game.surfaceLiftCompile, 'retried once, then the stall bound').toMatchObject({end: 'partial', why: 'stalled', tries: 2});
+          expect(open6).toBeGreaterThan(shut6);
+          for (const s of ride6.slice(shut6)) if (s.door > 0) expect(s.gap || s.built, `doors open only on the built district in play: ${JSON.stringify({...s, job: null})}`).toBe(false);
+          expect(states.slice(s2).filter(s => s !== 'paused' && s !== 'playing'), 'never a loading screen').toEqual([]);
+          expect(game.lifecycleCounts.loading - c2.loading).toBe(0);
+          expect(game.lifecycleCounts.warmup - c2.warmup).toBe(0);
+          expect(game.run.current).toEqual(surfKey);
+          const tl6 = game.layout.surface!.portal.lift!;
+          expect(P.x > tl6.cab.x0 && P.x < tl6.cab.x1 && P.z > tl6.cab.z0 && P.z < tl6.cab.z1, 'released in the tent\'s car').toBe(true);
+          expect(R.holding).toBe(false);
+          expect(jobs.length, 'the rest: a new job in play').toBeGreaterThanOrEqual(3);
+          expect(game.journeyCompileStats, 'the play-paced job').toBe(jobs[2].stats);
+          expect(['scene', 'shadow', 'done']).toContain(jobs[2].stats.phase);
+        } finally {
+          startSpy.mockRestore();
+          W.stallMs = stallMs0;
+        }
+      }
       expect(errors.filter(e => !e.includes('qa: the street is unreachable'))).toEqual([]);
       expect(frameErrors).toEqual([]);
       marks.push(`hits absorbed ${hits}`);

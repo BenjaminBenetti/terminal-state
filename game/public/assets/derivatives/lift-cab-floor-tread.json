@@ -1,0 +1,171 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "lift-cab-floor-tread",
+ "task": "studio-surface-run-lift-reliability-and-cab-20261118-023909-01",
+ "status": "runtime derivative (crop / seam feather / resize / derived normal + ORM / JPEG; deterministic processing only) of an ORIGINAL texture source generated for this project with Codex native image_gen (owned Codex CLI) under the user's authorization for the Surface Run cargo-lift cab retexture; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Surface Run cargo-lift cab: the deck and the kick plates",
+ "subject": "worn steel diamond tread plate (raised lentil lugs, grime between them)",
+ "cls": "tread",
+ "rebuild": "node tools/asset-pipeline/props/build-lift-cab-textures.mjs",
+ "rawStorage": "reference/tasks/surface-run-lift-reliability-and-cab-20261118-023909/gen/{LEDGER.jsonl, raw/codex-<n>-<id>-exec-<uuid>.png, prompts/frozen/<id>-c<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 6,
+  "session": "01a1ecaf-f7f4-7262-b5dd-548acbe78524",
+  "requested": "2026-11-18T03:25:17.532006Z",
+  "finished": "2026-11-18T03:26:13.650719Z",
+  "seconds": 56.1,
+  "imageGenGenerations": 1
+ },
+ "prompt": {
+  "file": "frozen/cab-floor-tread-c6.txt",
+  "sha256": "833e1fa3cadad9d9d67fb5fffeb0d7415d0eb63721ac2ca4d32b033838287359"
+ },
+ "source": {
+  "file": "codex-6-cab-floor-tread-exec-12ee7c0d-92b8-44b6-af2e-28ab3cb3b544.png",
+  "sha256": "3c8b37b7acac665cccddd27e77160a4213fe8e5ded27d1a1c1e5ae94acf7dea0",
+  "bytes": 3458615,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "crop": {
+   "x": 157,
+   "y": 157,
+   "w": 941,
+   "h": 941,
+   "u": {
+    "mode": "periodic",
+    "cropStart": 157,
+    "cropSize": 941,
+    "periods": 3,
+    "periodPx": 313.587,
+    "mmPerPx": 0.3827,
+    "autocorrelation": 0.678,
+    "why": "3 whole measured periods of 313.587 px (autocorrelation 0.678; 4 asked)"
+   },
+   "v": {
+    "mode": "periodic",
+    "cropStart": 157,
+    "cropSize": 941,
+    "periods": 3,
+    "periodPx": 313.516,
+    "mmPerPx": 0.3828,
+    "autocorrelation": 0.675,
+    "why": "3 whole measured periods of 313.516 px (autocorrelation 0.675; 4 asked)"
+   }
+  },
+  "seam": {
+   "featherPx": 64,
+   "method": "the last featherPx columns / rows cross-fade (cosine) into the source pixels just before the crop start (the true wrap neighbours; a whole number of periods earlier on a periodic axis)"
+  },
+  "lighting": "none (the sources are evenly lit material scans)",
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill",
+   "wrap": "3 x 3 tiled, centre extract"
+  },
+  "height": {
+   "bands": [
+    {
+     "blurPx": 1,
+     "basePx": 5,
+     "metresPerSd": 0.0004
+    },
+    {
+     "blurPx": 2,
+     "basePx": 14,
+     "metresPerSd": 0.0011
+    }
+   ],
+   "note": "luminance band-passes (output texels), clamped at 3 standard deviations"
+  },
+  "normal": {
+   "convention": "tangent space, R = -dh/dx, G = +dh/dy (image y down), B = z (build-reactor-kit.mjs)",
+   "slopes": "metres per metre from the height (m) and the span per texel"
+  },
+  "orm": {
+   "r": "ambient occlusion from cavity (blur 12 px, 0.3 per height sd, floor 0.45)",
+   "g": "roughness 0.28-0.82 (darker than the 12 px surroundings = rougher)",
+   "b": "metalness 1 bare steel -> 0.55 where darker (grime)"
+  },
+  "encode": {
+   "color": {
+    "quality": 85,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:2:0"
+   },
+   "normal": {
+    "quality": 90,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "orm": {
+    "quality": 88,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) + plain JS via tools/asset-pipeline/props/build-lift-cab-textures.mjs"
+ },
+ "tileCheck": {
+  "plainCrop": {
+   "seamLR": 7.61,
+   "seamTB": 8.919,
+   "interiorLR": 6.572,
+   "interiorTB": 7.412,
+   "ratioLR": 1.158,
+   "ratioTB": 1.203
+  },
+  "after": {
+   "seamLR": 6.645,
+   "seamTB": 6.947,
+   "interiorLR": 5.48,
+   "interiorTB": 6.364,
+   "ratioLR": 1.213,
+   "ratioTB": 1.092
+  },
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs interior neighbours along the same axis (1024 buffers); plainCrop = the crop without the feather"
+ },
+ "spanM": {
+  "u": 0.3601,
+  "v": 0.3602
+ },
+ "meanLinearAlbedo": [
+  0.1411,
+  0.1342,
+  0.1232
+ ],
+ "meanRoughness": 0.559,
+ "meanMetalness": 0.767,
+ "outputs": {
+  "color": {
+   "url": "assets/textures/lift/lift-cab-floor-tread-color.jpg",
+   "bytes": 190027,
+   "sha256": "e8d90c03dd3be618c3f9da9b51ec78d20d1de3a221bc190e54efa719a97f7516",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "normal": {
+   "url": "assets/textures/lift/lift-cab-floor-tread-normal.jpg",
+   "bytes": 518584,
+   "sha256": "9ae00a72aa0a6be161cfc7c5d96326848a0d9945dfa47b133dee3780e005d295",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "orm": {
+   "url": "assets/textures/lift/lift-cab-floor-tread-orm.jpg",
+   "bytes": 300062,
+   "sha256": "f99908d73967fa339b5cbdf70dd03f3561121f5ddf1ad73c3ee3c239ba97b431",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  }
+ }
+}

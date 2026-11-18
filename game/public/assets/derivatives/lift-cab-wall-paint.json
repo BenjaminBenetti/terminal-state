@@ -1,0 +1,169 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "lift-cab-wall-paint",
+ "task": "studio-surface-run-lift-reliability-and-cab-20261118-023909-01",
+ "status": "runtime derivative (crop / seam feather / resize / derived normal + ORM / JPEG; deterministic processing only) of an ORIGINAL texture source generated for this project with Codex native image_gen (owned Codex CLI) under the user's authorization for the Surface Run cargo-lift cab retexture; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Surface Run cargo-lift cab: walls, ceiling, gate posts, landing doors (tinted)",
+ "subject": "painted steel freight-cab wall lining: grey-green enamel, one bolted lap seam, cart scuffs and chips",
+ "cls": "paint",
+ "rebuild": "node tools/asset-pipeline/props/build-lift-cab-textures.mjs",
+ "rawStorage": "reference/tasks/surface-run-lift-reliability-and-cab-20261118-023909/gen/{LEDGER.jsonl, raw/codex-<n>-<id>-exec-<uuid>.png, prompts/frozen/<id>-c<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 1,
+  "session": "01a1ecaf-4a39-7a72-bf59-7c6765b4c3ad",
+  "requested": "2026-11-18T03:24:32.865323Z",
+  "finished": "2026-11-18T03:25:17.481945Z",
+  "seconds": 44.6,
+  "imageGenGenerations": 1
+ },
+ "prompt": {
+  "file": "frozen/cab-wall-paint-c1.txt",
+  "sha256": "59822df4c8c1ec18d48a9ac4cbdb9aa4ecd2f86988123a1cf61dae7f76e8630d"
+ },
+ "source": {
+  "file": "codex-1-cab-wall-paint-exec-47d83816-4498-4c5e-86f5-52a1bd9ff2d3.png",
+  "sha256": "d8b41758d73696892c12d4f3a626c864e1a02801a70649441dea356a08930bf3",
+  "bytes": 2243325,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "crop": {
+   "x": 64,
+   "y": 64,
+   "w": 1126,
+   "h": 1126,
+   "u": {
+    "mode": "free",
+    "cropStart": 64,
+    "cropSize": 1126,
+    "periods": 1,
+    "periodPx": 1126,
+    "mmPerPx": 0.9569,
+    "why": "free axis: the frame inside a 64 px feather margin"
+   },
+   "v": {
+    "mode": "free",
+    "cropStart": 64,
+    "cropSize": 1126,
+    "periods": 1,
+    "periodPx": 1126,
+    "mmPerPx": 0.9569,
+    "why": "free axis: the frame inside a 64 px feather margin"
+   }
+  },
+  "seam": {
+   "featherPx": 64,
+   "method": "the last featherPx columns / rows cross-fade (cosine) into the source pixels just before the crop start (the true wrap neighbours; a whole number of periods earlier on a periodic axis)"
+  },
+  "lighting": "none (the sources are evenly lit material scans)",
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill",
+   "wrap": "3 x 3 tiled, centre extract"
+  },
+  "height": {
+   "bands": [
+    {
+     "blurPx": 1,
+     "basePx": 6,
+     "metresPerSd": 0.00025
+    },
+    {
+     "blurPx": 3,
+     "basePx": 18,
+     "metresPerSd": 0.0006
+    }
+   ],
+   "note": "luminance band-passes (output texels), clamped at 3 standard deviations"
+  },
+  "normal": {
+   "convention": "tangent space, R = -dh/dx, G = +dh/dy (image y down), B = z (build-reactor-kit.mjs)",
+   "slopes": "metres per metre from the height (m) and the span per texel"
+  },
+  "orm": {
+   "r": "ambient occlusion from cavity (blur 9 px, 0.22 per height sd, floor 0.55)",
+   "g": "roughness 0.42-0.72 (darker than the 12 px surroundings = rougher)",
+   "b": "metalness 0"
+  },
+  "encode": {
+   "color": {
+    "quality": 85,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:2:0"
+   },
+   "normal": {
+    "quality": 90,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "orm": {
+    "quality": 88,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) + plain JS via tools/asset-pipeline/props/build-lift-cab-textures.mjs"
+ },
+ "tileCheck": {
+  "plainCrop": {
+   "seamLR": 2.069,
+   "seamTB": 2.384,
+   "interiorLR": 2.28,
+   "interiorTB": 2.678,
+   "ratioLR": 0.908,
+   "ratioTB": 0.89
+  },
+  "after": {
+   "seamLR": 2.437,
+   "seamTB": 2.304,
+   "interiorLR": 1.189,
+   "interiorTB": 1.618,
+   "ratioLR": 2.05,
+   "ratioTB": 1.424
+  },
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs interior neighbours along the same axis (1024 buffers); plainCrop = the crop without the feather"
+ },
+ "spanM": {
+  "u": 1.0775,
+  "v": 1.0775
+ },
+ "meanLinearAlbedo": [
+  0.1535,
+  0.1805,
+  0.1251
+ ],
+ "meanRoughness": 0.567,
+ "meanMetalness": 0.002,
+ "outputs": {
+  "color": {
+   "url": "assets/textures/lift/lift-cab-wall-paint-color.jpg",
+   "bytes": 72062,
+   "sha256": "f8bb2d5581147b4ea651ec2fe6083911a3f087d96ed2c85fe1c75cc8fc0bdc3a",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "normal": {
+   "url": "assets/textures/lift/lift-cab-wall-paint-normal.jpg",
+   "bytes": 212042,
+   "sha256": "9e67f46865ba8589034568dfd8b80ff5370e749f36aefdf7d4fd858b823a6ec9",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "orm": {
+   "url": "assets/textures/lift/lift-cab-wall-paint-orm.jpg",
+   "bytes": 227921,
+   "sha256": "749eab8bc3c9c274086049243925631c9fa200b2e0939f01b09cd3d7912847fd",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  }
+ }
+}

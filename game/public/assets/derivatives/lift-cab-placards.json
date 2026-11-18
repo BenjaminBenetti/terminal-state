@@ -1,0 +1,126 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "lift-cab-placards",
+ "task": "studio-surface-run-lift-reliability-and-cab-20261118-023909-01",
+ "status": "runtime derivative (crop / seam feather / resize / derived normal + ORM / JPEG; deterministic processing only) of an ORIGINAL texture source generated for this project with Codex native image_gen (owned Codex CLI) under the user's authorization for the Surface Run cargo-lift cab retexture; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Surface Run cargo-lift cab: the placards on its walls",
+ "subject": "four cab placards (capacity plate, stand clear of gate, inspection certificate, load evenly)",
+ "rebuild": "node tools/asset-pipeline/props/build-lift-cab-textures.mjs",
+ "rawStorage": "reference/tasks/surface-run-lift-reliability-and-cab-20261118-023909/gen/{LEDGER.jsonl, raw/codex-<n>-<id>-exec-<uuid>.png, prompts/frozen/<id>-c<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 4,
+  "session": "01a1ecaf-d20d-7e60-bf6e-4ada114bb402",
+  "requested": "2026-11-18T03:25:07.837416Z",
+  "finished": "2026-11-18T03:25:55.303897Z",
+  "seconds": 47.5,
+  "imageGenGenerations": 1
+ },
+ "prompt": {
+  "file": "frozen/cab-placards-c4.txt",
+  "sha256": "59eb542c47d5aa7e63756079fa80d16fd3bf7214e760045e2ef12987f167516e"
+ },
+ "source": {
+  "file": "codex-4-cab-placards-exec-9add4b25-fa84-4ca1-b4b0-f3f930fb82cf.png",
+  "sha256": "5ed6128889c0539be001bf9e8f029a30eb3bc00cd3491d19e36904cf64607fc7",
+  "bytes": 1979807,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "background": [
+   72,
+   72,
+   71
+  ],
+  "labels": {
+   "capacity": {
+    "rectPx": {
+     "x0": 24,
+     "y0": 237,
+     "x1": 611,
+     "y1": 551
+    },
+    "uv": [
+     0.0207,
+     0.5622,
+     0.4856,
+     0.8094
+    ],
+    "aspect": 1.869
+   },
+   "clear": {
+    "rectPx": {
+     "x0": 641,
+     "y0": 237,
+     "x1": 1230,
+     "y1": 551
+    },
+    "uv": [
+     0.5128,
+     0.5622,
+     0.9793,
+     0.8094
+    ],
+    "aspect": 1.876
+   },
+   "certificate": {
+    "rectPx": {
+     "x0": 24,
+     "y0": 697,
+     "x1": 611,
+     "y1": 1041
+    },
+    "uv": [
+     0.0207,
+     0.1715,
+     0.4856,
+     0.4426
+    ],
+    "aspect": 1.706
+   },
+   "load": {
+    "rectPx": {
+     "x0": 640,
+     "y0": 699,
+     "x1": 1231,
+     "y1": 1039
+    },
+    "uv": [
+     0.512,
+     0.173,
+     0.9801,
+     0.441
+    ],
+    "aspect": 1.738
+   }
+  },
+  "method": "per quarter: the columns / rows where at least a quarter of the pixels differ from the border-ring median colour by > 36 (sum of |dRGB|)",
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill"
+  },
+  "encode": {
+   "color": {
+    "quality": 85,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:2:0"
+   },
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) + plain JS via tools/asset-pipeline/props/build-lift-cab-textures.mjs"
+ },
+ "outputs": {
+  "color": {
+   "url": "assets/textures/lift/lift-cab-placards-color.jpg",
+   "bytes": 124872,
+   "sha256": "62aeaf14b8e49ee8a8162e39ec1566616bf6e178ea1dff492297f9c12f3675b4",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  }
+ }
+}

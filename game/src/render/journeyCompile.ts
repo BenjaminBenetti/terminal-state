@@ -86,6 +86,8 @@ export interface JourneyCompileOptions {
   maxStaleMs?: number;
   sliceMs?: number;
   shadowTargetMs?: number;
+  /** (the lift ride) frames a launch waits for its background task before a step runs it directly (default JOURNEY_COMPILE.postStallFrames). */
+  postStallFrames?: number;
   /**
    * The game's frame number (Game: FrameBudget.frame, stable from a frame's run() until the next frame callback): cheap items batch
    * only inside the frame whose step started the slice. Default: a counter
@@ -179,7 +181,7 @@ export class JourneyCompile {
   private readonly frameNo: () => number;
   private readonly now: () => number;
   private post: ((fn: () => void) => void) | null;
-  private readonly o: Required<Omit<JourneyCompileOptions, 'receiver' | 'frameNo' | 'now' | 'post' | 'maxStaleMs' | 'sliceMs' | 'shadowTargetMs'>> & {receiver: WarmItem | null; maxStaleMs?: number; sliceMs?: number; shadowTargetMs?: number};
+  private readonly o: Required<Omit<JourneyCompileOptions, 'receiver' | 'frameNo' | 'now' | 'post' | 'maxStaleMs' | 'sliceMs' | 'shadowTargetMs' | 'postStallFrames'>> & {receiver: WarmItem | null; maxStaleMs?: number; sliceMs?: number; shadowTargetMs?: number; postStallFrames?: number};
 
   constructor(o: JourneyCompileOptions) {
     // (the direct path — no scene pass target — would draw an off-screen shadow draw onto the canvas: no shadow work there)
@@ -305,7 +307,7 @@ export class JourneyCompile {
    */
   private sceneStep(): void {
     if (this.posted) {
-      if (this.frameNo() - this.postedFrame < JOURNEY_COMPILE.postStallFrames) { queueMicrotask(() => this.progress()); return; }
+      if (this.frameNo() - this.postedFrame < (this.o.postStallFrames ?? JOURNEY_COMPILE.postStallFrames)) { queueMicrotask(() => this.progress()); return; }
       this.posted = false;
       this.postToken++; // (the stalled task becomes a no-op when it does run)
       this.stats.postStalls++;

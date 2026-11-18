@@ -653,6 +653,11 @@ export class Hud {
     $('#vignette').animate([{opacity: Math.min(0.9, 0.35 + amount / 30)}, {opacity: 0}], {duration: 600, easing: 'ease-out'});
   }
 
+  /** The prompt line alone (Game.updateTransitGap: no full update runs in the transit gap; the next update's own prompt replaces it). */
+  setPrompt(html: string): void {
+    this.set('prompt', `${html}||${itemIconsVersion()}`, () => { $('#prompt').innerHTML = html; });
+  }
+
   toast(text: string, warn = false): void {
     const t = document.createElement('div');
     t.className = 'toast' + (warn ? ' warn' : '');

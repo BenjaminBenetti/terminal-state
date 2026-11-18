@@ -1,0 +1,166 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "lift-cab-hazard-stripe",
+ "task": "studio-surface-run-lift-reliability-and-cab-20261118-023909-01",
+ "status": "runtime derivative (crop / seam feather / resize / derived normal + ORM / JPEG; deterministic processing only) of an ORIGINAL texture source generated for this project with Codex native image_gen (owned Codex CLI) under the user's authorization for the Surface Run cargo-lift cab retexture; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Surface Run cargo-lift cab: the deck border, the gate sill / header edges",
+ "subject": "worn yellow / black 45 degree hazard striping on steel (100 mm stripes)",
+ "cls": "hazard",
+ "rebuild": "node tools/asset-pipeline/props/build-lift-cab-textures.mjs",
+ "rawStorage": "reference/tasks/surface-run-lift-reliability-and-cab-20261118-023909/gen/{LEDGER.jsonl, raw/codex-<n>-<id>-exec-<uuid>.png, prompts/frozen/<id>-c<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 3,
+  "session": "01a1ecaf-4a40-7912-9db5-e6140700d6ae",
+  "requested": "2026-11-18T03:24:32.919641Z",
+  "finished": "2026-11-18T03:25:14.174060Z",
+  "seconds": 41.2,
+  "imageGenGenerations": 1
+ },
+ "prompt": {
+  "file": "frozen/hazard-stripe-c3.txt",
+  "sha256": "132657c21355ca6f295578d2e27c7d5800a38c914e6383f29debebbacccff7eb"
+ },
+ "source": {
+  "file": "codex-3-hazard-stripe-exec-818b09ea-63c7-4ac3-9b9e-a386b3c848bf.png",
+  "sha256": "db68ad7e3573ca98f748a6b1061614a97232e1cd64d12d84a5e49f6a1274f8a4",
+  "bytes": 2635568,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "crop": {
+   "x": 314,
+   "y": 315,
+   "w": 626,
+   "h": 624,
+   "u": {
+    "mode": "periodic",
+    "cropStart": 314,
+    "cropSize": 626,
+    "periods": 1,
+    "periodPx": 626.039,
+    "mmPerPx": 0.4518,
+    "autocorrelation": 0.771,
+    "why": "1 whole measured periods of 626.039 px (autocorrelation 0.771; 3 asked)"
+   },
+   "v": {
+    "mode": "periodic",
+    "cropStart": 315,
+    "cropSize": 624,
+    "periods": 1,
+    "periodPx": 623.861,
+    "mmPerPx": 0.4534,
+    "autocorrelation": 0.782,
+    "why": "1 whole measured periods of 623.861 px (autocorrelation 0.782; 3 asked)"
+   }
+  },
+  "seam": {
+   "featherPx": 64,
+   "method": "the last featherPx columns / rows cross-fade (cosine) into the source pixels just before the crop start (the true wrap neighbours; a whole number of periods earlier on a periodic axis)"
+  },
+  "lighting": "none (the sources are evenly lit material scans)",
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill",
+   "wrap": "3 x 3 tiled, centre extract"
+  },
+  "height": {
+   "bands": [
+    {
+     "blurPx": 1,
+     "basePx": 6,
+     "metresPerSd": 0.0002
+    }
+   ],
+   "note": "luminance band-passes (output texels), clamped at 3 standard deviations"
+  },
+  "normal": {
+   "convention": "tangent space, R = -dh/dx, G = +dh/dy (image y down), B = z (build-reactor-kit.mjs)",
+   "slopes": "metres per metre from the height (m) and the span per texel"
+  },
+  "orm": {
+   "r": "ambient occlusion from cavity (blur 6 px, 0.15 per height sd, floor 0.75)",
+   "g": "roughness 0.55-0.85 (darker than the 12 px surroundings = rougher)",
+   "b": "metalness 0"
+  },
+  "encode": {
+   "color": {
+    "quality": 85,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:2:0"
+   },
+   "normal": {
+    "quality": 90,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "orm": {
+    "quality": 88,
+    "mozjpeg": true,
+    "chromaSubsampling": "4:4:4"
+   },
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) + plain JS via tools/asset-pipeline/props/build-lift-cab-textures.mjs"
+ },
+ "tileCheck": {
+  "plainCrop": {
+   "seamLR": 3.659,
+   "seamTB": 4.459,
+   "interiorLR": 2.451,
+   "interiorTB": 2.764,
+   "ratioLR": 1.493,
+   "ratioTB": 1.613
+  },
+  "after": {
+   "seamLR": 3.345,
+   "seamTB": 3.637,
+   "interiorLR": 1.933,
+   "interiorTB": 2.305,
+   "ratioLR": 1.73,
+   "ratioTB": 1.578
+  },
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs interior neighbours along the same axis (1024 buffers); plainCrop = the crop without the feather"
+ },
+ "spanM": {
+  "u": 0.2828,
+  "v": 0.2829
+ },
+ "meanLinearAlbedo": [
+  0.4463,
+  0.2561,
+  0.0133
+ ],
+ "meanRoughness": 0.7,
+ "meanMetalness": 0.002,
+ "outputs": {
+  "color": {
+   "url": "assets/textures/lift/lift-cab-hazard-stripe-color.jpg",
+   "bytes": 124372,
+   "sha256": "461ce9b595432691fb372b4ecc2186950fe4517d57694950f32458d9916b04f6",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "normal": {
+   "url": "assets/textures/lift/lift-cab-hazard-stripe-normal.jpg",
+   "bytes": 274309,
+   "sha256": "77c9a8e46e3f10af573006a03cb988fa5d564166c6ea77f9c3a793d31e937715",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  },
+  "orm": {
+   "url": "assets/textures/lift/lift-cab-hazard-stripe-orm.jpg",
+   "bytes": 223257,
+   "sha256": "fc980ba72f9f48c098307d9625bc91ace46aa49a8a6d240dec72730a398111a8",
+   "width": 1024,
+   "height": 1024,
+   "format": "jpeg"
+  }
+ }
+}
