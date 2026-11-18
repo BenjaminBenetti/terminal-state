@@ -1,19 +1,22 @@
-// Task studio-surface-run-field-followup-20261116-211729-01 (lane ACCESS, follow-up 2): SURFACE RUN version 2 — the OFFICE / MALL cargo
-// lift (gen/surface/accessLiftHost.ts), through the level registry:
-//  - every present station (a sweep) gets its lift inside the building on the access storey, near the version-1 door's way out;
-//  - a real room: the car's FLOOR cells at the storey floor under the car's ceiling, the gate's doorway, the ring SOLID, the landing open;
-//  - connectivity: every cell reachable on foot in the plain station is reachable with the lift, and the car is;
-//  - append-only / RNG-neutral: the plain station's props, pickups, lights, enemies, doors and spawn unchanged; one area, one sign and
-//    one light (the landing's fixture) appended; the grid differs only inside the footprint;
-//  - version 1 keeps its street door (tests/surface-access.test.ts / surface-v1-compat.test.ts pin it).
+// Task studio-surface-run-field-followup-20261116-211729-01 (lane ACCESS, follow-up 2), re-targeted by task
+// studio-surface-host-ground-connectors-20261118-053602-01: SURFACE RUN version 2 — the OFFICE / MALL host's way out is the on-foot
+// CONNECTOR from its version-1 doorway (gen/surface/accessConnector.ts; it replaces these hosts' version-2 cargo lift: both exit at ground
+// level), through the level registry:
+//  - every present station (a sweep) gets the connector at the version-1 doorway's storey and position (the Office's makeshift door
+//    position in the lobby's boarded entrance; the Mall's seed-hashed usable street exit); no lift;
+//  - the host grid is NOT carved (the tube stands outside it): every storey's cells are the plain station's;
+//  - the station is the version-1 one exactly but for its access record (kind 'connector', its return pose, the tube record) and the
+//    Office's moved barricade pieces' memory anchors (PropPlacement.memAt = where each stood in the plain / lift-era station);
+//  - the return pose (every loading-screen arrival) is walkable in the doorway's area, ~1.5 m inside it, reachable on foot from the spawn,
+//    and nothing reachable in the plain station is cut off.
+// (tests/surface-connector-pins.test.ts pins the lift-era indices of the official starters and ten seeds per host; tests/surface-access.test.ts
+// / surface-v1-compat.test.ts pin version 1.)
 import {describe, expect, it} from 'vitest';
 import {LEVELS} from '../src/levels/registry';
 import {SURFACE_VERSION, surfacePresent, type SurfaceHost} from '../src/gen/surface/surfaceRun';
-import {LIFT_CAR, outward} from '../src/gen/surface/accessLift';
-import {CELL, FLOOR, SOLID} from '../src/gen/grid';
+import {CONNECTOR, worldToConnector} from '../src/gen/surface/connectorShape';
 import {levelDistance} from '../src/gen/levelGen';
 import type {StationLayout} from '../src/gen/stationTypes';
-import type {SurfaceLift} from '../src/gen/surface/surfaceTypes';
 
 const seeds = (host: SurfaceHost, n: number): number[] => {
   const out: number[] = [];
@@ -23,84 +26,67 @@ const seeds = (host: SurfaceHost, n: number): number[] => {
 const gen = (host: SurfaceHost, s: number, v?: number): StationLayout => LEVELS[host].generate('main', {levelSeed: s, ...(v !== undefined ? {surfaceVersion: v} : {})});
 const plain = (x: unknown) => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)));
 const SWEEP = Number(process.env.SURFACE_HOST_SWEEP ?? 6);
+/** The layout's lists without the access record / grids (compared on their own) and the props' memory anchors. */
+const rest = (L: StationLayout) => {
+  const {surfaceAccess: _a, levels: _l, grid: _g, props, ...o} = L as StationLayout & Record<string, unknown>;
+  return plain({...o, props: props.map(({memAt: _m, ...p}) => p)});
+};
 
-/** The car room on its storey's grid: FLOOR at the floor under the car's ceiling, the gate doorway, the ring SOLID beside the gate. */
-function expectCarRoom(L: StationLayout, l: SurfaceLift): void {
-  const g = L.levels[l.level].grid;
-  for (let z = l.cab.z0 + CELL / 2; z < l.cab.z1; z += CELL) for (let x = l.cab.x0 + CELL / 2; x < l.cab.x1; x += CELL) {
-    const [cx, cy] = g.cellOf(x, z), i = g.idx(cx, cy);
-    expect(g.cells[i]).toBe(FLOOR);
-    expect(g.area[i]).toBe(l.area);
-    expect(g.floor[i]).toBeCloseTo(l.y - LIFT_CAR.sink, 4);
-    expect(g.ceil[i]).toBeCloseTo(l.y + LIFT_CAR.cabH + LIFT_CAR.ceilGap, 4);
-  }
-  const n = outward(l.doorSide), gx = l.door.x + n[0] * CELL / 2, gz = l.door.z + n[1] * CELL / 2;
-  const [dx, dy] = g.cellOf(gx, gz);
-  expect(g.cells[g.idx(dx, dy)], 'the gate doorway').toBe(FLOOR);
-  const side = (k: number) => { const [sx, sy] = g.cellOf(gx + (n[1] !== 0 ? k : 0), gz + (n[0] !== 0 ? k : 0)); return g.cells[g.idx(sx, sy)]; };
-  expect(side(LIFT_CAR.width * CELL / 2 + 0.25), 'the ring beside the gate').toBe(SOLID);
-  expect(side(-(LIFT_CAR.width * CELL / 2 + 0.25))).toBe(SOLID);
-  // the landing in front of the gate: open floor at the car's floor
-  const [lx, ly] = g.cellOf(l.door.x + n[0] * 1.2, l.door.z + n[1] * 1.2);
-  expect(g.cells[g.idx(lx, ly)], 'the landing').toBe(FLOOR);
-  expect(g.blocked[g.idx(lx, ly)]).toBe(0);
-}
-
-describe('Surface Run v2: the Office / Mall cargo lift inside the building', () => {
+describe('Surface Run v2: the Office / Mall connector at the version-1 doorway (no lift)', () => {
   for (const host of ['office', 'mall'] as const) {
-    it(`${host}: every present station of a sweep gets its lift on the access storey; a real, reachable room; nothing generated moved`, () => {
+    it(`${host}: every present station of a sweep walks out through its connector at the version-1 doorway; the grid uncarved; nothing else moved`, () => {
       const report: string[] = [];
       for (const s of seeds(host, SWEEP)) {
-        const L = gen(host, s, SURFACE_VERSION), P = gen(host, s, 0), a = L.surfaceAccess!;
+        const L = gen(host, s, SURFACE_VERSION), V = gen(host, s, 1), P = gen(host, s, 0), a = L.surfaceAccess!, v1 = V.surfaceAccess!;
         expect(a, `${host} ${s}`).toBeTruthy();
-        expect(a.kind, `${host} ${s}: the lift`).toBe('lift');
+        expect(a.kind, `${host} ${s}: the connector`).toBe('connector');
         expect(a.v).toBe(2);
-        const l = a.lift!;
-        expectCarRoom(L, l);
-        // near the version-1 door's way out (the Office lobby's entrance / the Mall's street exit storey)
-        const v1 = gen(host, s, 1).surfaceAccess!;
-        expect(l.level, `${host} ${s}: the access storey`).toBe(v1.returnPose.level);
-        const dist = Math.hypot((l.cab.x0 + l.cab.x1) / 2 - v1.returnPose.x, (l.cab.z0 + l.cab.z1) / 2 - v1.returnPose.z);
-        report.push(`${host} ${s}: ${l.doorSide} gate, storey ${l.level}, ${dist.toFixed(1)} m from the version-1 door`);
-        expect(dist).toBeLessThan(75);
-        // the return pose stands in the car on a free floor
-        const g = L.levels[l.level].grid, p = a.returnPose;
-        expect(p.x > l.cab.x0 && p.x < l.cab.x1 && p.z > l.cab.z0 && p.z < l.cab.z1).toBe(true);
+        expect(a.lift, 'no lift').toBeUndefined();
+        expect(v1.kind).toBe(host === 'office' ? 'office-door' : 'mall-door');
+        const c = a.connector!;
+        expect(c).toMatchObject({host, end: 'host', len: CONNECTOR.len});
+        // at the version-1 doorway: its storey, its door / exit, the record's mouth at the version-1 door's position along the facade
+        expect(c.level, `${host} ${s}: the access storey`).toBe(v1.returnPose.level);
+        if (host === 'office') {
+          expect(plain(a.door)).toEqual(plain(v1.door));
+          const [, t] = worldToConnector(c, v1.door!.x, v1.door!.z);
+          expect(Math.abs(t), `${host} ${s}: the tube's axis through the version-1 door`).toBeLessThan(1e-3);
+        } else expect(a.exit, `${host} ${s}: the version-1 usable exit`).toBe(v1.exit);
+        // the host grid is not carved: every storey's cells are the plain station's (and the version-1 one's)
+        L.levels.forEach((Lv, k) => {
+          expect(Lv.grid.cells.length).toBe(P.levels[k].grid.cells.length);
+          let diff = 0;
+          for (let i = 0; i < Lv.grid.cells.length; i++) if (Lv.grid.cells[i] !== P.levels[k].grid.cells[i] || Lv.grid.cells[i] !== V.levels[k].grid.cells[i]) diff++;
+          expect(diff, `${host} ${s}: storey ${k} cells`).toBe(0);
+        });
+        // the version-1 station exactly, but the access record and the memory anchors
+        expect(rest(L)).toEqual(rest(V));
+        const moved = L.props.flatMap((p, i) => (p.memAt ? [i] : []));
+        if (host === 'mall') expect(plain(L.props)).toEqual(plain(P.props));
+        for (const i of moved) {
+          // a moved piece: where version 1 puts it, anchored where it stood in the plain (lift-era) station
+          expect(plain(L.props[i].memAt)).toEqual({x: P.props[i].x, z: P.props[i].z});
+          expect([L.props[i].x, L.props[i].z]).toEqual([V.props[i].x, V.props[i].z]);
+        }
+        L.props.forEach((p, i) => { if (!p.memAt) expect([p.kind, p.x, p.z], `${host} ${s}: prop ${i}`).toEqual([P.props[i].kind, P.props[i].x, P.props[i].z]); });
+        // the return pose: walkable in the doorway's area, ~1.5 m inside the doorway, facing in, reachable on foot from the spawn
+        const g = L.levels[c.level].grid, p = a.returnPose, [ps, pt] = worldToConnector(c, p.x, p.z);
+        expect(p.level).toBe(c.level);
+        expect(g.walkable(...g.cellOf(p.x, p.z)), `${host} ${s}: the return pose`).toBe(true);
+        expect(g.area[g.idx(...g.cellOf(p.x, p.z))]).toBe(c.area);
         expect(g.circleClear(p.x, p.z, 0.4)).toBe(true);
-        // connectivity: the plain station's reachable cells all stay reachable, and the car is reached
+        expect(ps).toBeLessThan(-c.door.depth - 1.0);
+        expect(Math.abs(pt)).toBeLessThanOrEqual(1.0);
         const sp = L.levels[0].grid.cellOf(L.playerSpawn.x, L.playerSpawn.z);
         const before = levelDistance(P.levels, sp[0], sp[1], 0, P.levelLinks), after = levelDistance(L.levels, sp[0], sp[1], 0, L.levelLinks);
-        let lost = 0;
-        before.forEach((b, k) => { const gk = L.levels[k].grid; for (let i = 0; i < b.length; i++) if (b[i] >= 0 && after[k][i] < 0) {
-          const x = (i % gk.w + 0.5) * CELL, z = (Math.floor(i / gk.w) + 0.5) * CELL;
-          if (!(k === l.level && x > l.shaft.x0 && x < l.shaft.x1 && z > l.shaft.z0 && z < l.shaft.z1)) lost++;
-        } });
+        // (a cell a moved piece now stands on is blocked by it, as in version 1: not cut off)
+        let lost = 0, under = 0;
+        before.forEach((b, k) => { const gk = L.levels[k].grid, gp = P.levels[k].grid; for (let i = 0; i < b.length; i++) if (b[i] >= 0 && after[k][i] < 0) { if (gk.blocked[i] && !gp.blocked[i]) under++; else lost++; } });
         expect(lost, `${host} ${s}: cells cut off`).toBe(0);
+        if (host === 'mall' || !moved.length) expect(under).toBe(0);
         const [mx, my] = g.cellOf(p.x, p.z);
-        expect(after[l.level][g.idx(mx, my)], 'the car is reachable on foot').toBeGreaterThanOrEqual(0);
-        // append-only: nothing generated moved; one area, one sign appended
-        expect(plain(L.props)).toEqual(plain(P.props));
-        expect(plain(L.pickups)).toEqual(plain(P.pickups));
-        // (follow-up 3) lights: the plain list, then the landing's fixture appended (tests/surface-lift-lights.test.ts)
-        expect(plain(L.lights.slice(0, P.lights.length))).toEqual(plain(P.lights));
-        expect(L.lights.length).toBe(P.lights.length + 1);
-        expect(plain(L.zombies)).toEqual(plain(P.zombies));
-        expect(plain(L.doors)).toEqual(plain(P.doors));
-        expect(plain(L.playerSpawn)).toEqual(plain(P.playerSpawn));
-        expect(plain(L.areas.slice(0, P.areas.length))).toEqual(plain(P.areas));
-        expect(L.areas.length).toBe(P.areas.length + 1);
-        expect(plain(L.signs.slice(0, P.signs.length))).toEqual(plain(P.signs));
-        expect(L.signs.slice(P.signs.length).map(x => x.text)).toEqual(['LIFT TO STREET']);
-        // the grids differ only inside the shaft
-        L.levels.forEach((Lv, k) => {
-          const a2 = Lv.grid.cells, b2 = P.levels[k].grid.cells, gk = Lv.grid;
-          for (let i = 0; i < a2.length; i++) if (a2[i] !== b2[i]) {
-            const x = (i % gk.w + 0.5) * CELL, z = (Math.floor(i / gk.w) + 0.5) * CELL;
-            expect(k === l.level && x > l.shaft.x0 && x < l.shaft.x1 && z > l.shaft.z0 && z < l.shaft.z1, `${host} ${s}: cell ${i} of storey ${k}`).toBe(true);
-          }
-        });
-        // version 1: its door
-        expect(v1.kind).toBe(host === 'office' ? 'office-door' : 'mall-door');
+        expect(after[c.level][g.idx(mx, my)], 'the return pose is reachable on foot').toBeGreaterThanOrEqual(0);
+        report.push(`${host} ${s}: storey ${c.level}, yaw ${c.yaw.toFixed(3)}, door ${c.door.width} x ${c.door.height} m (depth ${c.door.depth}), ${moved.length} pieces moved`);
       }
       if (process.env.SURFACE_HOST_LOG) process.stdout.write(`${report.join('\n')}\n`);
     }, 600_000);

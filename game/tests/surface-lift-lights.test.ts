@@ -1,8 +1,8 @@
 // Task studio-surface-run-field-followup-20261116-211729-01 (lane ACCESS, follow-up 3): the version-2 cargo lift rendered nearly BLACK
 // with the flashlight off (the lead's Firefox WebGL2 spot check: the Subway hall's lift at rest and through the ride). Two parts, no
 // runtime THREE light, no global material / exposure change:
-//  - GEN: every version-2 lift end has a light over its landing, appended (RNG-neutral) — the Subway hall's and the Office / Mall
-//    landing's: one steady ceiling fixture in front of the gate (gen/surface/accessLift.ts liftLandingLight: the version-1 stairwell's
+//  - GEN: every version-2 lift end has a light over its landing, appended (RNG-neutral) — the Subway hall's (an Office / Mall has no lift
+//    since its connector, task studio-surface-host-ground-connectors-20261118-053602-01): one steady ceiling fixture in front of the gate (gen/surface/accessLift.ts liftLandingLight: the version-1 stairwell's
 //    power rule); the command tent's: a second work lamp under its ridge over the landing (gen/surface/checkpoint.ts). Version 1 has none
 //    (its station / district bytes: tests/surface-v1-compat.test.ts).
 //  - THE CAR: its own lit finish (world/elevator.ts cargoLitMaterials: own names, light enamel stock, a self-glow in each finish's own
@@ -25,7 +25,9 @@ const gen = (host: SurfaceHost, s: number, v: number, section = 'main'): Station
 const plain = (x: unknown) => JSON.parse(JSON.stringify(x));
 
 describe('Surface Run v2: the lift ends are lit (gen fixtures) and the car carries its own lit finish', () => {
-  for (const host of ['subway', 'office', 'mall'] as const) {
+  // (task studio-surface-host-ground-connectors-20261118-053602-01) only the Subway keeps the cargo lift; an Office / Mall walks out
+  // through its connector from the version-1 doorway and appends no light (tests/surface-access-v2-hosts.test.ts)
+  for (const host of ['subway'] as const) {
     it(`${host}: one steady fixture appended over the landing in front of the gate; the plain station's lights unchanged`, () => {
       for (const s of seeds(host, 3)) {
         const P = gen(host, s, 0), L = gen(host, s, SURFACE_VERSION), a = L.surfaceAccess!, l = a.lift!;
@@ -56,14 +58,34 @@ describe('Surface Run v2: the lift ends are lit (gen fixtures) and the car carri
     });
   }
 
+  for (const host of ['office', 'mall'] as const) {
+    it(`${host}: the connector appends no light — the version-2 station's lights are the plain station's`, () => {
+      for (const s of seeds(host, 3)) {
+        const P = gen(host, s, 0), L = gen(host, s, SURFACE_VERSION);
+        expect(L.surfaceAccess?.kind, `${host} ${s}`).toBe('connector');
+        expect(plain(L.lights)).toEqual(plain(P.lights));
+      }
+    });
+  }
+
   it('the command tent (each host): version 2 adds a work lamp under the ridge over the lift\'s landing; version 1 keeps its one lamp', () => {
     for (const host of ['subway', 'office', 'mall'] as const) {
       const s = seeds(host, 1)[0];
       const D2 = gen(host, s, SURFACE_VERSION, 'surface'), D1 = gen(host, s, 1, 'surface');
-      const t2 = D2.surface!.checkpoint.tent, t1 = D1.surface!.checkpoint.tent, l = D2.surface!.portal.lift!;
+      const t2 = D2.surface!.checkpoint.tent, t1 = D1.surface!.checkpoint.tent, l = D2.surface!.portal.lift;
       const inTent2 = D2.lights.filter(q => q.area === t2.area), inTent1 = D1.lights.filter(q => q.area === t1.area);
       expect(inTent1.length, `${host} ${s}: version 1`).toBe(1);
       expect(inTent2.length, `${host} ${s}: version 2`).toBe(2);
+      // (task studio-surface-host-ground-connectors-20261118-053602-01) an Office / Mall tent keeps both ridge lamps where the lift era
+      // had them (index-stable: tests/surface-connector-pins.test.ts), the second over the floor its connector's mouth opens onto
+      if (host !== 'subway') {
+        expect(l, `${host}: no lift`).toBeUndefined();
+        const f = inTent2[1];
+        expect(f.x > t2.rect.x0 && f.x < t2.rect.x1 && f.z > t2.rect.z0 && f.z < t2.rect.z1, 'under the canvas').toBe(true);
+        expect(f).toMatchObject({broken: false, flicker: false, dying: false, virtual: true, y: inTent2[0].y, power: inTent2[0].power});
+        continue;
+      }
+      if (!l) throw new Error(`${host} ${s}: the Subway tent's lift`);
       const n = outward(l.doorSide), f = inTent2[1];
       expect(f.x).toBeCloseTo(l.door.x + n[0] * LIFT_LANDING_LIGHT.out, 3);
       expect(f.z).toBeCloseTo(l.door.z + n[1] * LIFT_LANDING_LIGHT.out, 3);
