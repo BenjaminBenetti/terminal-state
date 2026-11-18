@@ -31,7 +31,7 @@ import {slotOf, type SlotCategory} from './lootTables';
 import {holderTheme, lootTheme, type LootTheme} from './lootEconomy';
 import {holderTable, type HolderKind} from './loot';
 import {BASELINE_PROFILE, catWeight, lootProfile, type LootProfile} from './lootTables';
-import {holderKey} from '../run/memory';
+import {propHolderKey} from '../run/memory';
 import type {StationLayout} from '../gen/stationTypes';
 import {
   BUTTER_COOKIES, CORNED_BEEF, FIELD_RATION, FRUIT_PUREE, GINGER_SODA, HONEY, ICED_COFFEE, ICED_TEA, JERKY, JUICE_BOXES, PANTRY_IDS,
@@ -331,10 +331,10 @@ export function realizePickupItem(seed: number, layoutIndex: number, level: stri
  * (the Office roof cache: lootTables REWARD_TABLES) are never substituted.
  */
 export function pantryHolderRealizer(level: string, records: Readonly<Record<string, {lots: readonly number[]}>>, profile: LootProfile = BASELINE_PROFILE) {
-  return <L extends PantryLot>(h: PantryHolder & {prop: {level?: number; x: number; z: number}}, lots: readonly L[]): readonly L[] => {
+  return <L extends PantryLot>(h: PantryHolder & {prop: {level?: number; x: number; z: number; memAt?: {x: number; z: number}}}, lots: readonly L[]): readonly L[] => {
     if (!lots.some(l => isPantryBase(l.itemId))) return lots;
     if (holderTable(h.kind as HolderKind, h.areaType, profile).source === 'reward') return lots;
-    return realizeHolderLots(h, level, lots, records[holderKey(h.kind, h.prop.level, h.prop.x, h.prop.z)]?.lots);
+    return realizeHolderLots(h, level, lots, records[propHolderKey(h.kind, h.prop)]?.lots);
   };
 }
 

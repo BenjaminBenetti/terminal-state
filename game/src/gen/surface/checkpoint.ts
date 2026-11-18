@@ -18,7 +18,8 @@ import type {Door, LightPlacement, PickupPlacement, Side} from '../stationTypes'
 import type {PropPlacement} from '../props';
 import {layStairRun, type StairFlight} from '../traversal';
 import type {SBox, SPose, SRect, SurfaceCheckpoint, SurfaceLift, SurfacePortal} from './surfaceTypes';
-import {LIFT_FOOT, LIFT_LANDING_LIGHT, carveLiftRoom, liftInsidePose, liftRecord, liftTrigger, outward} from './accessLift';
+import {LIFT_FOOT, LIFT_LANDING_LIGHT, carveLiftRoom, liftInsidePose, liftRecord, liftRoomShape, liftTrigger, outward} from './accessLift';
+import {connectorArrival, connectorTrigger, districtConnector} from './connectorFootprint';
 import type {SurfaceHost} from './surfaceRun';
 import {crH, crW, type CR, type CityFrame} from './cityFrame';
 import {KERB, addBuildingPlan, type BlockPlans, type BuildingPlan} from './cityBlocks';
@@ -79,7 +80,13 @@ export interface PortalCarve {
   /** The command tent: its building plan, outer rect, area, door. */
   tent: {plan: BuildingPlan; rect: CR; area: number; door: {x: number; z: number; side: Side}; doorCells: number[];
     /** (lane ACCESS follow-up) its tunables (PORTAL.tent; version 2: PORTAL.tentLift) and the cargo lift at its back (version 2), else null. */
-    dims: TentDims; lift: SurfaceLift | null};
+    dims: TentDims; lift: SurfaceLift | null;
+    /**
+     * (task studio-surface-host-ground-connectors-20261118-053602-01) The version-2 tent's interior anchor: the cargo lift's place at its
+     * back — the carved car (`lift`, the Subway) or, for an Office / Mall host, where the lift era's car stood (nothing carved: the tent's
+     * tables, crate, gear and both ridge lamps keep their lift-era spots). Null: version 1.
+     */
+    dress: SurfaceLift | null};
   /** The subway headhouse (subway host only): its plan, stair area, flights. */
   head: {plan: BuildingPlan; area: number; flights: StairFlight[]} | null;
   /** The portal building (headhouse / host tower / host mall). */
@@ -99,7 +106,12 @@ function solidRing(kit: Kit, r: CR): void {
 }
 
 /** Carves the portal (headhouse stair / the host building's doors) and the command tent into the plaza (before the interiors). */
-export function carvePortal(kit: Kit, f: CityFrame, plans: BlockPlans, ground: GroundMap, host: SurfaceHost, rng: Rng, districtRoot: string, opts: {lift?: boolean} = {}): PortalCarve {
+/**
+ * `opts.lift`: version 2's lift-sized command tent with the cargo lift at its back; `opts.connector` (task studio-surface-host-ground-
+ * connectors-20261118-053602-01, an Office / Mall host): no car is carved — the portal is the CONNECTOR tube from the host facade into the
+ * tent (gen/surface/connectorFootprint.ts; its footprint is carved after the dressing, gen/surface/index.ts).
+ */
+export function carvePortal(kit: Kit, f: CityFrame, plans: BlockPlans, ground: GroundMap, host: SurfaceHost, rng: Rng, districtRoot: string, opts: {lift?: boolean; connector?: boolean} = {}): PortalCarve {
   const g = kit.g;
   const p = plazaFrame(plans);
   const compoundArea = g.area[g.idx(p.r.x0 + 2, p.r.y0 + 2)];
@@ -173,16 +185,25 @@ export function carvePortal(kit: Kit, f: CityFrame, plans: BlockPlans, ground: G
   void ground;
   // (version 2, lane ACCESS follow-up) the cargo lift at the tent's back, its gate toward the flap: the car is part of the tent's own
   // area (its air is the tent's), the ring its canvas (SOLID in the tent's rect); the crossing's portal is the car
-  let lift: SurfaceLift | null = null;
+  let lift: SurfaceLift | null = null, dress: SurfaceLift | null = null;
   if (opts.lift) {
     const cellX = (u: number) => (p.we === 'E' ? p.r.x0 + u : p.r.x1 - u - 1), cellY = (v: number) => (p.ns === 'S' ? p.r.y0 + v : p.r.y1 - v - 1);
     const lv0 = tv0 + Math.floor((T.wid - LIFT_FOOT.v) / 2), gateU = 3 + LIFT_FOOT.u - 1;
     const lf = {ox: cellX(gateU), oy: cellY(lv0), dx: p.we === 'E' ? -1 : 1, dy: 0, ax: 0, ay: p.ns === 'S' ? 1 : -1};
-    const room = carveLiftRoom(g, lf, KERB, tarea.id, tarea.id);
-    lift = liftRecord(room.cab, room.doorSide, room.along, KERB, 0, tarea.id, 'upper');
-    portal = {kind: 'lift', pose: liftInsidePose(lift), trigger: liftTrigger(lift), building: tplan.id, label: 'Ride down to the station', lift};
+    if (opts.connector && host !== 'subway') {
+      // (an Office / Mall host) the tent's floor stays whole; the way back is the connector tube from the host facade (plaza v = 0) into
+      // the tent's facing wall, arriving in front of its mouth
+      const room = liftRoomShape(lf);
+      dress = liftRecord(room.cab, room.doorSide, room.along, KERB, 0, tarea.id, 'upper');
+      const connector = districtConnector(host, (u, v) => pw(p, u, v), YAW[sideV(p)], KERB, tarea.id);
+      portal = {kind: 'connector', pose: connectorArrival(connector), trigger: connectorTrigger(connector), building: portalBuilding, label: 'Back inside', connector};
+    } else {
+      const room = carveLiftRoom(g, lf, KERB, tarea.id, tarea.id);
+      lift = dress = liftRecord(room.cab, room.doorSide, room.along, KERB, 0, tarea.id, 'upper');
+      portal = {kind: 'lift', pose: liftInsidePose(lift), trigger: liftTrigger(lift), building: tplan.id, label: 'Ride down to the station', lift};
+    }
   }
-  return {portal, plaza: p, tent: {plan: tplan, rect: tr, area: tarea.id, door: {x: dc.x, z: dc.z, side: U}, doorCells, dims: T, lift}, head, portalBuilding, doors};
+  return {portal, plaza: p, tent: {plan: tplan, rect: tr, area: tarea.id, door: {x: dc.x, z: dc.z, side: U}, doorCells, dims: T, lift, dress}, head, portalBuilding, doors};
 }
 
 export interface CheckpointDress {
@@ -293,7 +314,7 @@ export function dressCheckpoint(op: OutdoorProps, kit: Kit, pc: PortalCarve, hos
   const TP = TENT_PLAN, sv2: Side = sv === 'N' ? 'S' : sv === 'S' ? 'N' : sv === 'W' ? 'E' : 'W';
   let tableU = tu0 + TP.mapU, tableV = (tvA + tvB) / 2, supplyU = tu0 + TP.supplyU, supplyV = tableV, tableRot = FACE_ROT[su], supplyRot = FACE_ROT[su];
   let readU = tableU + 0.6 + TP.reader, readV = tableV;
-  if (pc.tent.lift) {
+  if (pc.tent.dress) {
     // (version 2, lane ACCESS follow-up) the lift stands at the back: both tables along the side walls in front of it (long side along u,
     // FRONT toward the aisle from the car's gate to the flap), the map table's reader in the aisle
     const fu0 = (3 + LIFT_FOOT.u) * CELL, uc = (fu0 + tu1) / 2 - 0.3, half = (kindDims('srMapTable')?.d ?? 0.95) / 2 + 0.12;
@@ -362,10 +383,11 @@ export function dressCheckpoint(op: OutdoorProps, kit: Kit, pc: PortalCarve, hos
   const tl = at(tableU, tableV);
   lights.push({x: tl.x, y: KERB + T.clear - 0.25, z: tl.z, rot: 0, area: pc.tent.area, broken: false, flicker: false, warm: true, power: 0.8, dying: false, level: 0, virtual: true,
     tint: [1.0, 0.84, 0.62]});
-  if (pc.tent.lift) {
+  if (pc.tent.dress) {
     // (version 2, lane ACCESS follow-up) a second work lamp under the ridge, over the lift's landing: the gate and the car at rest (the
-    // station ends' landing fixture, gen/surface/accessLift.ts liftLandingLight; the car carries its own lit finish)
-    const L = pc.tent.lift, n = outward(L.doorSide);
+    // station ends' landing fixture, gen/surface/accessLift.ts liftLandingLight; the car carries its own lit finish). An Office / Mall
+    // tent (no car: the connector) keeps it at the same spot (task studio-surface-host-ground-connectors-20261118-053602-01)
+    const L = pc.tent.dress, n = outward(L.doorSide);
     lights.push({x: r3(L.door.x + n[0] * LIFT_LANDING_LIGHT.out), y: KERB + T.clear - 0.25, z: r3(L.door.z + n[1] * LIFT_LANDING_LIGHT.out), rot: 0, area: pc.tent.area,
       broken: false, flicker: false, warm: true, power: 0.8, dying: false, level: 0, virtual: true, tint: [1.0, 0.84, 0.62]});
   }

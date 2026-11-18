@@ -134,6 +134,7 @@ export const CORPSE_TEXT = {
   notReady: 'The body is not ready yet',
   noRoom: 'No room to put the body down here — face open, level floor',
   elevator: 'Not inside the elevator — put the body down on a floor',
+  passage: 'Not in the passage — carry the body through first',
   handsFull: 'Your hands are full — put the body down first',
   stationFull: `No more room for bodies here (at most ${BODIES.stationHere} in one station)`,
   trainFull: `The train holds at most ${BODIES.maxAboard} bodies — put this one down outside`,
@@ -224,6 +225,8 @@ export interface CorpseHost {
     actorVelocity?(target: object, point: THREE.Vector3, out: THREE.Vector3): boolean; statics?: {cellGround(x: number, z: number, y?: number): number} | null} | null;
   damage?: {releaseZombie?(z: object): boolean} | null;
   atmosphere?: {markShadows(root: THREE.Object3D, structure: boolean): void} | null;
+  /** (task studio-surface-host-ground-connectors-20261118-053602-01) walking in the Surface connector tube (off the host's grid: no floor there to leave a body on). */
+  surfaceConnector?: {holding: boolean} | null;
   trainRuntime?: {spec: PlayerTrainSpec; view: {root: THREE.Object3D} | null; train: {placement: TrainPlacement} | null; consoleAimed?: boolean; saveAimed?: boolean} | null;
   trainRide?: {riding: boolean; phase: string} | null;
   playerTrain: {cargo: {liveBodies: {bodies(): BodyRecordJSON[]; restoreBodies(b: BodyRecordJSON[]): void} | null}; chipper?: {state: {job: {body: BodyRecordJSON} | null}}};
@@ -655,6 +658,7 @@ export class CorpseSystem implements CorpseSystemApi {
     const h = this.host, b = this.hand;
     if (!b) return false;
     if (h.trainRide?.riding) { this.refuse(CORPSE_TEXT.riding); return false; }
+    if (h.surfaceConnector?.holding) { this.refuse(CORPSE_TEXT.passage); return false; }
     return this.physicsReady() ? this.dropRagdoll(b) : this.layDown(b);
   }
 

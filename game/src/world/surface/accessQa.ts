@@ -13,12 +13,20 @@
 //   ride(dir?)          liftGo() then cross(dir): the ride itself (refused when this section's way is not a lift)
 //   tent()              the district's command tent: rect, door, the flap's state (t / target / gas source running), the player inside
 //                       the tent / the car, the eye's gas exposure (null: not in a district)
+// Task studio-surface-host-ground-connectors-20261118-053602-01, version 2 Office / Mall (the walked connector tube;
+// world/surface/connectorRuntime.ts):
+//   connector()         the tube: phase ('idle' | 'crossing'), held / flaps / ready / reposed / armed / refusal / sealed, the tube-local pose,
+//                       this world's record, counters (null: no connector here)
+//   connectorGo(back?)  stand on this world's walk-in side just outside the tube's take zone, facing into it (back: s metres further out;
+//                       teleport — QA setup; the walk itself is real input)
 
 import type {Game} from '../../game';
 import {SURFACE_SECTION, isSurfaceKey, surfacePresent, SURFACE_VERSION, type SurfaceHost} from '../../gen/surface/surfaceRun';
 import {surfaceAccessOf} from './accessRuntime';
 import type {SurfaceCrossResult} from './crossing';
 import {surfaceLiftOf} from './liftRuntime';
+import {surfaceConnectorOf} from './connectorRuntime';
+import {connectorToWorld} from '../../gen/surface/connectorShape';
 import {surfaceAirRuntime} from './air';
 
 type Teleport = (x: number, z: number, yaw?: number, level?: number) => boolean;
@@ -78,6 +86,17 @@ export function surfaceAccessQaApi(game: Game, teleport: Teleport) {
       return null;
     },
     lift: () => surfaceLiftOf(game)?.qa() ?? null,
+    connector: () => surfaceConnectorOf(game)?.qa() ?? null,
+    connectorGo: (back = 1.2): boolean => {
+      const c = surfaceConnectorOf(game)?.record();
+      if (!c || surfaceConnectorOf(game)?.holding) return false;
+      const host = c.end === 'host', s = host ? -c.door.depth - back : c.len + back;
+      const [x, z] = connectorToWorld(c, s, 0);
+      // facing into the tube: +s from the host side (yaw = the record's), -s from the tent side
+      const ok = teleport(x, z, host ? c.yaw : c.yaw + Math.PI, c.level);
+      rt()?.frame();
+      return ok;
+    },
     liftGo: (): boolean => liftHere() && goWay(),
     ride: (dir?: 'up' | 'down'): Promise<SurfaceCrossResult> => {
       if (!liftHere() || !goWay()) return Promise.resolve({ok: false, reason: 'no-access', error: 'No cargo lift here.'});

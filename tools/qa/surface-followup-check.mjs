@@ -2,6 +2,7 @@
 // follow-up (root CLAUDE.md browser policy: the workspace lock / watchdog / owned-browser cleanup of browser-env.mjs; a 10 GiB anon + shmem
 // guard closes the owned browser, plus an earlier self-stop at STOP_GIB). Firefox + Mesa on this worker: functional evidence and
 // after-views only, never hardware performance. A version-2 campaign station (networkSeed 1 → st-00 by default):
+//   (the Subway host only since the Office / Mall connectors: task studio-surface-host-ground-connectors-20261118-053602-01)
 //   1. the station's cargo lift at its closed street exit; the RIDE up (frames counted while it runs, the phases, the doors' first open
 //      frame), the arrival in the command tent's lift; the tent air, the flap opened and the walk out;
 //   2. the truck: damaged (smoke / flames), the side map board, the board's map; the fog pressure at 0.5 and 1 (the HUD's text);
@@ -77,6 +78,10 @@ await withBrowserLock(async () => {
       access: await ev(() => { const a = window.__game.layout.surfaceAccess; return a && {v: a.v, kind: a.kind, hall: a.hall, label: a.label}; }).catch(e => String(e))});
     if (!playing) throw new Error('station never reached playing');
     await frames(30);
+    // (task studio-surface-host-ground-connectors-20261118-053602-01) only the Subway keeps the cargo lift: a version-2 Office / Mall host
+    // crosses on foot through its connector tube (no lift to ride here) — this lift route stops with a clear note, nothing else is run
+    const accessKind = await ev(() => window.__game.layout.surfaceAccess?.kind ?? null).catch(() => null);
+    if (accessKind !== 'lift') { step('no cargo lift at this host (version-2 Office / Mall: the on-foot connector) — lift route not applicable', {accessKind, host: HOST}); return; }
 
     // ---- 1. the lift up --------------------------------------------------------------------------------------------------------
     if (!headroom('lift')) return;

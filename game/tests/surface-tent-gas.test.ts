@@ -1,7 +1,7 @@
 // Task studio-surface-run-field-followup-20261116-211729-01 (lane ACCESS): the command tent is a SAFE interior while its flap is shut — and
-// the arrival (version 2: standing in the cargo lift's car inside the tent) is in it. Node, THE gas the game uses for exposure and the
-// volumetric layers (one source of truth): world/surface/airField.ts SurfaceGasField (the interior zones) + world/surface/airMask.ts
-// surfaceAirAt (the outdoor air, the sealed cab):
+// the arrival (version 2: standing in the Subway's cargo lift car, or in front of an Office / Mall connector tube's mouth) is in it. Node,
+// THE gas the game uses for exposure and the volumetric layers (one source of truth): world/surface/airField.ts SurfaceGasField (the
+// interior zones) + world/surface/airMask.ts surfaceAirAt (the outdoor air, the sealed cab):
 //  - every other doorway of the district breached at its full age, the field settled at the arrival and run for a minute: no gas anywhere
 //    in the tent (the car included) at any height a body or an eye reaches, from either term;
 //  - the car's cells are the tent's own air (the flap's zone; an indoor column under the tent's top: no outdoor air, no other pocket);
@@ -18,6 +18,7 @@ import {GAS} from '../src/world/gas/field';
 import {surfaceAirAt, surfaceAirPressureAt, surfaceOutdoorMap} from '../src/world/surface/airMask';
 import {SurfaceGasField, surfaceGasZones} from '../src/world/surface/airField';
 import {doorBreachId, doorPoint, planSurfaceDoors} from '../src/world/surface/airDoors';
+import {CONNECTOR, connectorToWorld} from '../src/gen/surface/connectorShape';
 import type {StationLayout} from '../src/gen/stationTypes';
 
 const seeds = (host: SurfaceHost, n: number): number[] => {
@@ -49,11 +50,18 @@ describe('Surface Run: the command tent is gas-free with its flap shut (the arri
       // the arrival is in the tent (version 2: standing in the car, the car's cells the tent zone's)
       const inTent = (x: number, z: number) => x > t.rect.x0 && x < t.rect.x1 && z > t.rect.z0 && z < t.rect.z1;
       if (v >= 2) {
-        const l = S.portal.lift!;
         expect(inTent(pose.x, pose.z), 'the arrival stands in the tent').toBe(true);
-        for (let z = l.cab.z0 + CELL / 2; z < l.cab.z1; z += CELL) for (let x = l.cab.x0 + CELL / 2; x < l.cab.x1; x += CELL) {
+        // (task studio-surface-host-ground-connectors-20261118-053602-01) the Subway arrives in its cargo lift's car; an Office / Mall in
+        // front of its connector tube's mouth: the tent apron the walk releases the player onto (the tube's own air: tests/surface-connector-gen)
+        const l = S.portal.lift, c = S.portal.connector;
+        expect(S.portal.kind, `${host}: the arrival`).toBe(host === 'subway' ? 'lift' : 'connector');
+        const cells: [number, number][] = [];
+        if (l) for (let z = l.cab.z0 + CELL / 2; z < l.cab.z1; z += CELL) for (let x = l.cab.x0 + CELL / 2; x < l.cab.x1; x += CELL) cells.push([x, z]);
+        if (c) for (let s = c.len + CELL / 2; s < c.len + CONNECTOR.apron; s += CELL) for (let t = -CONNECTOR.width / 2 + CELL / 2; t < CONNECTOR.width / 2; t += CELL) cells.push(connectorToWorld(c, s, t));
+        expect(cells.length, 'the arrival\'s floor').toBeGreaterThan(0);
+        for (const [x, z] of cells) {
           const cx = Math.floor(x / CELL), cy = Math.floor(z / CELL);
-          expect(f.zoneAtCell(cx, cy), `car cell ${cx},${cy}: the tent's air`).toBe(tentZone);
+          expect(f.zoneAtCell(cx, cy), `${l ? 'car' : 'tent apron'} cell ${cx},${cy}: the tent's air`).toBe(tentZone);
           expect(map.top[cy * map.w + cx], 'an indoor column').toBeGreaterThan(0);
         }
       }

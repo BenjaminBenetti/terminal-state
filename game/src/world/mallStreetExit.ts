@@ -48,7 +48,8 @@ import {mulberry32} from '../core/rng';
 import {canvasTexture} from './canvasTextures';
 import {wmNoise} from './surfaceNodes';
 import {EXT_FOG, EXT_U, exteriorFogOpacity, fallbackPropGeometry, modelParts} from './exterior';
-import {MALL_VEHICLE_MODELS, drawnKey, placeVehicles, type VehiclePlace} from './mallVehicles'; // task studio-mall-parking-glass-followup-20261117-043548-01
+import {MALL_VEHICLE_MODELS, drawnKey, footprintsTouch, placeVehicles, type VehiclePlace} from './mallVehicles'; // task studio-mall-parking-glass-followup-20261117-043548-01
+import {CONNECTOR} from '../gen/surface/connectorShape';
 import {MALL_EXT_ORDER, MALL_SKY, gasColour, gasDensity, hazeSatCpu, mallSkyColour, murkAt} from './mallExterior';
 import {MALL_FOG} from './mallAtmosphere';
 
@@ -100,6 +101,13 @@ export interface StreetExitSpec {
    * pane, the lit EXIT CLOSED face). Absent = locked, exactly as before.
    */
   usable?: true;
+  /**
+   * Task studio-surface-host-ground-connectors-20261118-053602-01: the usable exit is the version-2 Mall CONNECTOR's doorway
+   * (layout.surfaceAccess.connector, gen/surface/accessConnector.ts): its walk-through span (m, centred on the opening) — no leaf, push
+   * bar or mullion of either door set stands in it (the sidelights and the transom stay), and the tube (world/surface/connectorView.ts)
+   * stands on the street in front of the facade: no fog card, wreck, rubble or paving inside its footprint (`len` m out, its half-width).
+   */
+  connector?: {width: number; len: number; half: number; clear: number};
 }
 
 /** The culler's view of an exit (world/levelCulling.ts ExitAperture): the glazed opening on its hall-side plane. */
@@ -115,6 +123,7 @@ const num = (v: unknown, d: number): number => (typeof v === 'number' && Number.
 export function streetExitSpecs(layout: {mall?: unknown}, ceilAt: (level: number, x: number, z: number) => number, capY = Infinity): StreetExitSpec[] {
   const raw = ((layout.mall as {exits?: unknown[]} | undefined)?.exits ?? []) as Record<string, unknown>[];
   const usable = (layout as {surfaceAccess?: {exit?: string}}).surfaceAccess?.exit; // (lane ACCESS: Surface Run)
+  const con = connectorOfExit(layout);
   const out: StreetExitSpec[] = [];
   raw.forEach((r, k) => {
     const side = String(r.side ?? '');
@@ -147,10 +156,18 @@ export function streetExitSpecs(layout: {mall?: unknown}, ceilAt: (level: number
       id: String(r.id ?? `X${k + 1}`), level, streetY, nx, nz, plane, s0, s1, y0, y1, collider, view: {...view}, vestibule,
       hallCeil: num(hall?.ceil, num(ceilAt(level, hx, hz), y1 + 0.6)), panels: panels.length ? panels : defaultPanels(s0, s1, y0, y1),
       capY, seed: num(r.seed, 7919 * (k + 1)) >>> 0,
-      ...(usable !== undefined && String(r.id ?? '') === usable ? {usable: true as const} : {}),
+      ...(usable !== undefined && String(r.id ?? '') === usable ? {usable: true as const, ...(con ? {connector: {...con}} : {})} : {}),
     });
   });
   return out;
+}
+
+/** The Mall connector's doorway on its usable exit (task studio-surface-host-ground-connectors-20261118-053602-01), else null. */
+function connectorOfExit(layout: unknown): StreetExitSpec['connector'] | null {
+  const a = (layout as {surfaceAccess?: {kind?: string; connector?: {host?: string; end?: string; len?: number; door?: {width?: number}}}}).surfaceAccess;
+  const c = a?.kind === 'connector' ? a.connector : undefined;
+  if (!c || c.host !== 'mall' || c.end !== 'host') return null;
+  return {width: num(c.door?.width, CONNECTOR.width), len: num(c.len, CONNECTOR.len), half: CONNECTOR.width / 2 + CONNECTOR.ring, clear: CONNECTOR.width / 2};
 }
 
 /** Panes of an opening when the record carries none: 0.9 m leaf pairs centred, sidelights, a transom above 2.3 m. */
@@ -934,6 +951,10 @@ export function buildStreetExit(s: StreetExitSpec, models: Readonly<Record<strin
    * panel — the frame members and the panes tile the whole opening (no see-through gap without collision, no collider without a
    * visual). `hall`: the locked set the player faces (push bars, a chain + padlock through each leaf pair, notices, a boarded pane).
    */
+  // (task studio-surface-host-ground-connectors-20261118-053602-01) the connector's walk span: nothing of the door sets stands in it — the
+  // leaves are off (their panes' seeded draws still taken, into a set never drawn), the meeting mullion between two pairs gone
+  const ws = s.connector ? s.connector.width / 2 : 0, inWalk = (a: number, b: number) => ws > 0 && b > -ws + 1e-3 && a < ws - 1e-3;
+  const offcut = new Acc({position: 3, normal: 3, uv: 2});
   const doorSet = (w: number, acc: Acc, hall: boolean) => {
     const t = 0.06, HEAD = 0.1, alu = finish, kick = tint(ALU[0], 0.9), st = 0.09;
     fbox(-hs, -hs + J, 0, H, w - t, w + t, alu);
@@ -951,7 +972,7 @@ export function buildStreetExit(s: StreetExitSpec, models: Readonly<Record<strin
     for (const p of low) {
       if (p.u0 - prevEnd > 0.002 || p.kind === 'sidelight' || prevKind === 'sidelight') {
         const a = prevKind === 'jamb' ? prevEnd : prevEnd - 0.04, b = p.u0 + (p.u0 - prevEnd > 0.002 || prevKind === 'jamb' ? 0 : 0.04);
-        if (b - a > 0.005) fbox(a, b, 0, leafTop, w - t, w + t, alu);
+        if (b - a > 0.005 && !inWalk(a, b)) fbox(a, b, 0, leafTop, w - t, w + t, alu);
       }
       prevEnd = p.u1; prevKind = p.kind;
     }
@@ -967,6 +988,7 @@ export function buildStreetExit(s: StreetExitSpec, models: Readonly<Record<strin
       }
       doors.push(p);
       const a = p.u0, b = p.u1;
+      if (inWalk(a, b)) { pane(offcut, a + st, b - st, 0.26, leafTop - 0.09, w, !hall); continue; }
       fbox(a, a + st, 0, leafTop, w - t * 0.7, w + t * 0.7, alu);
       fbox(b - st, b, 0, leafTop, w - t * 0.7, w + t * 0.7, alu);
       fbox(a + st, b - st, leafTop - 0.09, leafTop, w - t * 0.7, w + t * 0.7, alu);
@@ -1061,8 +1083,16 @@ export function buildStreetExit(s: StreetExitSpec, models: Readonly<Record<strin
       [[s0 / tu, y0 / tv], [(s0 + len) / tu, y0 / tv], [(s0 + len) / tu, y1 / tv], [s0 / tu, y1 / tv]], {color: col, aCell: sx(cell), aExit: exitAttr});
   };
   const curbY = -0.15;
-  ground('paving', V.u0, V.u1, plan.pavement[0], plan.pavement[1], 0);
-  ground('curb', V.u0, V.u1, plan.pavement[1], plan.pavement[1] + 0.25, 0);
+  // (the connector's tube stands on the pavement: its clear width has its own groundsheet there — no paving under it)
+  const tubeEnd = s.connector ? B + s.connector.len : -Infinity, tw = s.connector?.clear ?? 0;
+  const paved = (cell: StreetCell, w0: number, w1: number) => {
+    if (!s.connector || w0 >= tubeEnd) { ground(cell, V.u0, V.u1, w0, w1, 0); return; }
+    ground(cell, V.u0, -tw, w0, w1, 0);
+    ground(cell, tw, V.u1, w0, w1, 0);
+    if (w1 > tubeEnd) ground(cell, -tw, tw, tubeEnd, w1, 0);
+  };
+  paved('paving', plan.pavement[0], plan.pavement[1]);
+  paved('curb', plan.pavement[1], plan.pavement[1] + 0.25);
   vquad('curb', [V.u1, plan.pavement[1] + 0.25], [V.u0, plan.pavement[1] + 0.25], curbY, 0, [0, 0, 1]);
   // road: two lanes of asphalt with the dashed centre line between
   const [r0, r1] = plan.road, rm = (r0 + r1) / 2;
@@ -1111,8 +1141,14 @@ export function buildStreetExit(s: StreetExitSpec, models: Readonly<Record<strin
   };
   const rubG = fallbackPropGeometry('rubble');
   // (the plan's headings are the old Z-long stand-ins': a car parked along the road (u) was turned a quarter)
-  const vehicles = placeVehicles(plan.cars.map(c => ({u: c.u, y: curbY, w: c.w, yaw: Math.PI / 2 + c.yaw, kind: c.kind})), s.seed);
-  for (const rb of plan.rubble) place(rubG, rb.u, rb.w > plan.road[0] && rb.w < plan.road[1] ? curbY : 0, rb.w, r() * 6.28, [rb.s, rb.s * 0.8, rb.s]);
+  // (the connector: no wreck / rubble in the tube's footprint — dropped after the picks, every seeded draw kept)
+  const tube: VehiclePlace | null = s.connector ? {key: 'tube', u: 0, y: curbY, w: B + (s.connector.len + 0.5) / 2, yaw: 0, k: 0, len: s.connector.len + 0.5, wid: 2 * s.connector.half, kind: 'car'} : null;
+  const vehicles = placeVehicles(plan.cars.map(c => ({u: c.u, y: curbY, w: c.w, yaw: Math.PI / 2 + c.yaw, kind: c.kind})), s.seed).filter(v => !tube || !footprintsTouch(v, tube));
+  for (const rb of plan.rubble) {
+    const yaw = r() * 6.28;
+    if (tube && Math.abs(rb.u) < tube.wid / 2 + rb.s && rb.w < tube.w + tube.len / 2 + rb.s) continue;
+    place(rubG, rb.u, rb.w > plan.road[0] && rb.w < plan.road[1] ? curbY : 0, rb.w, yaw, [rb.s, rb.s * 0.8, rb.s]);
+  }
   rubG.dispose();
   const steelCol: V3 = [0.16, 0.16, 0.15];
   const sbox = (u0: number, u1: number, y0: number, y1: number, w0: number, w1: number, col: V3) =>
@@ -1133,11 +1169,19 @@ export function buildStreetExit(s: StreetExitSpec, models: Readonly<Record<strin
   // ---- FOG CARDS ----------------------------------------------------------------------------------------------------------
   const fog = new Acc({position: 3, normal: 3, uv: 2, aExit: 4, aCard: 2});
   const cardTop = Math.min(V.y1 - 0.3, 16);
+  // (the connector: no card inside the tube's reach — each card's slice opacity folded into the first one beyond it, so the fog over
+  // the street reads as before; the ground card starts beyond the tube)
+  let cards = plan.cards;
+  if (s.connector) {
+    const keep = plan.cards.filter(c => c.w > tubeEnd + 0.3), gone = plan.cards.filter(c => c.w <= tubeEnd + 0.3);
+    const t = gone.reduce((a, c) => a * (1 - c.opacity), 1);
+    cards = keep.map((c, i) => (i === 0 ? {...c, opacity: 1 - t * (1 - c.opacity)} : c));
+  }
   // far cards first (back-to-front for an eye inside)
-  for (const c of [...plan.cards].reverse()) {
+  for (const c of [...cards].reverse()) {
     fog.quad([[V.u0 + 0.1, curbY, c.w], [V.u1 - 0.1, curbY, c.w], [V.u1 - 0.1, cardTop, c.w], [V.u0 + 0.1, cardTop, c.w]], [0, 0, -1], [[0, 0], [1, 0], [1, 1], [0, 1]], {aExit: exitAttr, aCard: [c.opacity, 0]});
   }
-  const gw0 = B + 0.4, gw1 = V.w1 - 1;
+  const gw0 = s.connector ? tubeEnd + 0.3 : B + 0.4, gw1 = V.w1 - 1;
   if (gw1 > gw0 + 1) fog.quad([[V.u0 + 0.1, plan.ground.y, gw0], [V.u1 - 0.1, plan.ground.y, gw0], [V.u1 - 0.1, plan.ground.y, gw1], [V.u0 + 0.1, plan.ground.y, gw1]], [0, 1, 0], [[0, 0.5], [1, 0.5], [1, 0.5], [0, 0.5]], {aExit: exitAttr, aCard: [plan.ground.opacity, 1]});
 
   // ---- meshes -------------------------------------------------------------------------------------------------------------

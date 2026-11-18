@@ -186,7 +186,7 @@ export interface SurfacePortal {
    * 'stair' = a subway entrance stair down (Subway host); 'door' = a building's street doors (Office tower / Mall entrance); 'lift' =
    * (version 2, lane ACCESS follow-up) the cargo lift inside the command tent (`lift`).
    */
-  kind: 'stair' | 'door' | 'lift';
+  kind: 'stair' | 'door' | 'lift' | 'connector';
   /** Arrival pose (standing just outside the portal, facing the checkpoint). */
   pose: SPose;
   /** The interaction box of the way back (the door / the grille at the stair foot): [E] goes back to the host station. */
@@ -197,6 +197,38 @@ export interface SurfacePortal {
   label: string;
   /** (version 2, lane ACCESS follow-up) The cargo lift the crossing rides (kind 'lift'): its car stands at the tent's stop. */
   lift?: SurfaceLift;
+  /** (version 2, an Office / Mall host) The connector tube the crossing walks (kind 'connector'): its tent end opens into the tent. */
+  connector?: SurfaceConnector;
+}
+
+/**
+ * Task studio-surface-host-ground-connectors-20261118-053602-01 (version 2, an Office / Mall host): ONE WORLD's placement of the
+ * CONNECTOR — the level canvas tube from the host's street door to the command tent (gen/surface/connectorShape.ts: the one shape, the
+ * tube-local frame s / t, the walk model). The host station's record (SurfaceAccessInfo.connector, end 'host') places it at the host's
+ * street door over the street outside its grid; the district's (SurfacePortal.connector, end 'tent') from the host building's facade to
+ * the tent's wall. World metres, absolute y. Both records of a station share `len`; `door` is the host world's (the district's copies
+ * the shape's defaults: its host mouth stays shut there).
+ */
+export interface SurfaceConnector {
+  /** The host the tube serves. */
+  host: 'office' | 'mall';
+  /** Which end this world's walk-in side is: the host doorway (the host station) or the tent (the district). */
+  end: 'host' | 'tent';
+  /** The tube axis at s = 0 (the host mouth on the host facade's outer plane, on the floor), its storey and the heading of +s. */
+  x: number;
+  z: number;
+  y: number;
+  level: number;
+  yaw: number;
+  /** The tent mouth's s (CONNECTOR.len). */
+  len: number;
+  /**
+   * The host doorway behind the host mouth (s = -depth .. 0): its clear width / height, and the host facade opening's full width the
+   * tube's collar closes (the Mall's street door set is wider than the tube; the Office boarding's cut is the doorway itself).
+   */
+  door: {depth: number; width: number; height: number; collar: number};
+  /** The walk-in side's layout area (the lobby / exit hall; the tent). */
+  area: number;
 }
 
 /**
@@ -378,7 +410,7 @@ export interface SurfaceAccessInfo {
    * 'subway-stair' = an extended stairwell up from a street-exit hall; 'office-door' / 'mall-door' = an exterior street exit; 'lift' =
    * (version 2, lane ACCESS follow-up) a cargo lift at a closed street-exit hall (`lift`).
    */
-  kind: 'subway-stair' | 'office-door' | 'mall-door' | 'lift';
+  kind: 'subway-stair' | 'office-door' | 'mall-door' | 'lift' | 'connector';
   /** The [E] box of the way out (the door at the top of the stairwell / the street door). */
   trigger: SBox;
   /** Where a player coming back down / in stands (inside, facing away from the door). */
@@ -403,4 +435,6 @@ export interface SurfaceAccessInfo {
   street?: string;
   /** (version 2, lane ACCESS follow-up) The cargo lift (kind 'lift'): the station's end of the shaft. */
   lift?: SurfaceLift;
+  /** (version 2, an Office / Mall host) The connector (kind 'connector'): the host station's end of the tube, over its street. */
+  connector?: SurfaceConnector;
 }

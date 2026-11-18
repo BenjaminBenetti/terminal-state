@@ -317,8 +317,10 @@ describe('surface gas: the truck cab, the mask, the in-engine fallback', () => {
     const hx = (I.x1 - I.x0) / 2, hy = (I.y1 - I.y0) / 2, hz = (I.z1 - I.z0) / 2;
     expect(E.x > I.x0 && E.x < I.x1 && E.y > I.y0 && E.y < I.y1 && E.z > I.z0 && E.z < I.z1).toBe(true); // (the seated eye is in its cab)
     // game.ts: only an ENCLOSED vehicle seat shelters (the vehicle controller's `enclosed`: seated, in a vehicle whose def is enclosed)
+    // — or a walker held in an Office / Mall connector tube proper (its air is indoors to the crown: world/surface/airMask.ts, the
+    // tube's cells; tests/surface-connector-gen.test.ts)
     const src = fs.readFileSync(path.join(GAME, 'src/game.ts'), 'utf8');
-    expect(src).toMatch(/this\.gas\.shelter = \(\) => this\.skywaysCar\?\.enclosed === true;/);
+    expect(src).toMatch(/this\.gas\.shelter = \(\) => this\.skywaysCar\?\.enclosed === true \|\| this\.surfaceConnector\?\.sheltered\(\) === true;/);
     g.sys.shelter = () => g.car.driving && g.car.enclosed === true; // (the same, on the stand-in: its `enclosed` is the def's flag)
     // the truck on the street between B0 / B1 / B2, turned (the vehicle frame: -z forward); level, and pitched as a seat on a flight is
     for (const pitch of [0, 0.3]) {

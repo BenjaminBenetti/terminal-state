@@ -390,6 +390,13 @@ export interface PropPlacement {
   cargoGone?: boolean;
   /** Task studio-skywalk-events-20261115-193624-01 (lane GOLF-COURSE): a low piece a walker crosses (the mini-golf deck / rails): core/physics.ts walker push-out skips it; its box stays for every other reader. */
   walkOver?: boolean;
+  /**
+   * Task studio-surface-host-ground-connectors-20261118-053602-01 (gen/surface/accessConnector.ts): a holder piece the Surface Run's
+   * version-2 Office / Mall connector access MOVED aside (the boarded entrance's barricade) — the position its run memory stays keyed at
+   * (run/memory.ts holderKey via run/worldMemory.ts holderKeyOf), so a save taken before the move keeps its opened / emptied contents.
+   * Absent on every other placement (holder key = x / z).
+   */
+  memAt?: {x: number; z: number};
 }
 
 /**

@@ -7,11 +7,14 @@
 //    only inside the chosen hall;
 //  - a real room: the car's FLOOR cells at the hall floor, its ceiling, the gate's doorway, the return pose standing in it, reachable;
 //  - the district's end: the car at the back of the command tent, in the tent's own area, the portal pose standing in it, the way from
-//    the car to the flap free; version 1 (both sides) keeps its stairwell / portal (tests/surface-v1-compat.test.ts pins the bytes).
+//    the car to the flap free (an Office / Mall: its connector tube's mouth there instead — task
+//    studio-surface-host-ground-connectors-20261118-053602-01); version 1 (both sides) keeps its stairwell / portal
+//    (tests/surface-v1-compat.test.ts pins the bytes).
 import {describe, expect, it} from 'vitest';
 import {LEVELS} from '../src/levels/registry';
 import {SURFACE_VERSION, surfacePresent, type SurfaceHost} from '../src/gen/surface/surfaceRun';
 import {LIFT_AVOID_PARENTS, LIFT_CAR, subwayLiftCandidates} from '../src/gen/surface/accessLift';
+import {CONNECTOR, connectorToWorld, worldToConnector} from '../src/gen/surface/connectorShape';
 import {validateLayout, type StationLayout} from '../src/gen/station';
 import {CELL, FLOOR, SOLID} from '../src/gen/grid';
 import {levelDistance} from '../src/gen/levelGen';
@@ -127,20 +130,24 @@ describe('Surface Run v2: the Subway lift at a normal closed street exit', () =>
     }
   }, 180_000);
 
-  it('version 1 keeps its stairwell / street doors; an Office / Mall at version 2 takes its lift inside the building', () => {
+  it('version 1 keeps its stairwell / street doors; an Office / Mall at version 2 walks out through its connector (no lift)', () => {
     const s = seeds('subway', 1)[0];
     expect(gen('subway', s, 1).surfaceAccess).toMatchObject({v: 1, kind: 'subway-stair'});
     for (const host of ['office', 'mall'] as const) {
       const t = seeds(host, 1)[0];
       expect(gen(host, t, 1).surfaceAccess).toMatchObject({v: 1, kind: `${host}-door`});
-      // (follow-up 2: the host's own version-2 lift — tests/surface-access-v2-hosts.test.ts sweeps it)
-      expect(gen(host, t, 2).surfaceAccess).toMatchObject({v: 2, kind: 'lift'});
+      // (task studio-surface-host-ground-connectors-20261118-053602-01: the on-foot connector from the version-1 doorway replaces the
+      // host's version-2 lift — tests/surface-access-v2-hosts.test.ts sweeps it, tests/surface-connector-pins.test.ts pins it)
+      const a = gen(host, t, 2).surfaceAccess;
+      expect(a).toMatchObject({v: 2, kind: 'connector', connector: {host, end: 'host'}});
+      expect(a?.lift).toBeUndefined();
     }
   }, 120_000);
 });
 
 describe('Surface Run v2: the district end — the cargo lift inside the command tent', () => {
-  for (const host of ['subway', 'office', 'mall'] as const) {
+  // (task studio-surface-host-ground-connectors-20261118-053602-01) the Office / Mall district end is the connector tube's mouth (below)
+  for (const host of ['subway'] as const) {
     it(`${host}: the car at the tent's back in the tent's own area, the portal pose in it, the way to the flap free; v1 unchanged`, () => {
       const s = seeds(host, 1)[0];
       const D = district(host, s, 2), S = D.surface!, l = S.portal.lift!;
@@ -169,6 +176,36 @@ describe('Surface Run v2: the district end — the cargo lift inside the command
       const D1 = district(host, s, 1);
       expect(D1.surface!.portal.kind).toBe(host === 'subway' ? 'stair' : 'door');
       expect(D1.surface!.portal.lift).toBeUndefined();
+    }, 120_000);
+  }
+  for (const host of ['office', 'mall'] as const) {
+    it(`${host}: the connector's tent mouth at the tent's back, the portal pose in the tent's area, the way to the flap free; v1 unchanged`, () => {
+      const s = seeds(host, 1)[0];
+      const D = district(host, s, 2), S = D.surface!, c = S.portal.connector!;
+      expect(S.portal.kind).toBe('connector');
+      expect(S.portal.lift).toBeUndefined();
+      expect(c).toMatchObject({host, end: 'tent', level: 0, len: CONNECTOR.len, area: S.checkpoint.tent.area});
+      const t = S.checkpoint.tent, p = S.portal.pose, g = D.grid;
+      // the tube's tent mouth on the tent's wall, the pose in front of it under the canvas, standing clear
+      const [mx, mz] = connectorToWorld(c, c.len, 0);
+      expect(mx >= t.rect.x0 && mx <= t.rect.x1 && mz >= t.rect.z0 && mz <= t.rect.z1, 'the tent mouth on the tent').toBe(true);
+      expect(p.x > t.rect.x0 && p.x < t.rect.x1 && p.z > t.rect.z0 && p.z < t.rect.z1, 'the pose under the canvas').toBe(true);
+      expect(g.area[g.idx(...g.cellOf(p.x, p.z))]).toBe(t.area);
+      expect(g.circleClear(p.x, p.z, 0.4)).toBe(true);
+      // on foot from the pose to the flap's cell
+      const [cx, cy] = g.cellOf(p.x, p.z);
+      const dist = levelDistance(D.levels!, cx, cy)[0];
+      const [fx, fy] = g.cellOf(t.door.x, t.door.z);
+      expect(dist[g.idx(fx, fy)], 'the flap is reachable from the tube mouth').toBeGreaterThan(0);
+      // nothing blocking stands on the tent apron the walk releases the player onto
+      for (const q of D.props) {
+        if ((q.level ?? 0) !== 0 || q.h <= 0.05 || q.cargoGone) continue;
+        const [qs, qt] = worldToConnector(c, q.x, q.z), r = Math.max(q.hx, q.hz);
+        expect(qs + r > c.len && qs - r < c.len + CONNECTOR.apron && Math.abs(qt) - r < CONNECTOR.apronHalf, `${q.kind} on the tent apron`).toBe(false);
+      }
+      const D1 = district(host, s, 1);
+      expect(D1.surface!.portal.kind).toBe('door');
+      expect(D1.surface!.portal.connector).toBeUndefined();
     }, 120_000);
   }
 });

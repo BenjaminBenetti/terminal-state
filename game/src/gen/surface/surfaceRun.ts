@@ -46,8 +46,16 @@ export const SURFACE_VERSION = 2;
  * seeding of a not-yet-seeded depot) apply to every version.
  */
 export function surfaceFeatures(version: number | undefined): {
-  /** The crossing is a cargo-lift ride (both directions) between a lift at the host's access and one inside the command tent. */
+  /**
+   * The SUBWAY's crossing is a cargo-lift ride (both directions) between a lift at its closed street exit and one inside the command tent
+   * (the Office / Mall: `connector`).
+   */
   lift: boolean;
+  /**
+   * (task studio-surface-host-ground-connectors-20261118-053602-01) An OFFICE / MALL host's crossing is walked on foot through one level
+   * canvas tube from its version-1 street doorway to the command tent (gen/surface/connectorShape.ts; gen/surface/accessConnector.ts).
+   */
+  connector: boolean;
   /** The Subway's way up is at a normal closed street exit (never off the food court). */
   closedExitAccess: boolean;
   /** The district side arrives inside the command tent (gas-free) whose doorway is a real walk-through opening. */
@@ -58,7 +66,7 @@ export function surfaceFeatures(version: number | undefined): {
   deepInteriors: boolean;
 } {
   const v2 = (version ?? 0) >= 2;
-  return {lift: v2, closedExitAccess: v2, tentArrival: v2, fogBoundary: v2, deepInteriors: v2};
+  return {lift: v2, connector: v2, closedExitAccess: v2, tentArrival: v2, fogBoundary: v2, deepInteriors: v2};
 }
 
 export function isSurfaceHost(level: LevelId): level is SurfaceHost {

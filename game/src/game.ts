@@ -15,7 +15,9 @@ import {PropModelLibrary, loadAssets, type AssetBundle} from './assets/loader';
 import {foreignTo, levelWorkingSet, selectLevelKeys} from './assets/levelAssets';
 import {SURFACE_LANE, hostKeyOf, isSurfaceHost, isSurfaceKey, sectionAssetLevel, surfaceKeyOf, surfaceVersionFor} from './gen/surface/surfaceRun';
 import {abortCrossers, arriveCrossers, departCrossers, surfaceCrossRefusal, surfaceCrossers, type SurfaceCrosser, type SurfaceCrossGate, type SurfaceCrossRefusal, type SurfaceCrossResult} from './world/surface/crossing'; // (lane ACCESS: Game.crossSurface)
-import {LIFT_RIDE_COMPILE, liftOfLayout, type SurfaceLiftRuntime} from './world/surface/liftRuntime'; // (lane ACCESS follow-up: the v2 crossing is a cargo-lift ride)
+import {LIFT_RIDE_COMPILE, LIFT_RIDE_WAIT, liftOfLayout, type SurfaceLiftRuntime} from './world/surface/liftRuntime'; // (lane ACCESS follow-up: the v2 crossing is a cargo-lift ride)
+import {connectorOfLayout, type SurfaceConnectorRuntime} from './world/surface/connectorRuntime'; // (task studio-surface-host-ground-connectors-20261118-053602-01: the Office / Mall connector tube)
+import {cloneLayoutDeep} from './gen/cloneLayout'; // (the Surface anticipation's pristine copies)
 import {installSurfaceRun} from './world/surface/install'; // task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN // Task track3-eaton-centre-20261031 (lane PACKAGE): level-scoped lazy assets
 import {adoptStationName} from './campaign/stationName';
 import {LevelResources} from './assets/levelResources'; // lane PACKAGE (track3): level textures / GPU resources released with their level
@@ -286,6 +288,7 @@ import {RtFlashlight} from './render/rt/rtFlashlightRuntime';
 import {RtScene} from './render/rt/rtScene';
 import {shareShaderText} from './render/shaderTextShare'; // task studio-graphics-gpu-materials-toggle-20261114-212239-01
 import {JourneyCompile, type JourneyCompileOptions} from './render/journeyCompile'; // (lane RENDER-CPU: the journey's sliced preparation)
+import {FIRST_VIEW, exitDistance, firstViewCoverage, firstViewProgress, firstViewRest, firstViewStatus, inFrameStep, planFirstViewSteps, waitForFirstView, type CrossingExit, type CrossingViewResult, type FirstViewPlan} from './render/firstView'; // (lane READY: a crossing's exit opens on its drawn first view)
 import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
 import {loadingPlaceName, type LastSaveStatus} from './ui/loadingScreen'; // task studio-beta-campaign-polish-20261103-063841-01 (lane MENU): loading name only; Load last save
 import type {LoadMeter} from './ui/loadingMap'; // task studio-initial-loading-subway-graphic-20261111-070741-01: the loading screen's map takes the load's progress
@@ -966,7 +969,9 @@ export class Game {
     // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): seated in an ENCLOSED vehicle (the Surface Run truck's cab: the
     // vehicle controller's `enclosed`) the eye breathes clean air — exposure 0; the gas still renders round it (beyond the cab's glass:
     // world/surface/air.ts). Open vehicles: no.
-    this.gas.shelter = () => this.skywaysCar?.enclosed === true;
+    // (task studio-surface-host-ground-connectors-20261118-053602-01) and in the connector tube proper: sealed canvas — no gas drawn inside it
+    // either (off the host's grid; the district's footprint is sealed on the same field: world/surface/air*.ts)
+    this.gas.shelter = () => this.skywaysCar?.enclosed === true || this.surfaceConnector?.sheltered() === true;
     this.gas.hintFor = protectedNow => {
       const m = this.gasMask;
       if (protectedNow || m.state === 'donning') return '';
@@ -1347,7 +1352,8 @@ export class Game {
       : key.level === 'subway' && key.section === 'main' ? SUBWAY_LAYOUT_LANE : null;
     const {layoutVersion, ctx} = this.sectionGenInputs(key, run);
     // (campaign: the node's own seed; lane BUILD: a journey's destination comes pre-generated from the same inputs — takePregenerated)
-    const layout = this.takePregenerated(key, run, ctx) ?? LEVELS[key.level].generate(key.section, ctx);
+    // (task studio-surface-host-ground-connectors-20261118-053602-01: a Surface world comes from its anticipated pristine copy — anticipated)
+    const layout = this.takePregenerated(key, run, ctx) ?? this.anticipated(key, run, ctx) ?? this.anticipate(key, run, ctx, LEVELS[key.level].generate(key.section, ctx));
     if (layoutVersion !== undefined && versionLane && run.laneStore(versionLane, key) === undefined) run.setLaneStore(versionLane, {v: layoutVersion}, key);
     // (task studio-screacher-production-20261110-221858-01) every level: the enemy-roster version this station was first built with
     // (ai/enemyRoster.ts: a station visited before the roster existed stays at 0 — its enemies and kills exact; an unvisited one gets the current)
@@ -1393,8 +1399,63 @@ export class Game {
     this.pregenerated = null;
     try {
       const {ctx} = this.sectionGenInputs(key, run);
-      this.pregenerated = {run, key: `${key.level}/${sectionId(key)}`, inputs: JSON.stringify(ctx), layout: LEVELS[key.level].generate(key.section, ctx)};
+      const layout = this.anticipated(key, run, ctx) ?? this.anticipate(key, run, ctx, LEVELS[key.level].generate(key.section, ctx));
+      this.pregenerated = {run, key: `${key.level}/${sectionId(key)}`, inputs: JSON.stringify(ctx), layout};
     } catch (err) { console.warn('journey: pre-generating', key, 'failed (the prepare generates it again)', err); }
+  }
+
+  /**
+   * (task studio-surface-host-ground-connectors-20261118-053602-01: "real preparation/pre-warming anticipated/paced during approach/
+   * crossing") THE SURFACE ANTICIPATION: a pristine deep copy (gen/cloneLayout.ts) of each world of the current Surface Run station whose
+   * crossing is walked / ridden (a version-2 connector or cargo lift), kept from its generation; a crossing takes a fresh copy (tens of ms)
+   * instead of generating in play (the generator is one synchronous block: ~0.6 s a district, ~1.6-1.9 s an Office / Mall host). The
+   * other world is generated while this one is prepared (behind its loading screen: surfaceAnticipateOther). Same inputs rule as
+   * `pregenerated`; only the current station's pair is kept (another station / run drops them).
+   */
+  // (created on first use: test shells built on Game.prototype run the journey's pre-generation without the constructor's fields)
+  private surfaceAnticipationMap?: Map<string, {run: RunState; station: string; inputs: string; layout: StationLayout}>;
+  private surfaceAnticipationTally?: {stored: number; hits: number; misses: number; others: number; othersMs: number};
+  private get surfaceAnticipation(): NonNullable<Game['surfaceAnticipationMap']> { return (this.surfaceAnticipationMap ??= new Map()); }
+  /** (QA / tests) The anticipation's counts: copies stored, crossings served from a copy / not (inputs changed), other worlds made. */
+  get surfaceAnticipationCounts(): NonNullable<Game['surfaceAnticipationTally']> { return (this.surfaceAnticipationTally ??= {stored: 0, hits: 0, misses: 0, others: 0, othersMs: 0}); }
+
+  /** A fresh copy of the anticipated layout made for exactly this run, section and inputs (null: none). */
+  private anticipated(key: SectionKey, run: RunState, ctx: SectionGenContext): StationLayout | null {
+    const a = this.surfaceAnticipation.get(`${key.level}/${sectionId(key)}`);
+    if (!a) return null;
+    if (a.run !== run || a.inputs !== JSON.stringify(ctx)) { this.surfaceAnticipationCounts.misses++; return null; }
+    this.surfaceAnticipationCounts.hits++;
+    return cloneLayoutDeep(a.layout);
+  }
+
+  /** Keep a pristine copy of a just-generated Surface world with a walked / ridden crossing (returns the layout itself). */
+  private anticipate(key: SectionKey, run: RunState, ctx: SectionGenContext, layout: StationLayout): StationLayout {
+    const kind = isSurfaceKey(key) ? layout.surface?.portal.kind : layout.surfaceAccess?.kind;
+    if (kind !== 'connector' && kind !== 'lift') return layout;
+    const station = key.station ?? key.level;
+    for (const [k, a] of this.surfaceAnticipation) if (a.run !== run || a.station !== station) this.surfaceAnticipation.delete(k);
+    try {
+      this.surfaceAnticipation.set(`${key.level}/${sectionId(key)}`, {run, station, inputs: JSON.stringify(ctx), layout: cloneLayoutDeep(layout)});
+      this.surfaceAnticipationCounts.stored++;
+    } catch (err) { console.warn('Surface Run: keeping a copy of', key, 'failed (a crossing generates it)', err); }
+    return layout;
+  }
+
+  /** While a Surface world is prepared (behind its loading screen / a crossing's gap): its other world generated and kept, if not yet. */
+  private surfaceAnticipateOther(key: SectionKey, run: RunState, layout: StationLayout): void {
+    const kind = isSurfaceKey(key) ? layout.surface?.portal.kind : layout.surfaceAccess?.kind;
+    if (kind !== 'connector' && kind !== 'lift') return;
+    // (the layout being prepared, not the current world's: surfaceCrossTarget reads the live one, still the previous world here)
+    const other = isSurfaceKey(key) ? hostKeyOf(key) : key.section === 'main' && isSurfaceHost(key.level) && layout.surfaceAccess ? surfaceKeyOf(key) : null;
+    if (!other) return;
+    try {
+      const {ctx} = this.sectionGenInputs(other, run);
+      if (this.surfaceAnticipation.get(`${other.level}/${sectionId(other)}`)?.inputs === JSON.stringify(ctx)) return;
+      const t0 = performance.now();
+      this.anticipate(other, run, ctx, LEVELS[other.level].generate(other.section, ctx));
+      this.surfaceAnticipationCounts.others++;
+      this.surfaceAnticipationCounts.othersMs += performance.now() - t0;
+    } catch (err) { console.warn('Surface Run: anticipating', key, 'failed (a crossing generates it)', err); }
   }
 
   /** The pre-generated layout when it was made for exactly this run, section and inputs (taken once; null otherwise). */
@@ -1414,6 +1475,7 @@ export class Game {
     this.propModels.sealed = this.levelResources.sealed = false; // lane PACKAGE (track3): the loading screen fetches the level's assets
     this.levelResources.beginSection(); // (task train-all-cargo: a carried prop's art, whatever its level, stays with this section)
     const layout = this.generateSection(key, run);
+    if (!this.transitGap) this.surfaceAnticipateOther(key, run, layout); // (behind the loading screen: the other world of a Surface station, kept)
     for (const f of this.sectionLayoutHooks) { try { f(layout, key, run, 'prepare'); } catch (err) { console.warn('train-all-cargo: a layout hook failed', err); } }
     const lazyKeys = this.modelKeysFor(layout, sectionAssetLevel(key)); // (Surface Run: the district loads as its own asset family)
     await this.propModels.ensure(lazyKeys, onProgress);
@@ -1778,6 +1840,7 @@ export class Game {
     if (fresh) this.trainRide?.reset();
     if (this.trainRide?.riding) { /* the car drives into this station; TrainRide.arrive() parks it at trainPlacement */ }
     else if (this.surfaceLiftRide?.holding) { /* (lane ACCESS follow-up) riding the cargo lift: the ride already placed the player in this end's car */ }
+    else if (this.surfaceConnector?.holding) { /* (the connector tube: the walk already placed the player in this world's tube) */ }
     else if (fresh) this.player.spawn(pose.x, pose.z, pose.yaw, y); else this.player.place(pose.x, pose.z, pose.yaw, y);
     this.ladderAim = null;
     this.recoilPitch = this.recoilYaw = this.bloom = this.shake = 0;
@@ -2298,6 +2361,14 @@ export class Game {
     if (this.surfaceLiftRide && this.surfaceLiftRide.phase !== 'idle') {
       this.surfaceLiftRide.tick(dt);
       if (this.surfaceLiftRide.holding) this.surfaceLiftRide.stepPlayer(dt, inp, {aiming: false, speedMult: 1, canSprint: false});
+      this.hud.setPrompt(this.surfaceLiftRide.statusLine() ?? ''); // (no HUD update runs in the gap: the ride's status line alone)
+    }
+    // (task studio-surface-host-ground-connectors-20261118-053602-01) the connector tube: its flaps and the player walking in it
+    const con = this.surfaceConnector;
+    if (con && con.phase !== 'idle') {
+      if (con.holding) con.stepPlayer(dt, inp, {aiming: false, speedMult: 1, canSprint: false});
+      con.tick(dt);
+      this.hud.setPrompt(con.statusLine() ?? '');
     }
     this.updateCamera(dt);
     this.trainRide.tiltCamera(this.camera);
@@ -2311,9 +2382,9 @@ export class Game {
    * the level culler alone); the identical steps as buildSection. A teardown meanwhile (stationGen moved: the journey's single flight never
    * lets one start) abandons it (PacedBuildCancelled). `genMs` = its main-thread work, not the ride's wall time.
    */
-  private async buildSectionPaced(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean): Promise<void> {
+  private async buildSectionPaced(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean, pacing: PacedBuildOptions = {}): Promise<void> {
     const gen = this.stationGen, stats = (this.journeyBuild = newPacedStats());
-    await runPaced(this.buildSectionSteps(key, layout, arrival, fresh, true), {...this.buildPacing, stats, alive: () => gen === this.stationGen});
+    await runPaced(this.buildSectionSteps(key, layout, arrival, fresh, true), {...pacing, ...this.buildPacing, stats, alive: () => gen === this.stationGen});
     this.genMs = stats.workMs;
   }
   /**
@@ -2487,8 +2558,9 @@ export class Game {
    * shadow-map variants by off-screen draws nested at the real frame's depth. The arrival still waits at most 8 s for the scene-pass
    * phase; nothing holds a frame or hides the canvas. 'view' (software rasterizer): the representatives within 24 m only.
    */
-  private async backgroundCompile(full = false): Promise<'done' | 'cancelled' | 'skipped' | 'arrived'> {
-    // (lane ACCESS follow-up) `full`: the Surface Run lift ride waits for the WHOLE job (no cap) and is told how it ended
+  private async backgroundCompile(): Promise<'cancelled' | 'skipped' | 'arrived'> {
+    // (task studio-surface-host-ground-connectors-20261118-053602-01, lane READY: a crossing waits for its exit's FIRST VIEW instead —
+    // prepareCrossingView; this is the train journey's arrival gate, and a crossing's play-paced rest after a stalled first view)
     if (!this.world || !this.renderer.initialized || this.gpu?.deviceLost) return this.gpu?.deviceLost ? 'cancelled' : 'skipped';
     const mode = warmupMode(location.search, this.softwareGl?.software === true);
     if (mode === 'off') return 'skipped';
@@ -2512,22 +2584,137 @@ export class Game {
       const casters = mode === 'full' && this.flashlight.castShadow ? runtimeVariantsFirst(byNear([...plan.items, ...plan.others].filter(i => i.caster))) : [];
       const receiver = plan.items.find(i => i.object.receiveShadow && !i.flips.length) ?? null;
       // (task journey-compile-pacing-20261104: paced to real frames — frameNo = the scheduler's frame callbacks begun)
-      // (lane ACCESS follow-up) the lift ride waits for it with only the sealed car drawn: a step every frame, bigger chunks / slices
       const job = (this.journeyCompile = new JourneyCompile({renderer: this.renderer as unknown as JourneyCompileOptions['renderer'], scheduler: this.frameBudget,
-        scene: this.scene, camera: this.camera, target, depth, items, casters, receiver, frameNo: () => this.frameBudget.frame, ...(full ? LIFT_RIDE_COMPILE : {})}).start());
-      if (full) {
-        await job.done;
-        console.info(`Terminal State: lift ride compile ${job.stats.phase} — scene ${job.stats.sceneDone}/${job.stats.sceneItems}, shadows ${job.stats.shadowDone}/${job.stats.casters}, ${((performance.now() - t0) / 1000).toFixed(1)} s`);
-        return job.stats.phase === 'done' ? 'done' : 'cancelled';
-      }
+        scene: this.scene, camera: this.camera, target, depth, items, casters, receiver, frameNo: () => this.frameBudget.frame}).start());
       // the arrival waits for the scene-pass phase at most 8 s, as before; the job keeps going in spare frame time after that
       await Promise.race([job.sceneDone, new Promise(r => setTimeout(r, 8000))]);
       const st = job.stats;
       console.info(`Terminal State: next station prepared during the ride (${mode}) — scene ${st.sceneDone}/${st.sceneItems}, shadows ${st.shadowDone}/${st.casters} at arrival after ${((performance.now() - t0) / 1000).toFixed(1)} s (continuing in spare frame time)`);
       void job.done.then(() => console.info(`Terminal State: journey compile ${job.stats.phase} — scene ${job.stats.sceneDone}/${job.stats.sceneItems}, shadows ${job.stats.shadowDone}/${job.stats.casters}, ${job.stats.steps} steps (max ${job.stats.stepMaxMs.toFixed(1)} ms), ${((performance.now() - t0) / 1000).toFixed(1)} s`));
-    } catch (err) { console.warn('campaign: background compile failed', err); if (full) return 'cancelled'; }
+    } catch (err) { console.warn('campaign: background compile failed', err); }
     return 'arrived';
   }
+
+  /**
+   * (task studio-surface-host-ground-connectors-20261118-053602-01, lane READY) A CROSSING's readiness — the Surface Run cargo lift ride
+   * and the Office / Mall on-foot connector: the destination (built: the current world, its participants arrived) prepared for the
+   * FIRST VIEW from its `exit` (render/firstView.ts: the eye where the player comes out; any yaw). The journey compile's job with the
+   * first view leading: its representatives compiled, then everything of it DRAWN off-screen in the scene pass's own render context,
+   * a few items per frame (adapted to the measured draw; frames keep coming), then one hidden frame of the real view; the rest of the
+   * destination in the same job behind it. Call while the player is still held (the sealed car, the closed far door) with `since` = the
+   * active ms (frameBudget.activeMs) the bound counts from, and null `crossingView` before a crossing's first try. Resolves (never
+   * rejects) with the first view's end:
+   *  - 'ready': drawn (why '') — or, without a scene pass (the direct path), compiled only (why says so);
+   *  - 'partial': its bound ran out (why 'budget': LIFT_RIDE_WAIT.budgetMs of active time; 'stalled': no first-view progress for
+   *    LIFT_RIDE_WAIT.stallMs) — what was prepared stands; open on the BUILT world and report it (never silently);
+   *  - 'cancelled': the job ended without it (why: its reason; a lost device — check gpu.deviceLost — or a replaced job: retry once).
+   * Then open the exit and call continueCrossingPreparation(). From here on the job runs in the journey's play pacing.
+   */
+  async prepareCrossingView(exit: CrossingExit, since: number): Promise<CrossingViewResult> {
+    if (!this.world || !this.renderer.initialized || this.gpu?.deviceLost) return {end: 'cancelled', why: this.gpu?.deviceLost ? 'device lost' : 'no world to prepare'};
+    const mode = warmupMode(location.search, this.softwareGl?.software === true);
+    if (mode === 'off') return {end: 'partial', why: 'graphics warm-up off (?warmup=off)'};
+    this.journeyCompile?.cancel();
+    this.journeyCompile = null; // (the status line says "preparing the view" until this crossing's job exists — never an old job's counts)
+    const t0 = performance.now(), tries = (this.crossingView?.tries ?? 0) + 1, world = this.world;
+    // each planning phase in a frame of its own (measured on the Subway lift ride in Node: one 2.4 s frame when planned in one go)
+    const prep = {steps: 0, ms: 0, maxMs: 0, by: {} as Record<string, number>};
+    const step = <T>(what: string, fn: () => T): Promise<T> => inFrameStep(this.frameBudget, 'crossing.plan', () => {
+      if (this.world !== world) throw new Error('the world changed');
+      const s = performance.now();
+      try { return fn(); } finally { const ms = performance.now() - s; prep.steps++; prep.ms += ms; prep.by[what] = (prep.by[what] ?? 0) + ms; if (ms > prep.maxMs) prep.maxMs = ms; }
+    });
+    try {
+      const at = new THREE.Vector3(exit.x, exit.y, exit.z), culler = world.culler;
+      let target: unknown = null;
+      const plan = await step('plan', () => {
+        target = this.atmosphereBypass ? null : this.atmosphere.warmTarget(this.scene, this.camera);
+        this.refreshRuntimeVariants(mode); // (the destination's play-only variants join the job, as the journey's)
+        this.containers?.showFrom(at); // (the loot the exit's first frame shows — hidden until a play refresh — is in its first view)
+        return planWarmup(this.scene, {mode, cameraMask: this.camera.layers.mask, pools: this.warmRegistry.poolRoots(), near: mode === 'view' ? {center: at, radius: FIRST_VIEW.radius} : undefined});
+      });
+      const shadows = !!target && this.flashlight.castShadow;
+      const g = planFirstViewSteps(this.scene, {exit, cameraMask: this.camera.layers.mask, camera: this.camera, casters: shadows,
+        sweep: {update: cam => culler.update(cam, true), restore: () => culler.update(this.camera, true)}});
+      let fv: FirstViewPlan | null = null, programs = {first: 0, more: 0, covered: 0};
+      while (!fv) { const r = await step('view', () => g.next()); if (r.done) fv = r.value; }
+      const v = fv;
+      const order = await step('order', () => {
+        // nearest the exit first (each renderable's distance once: its bounding sphere, as the first view's plan measures it)
+        const dist = new Map<THREE.Object3D, number>();
+        const of = (o: THREE.Object3D) => { let d = dist.get(o); if (d === undefined) dist.set(o, d = exitDistance(o, at)); return d; };
+        const byNear = <T extends {object: THREE.Object3D}>(l: readonly T[]) => l.map(i => ({i, d: of(i.object)})).sort((a, b) => (a.d - b.d) || 0).map(x => x.i);
+        // the scene lane: the first view's representatives first, then the job's plan (as the journey's) without them — its program groups
+        // the first view lacks (new programs) before the ones it has ('full': their own render objects, with the others; 'view': done)
+        const lead = new Set<THREE.Object3D>(v.reps.map(i => i.object)), leadCasters = new Set<THREE.Object3D>(v.casters.map(i => i.object));
+        const {fresh, covered} = firstViewCoverage(byNear(plan.items).filter(i => !lead.has(i.object)), v);
+        const items = [...v.reps, ...fresh, ...(mode === 'full' ? [...covered, ...byNear(plan.others).filter(i => !lead.has(i.object))] : [])];
+        const others = mode === 'full' && shadows ? runtimeVariantsFirst(byNear([...plan.items, ...plan.others].filter(i => i.caster))).filter(i => !leadCasters.has(i.object)) : [];
+        programs = {first: v.reps.length, more: fresh.length, covered: covered.length};
+        return {items, casters: [...v.casters, ...others], receiver: plan.items.find(i => i.object.receiveShadow && !i.flips.length) ?? null};
+      });
+      const job = await step('job', () => (this.journeyCompile = new JourneyCompile({renderer: this.renderer as unknown as JourneyCompileOptions['renderer'], scheduler: this.frameBudget,
+        scene: this.scene, camera: this.camera, target, depth: this.sceneDepth(false), ...order, frameNo: () => this.frameBudget.frame, ...LIFT_RIDE_COMPILE,
+        firstView: {items: [...v.reps, ...v.others], reps: v.reps.length, casters: v.casters.length}}).start()));
+      this.crossingView = {end: 'pending', why: '', ms: 0, activeMs: 0, mode, plan: v.stats, prep, programs, tries, job: job.stats, rest: null};
+      const w = await waitForFirstView(job, () => this.frameBudget.activeMs, since, LIFT_RIDE_WAIT);
+      const st = job.stats, p = firstViewProgress(st);
+      Object.assign(this.crossingView, {end: w.end, why: w.why, ms: performance.now() - t0, activeMs: this.frameBudget.activeMs - since});
+      console.info(`Terminal State: crossing first view ${w.end}${w.why ? ` (${w.why})` : ''} — ${p.done}/${p.total}: ${st.viewRepsCompiled}/${st.viewReps} representatives compiled, `
+        + `${st.viewDone}/${st.viewItems} drawn in ${st.viewDraws} off-screen draws (max ${st.viewMaxPerDraw}, ${st.viewDrawMaxMs.toFixed(1)} ms), casters ${Math.min(st.shadowDone, st.viewCasters)}/${st.viewCasters}, `
+        + `real-view frame ${st.viewFrame ? `${st.viewFrameMs.toFixed(1)} ms` : 'no'} · planned in ${prep.steps} frame steps, ${prep.ms.toFixed(1)} ms (max ${prep.maxMs.toFixed(1)}; `
+        + `${Object.entries(prep.by).map(([k, ms]) => `${k} ${ms.toFixed(1)}`).join(', ')}; sweep ${v.stats.poses} poses ${v.stats.sweepMs.toFixed(1)} ms) · ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+      if (w.end === 'partial' && w.why === 'stalled') job.cancel(); // (no progress at all: continueCrossingPreparation starts a fresh play-paced job)
+      else if (job.running) job.pace(null); // (from here on the journey's play pacing: the exit is about to open)
+      // the left world's queued GPU releases, still unseen (the player is held): the first view holds its own programs now — a later
+      // new program group of the destination may build one the left world had (its compile's business, in play pacing); a partial first
+      // view keeps them until its program groups are compiled (continueCrossingPreparation)
+      if (w.end === 'ready') this.flushRetired();
+      return w;
+    } catch (err) {
+      (this.journeyCompile as JourneyCompile | null)?.cancel(); // (set in a step: TS cannot see it)
+      if (this.world !== world) return {end: 'cancelled', why: 'the world changed'};
+      console.warn('crossing: preparing the first view failed', err);
+      return {end: 'cancelled', why: 'error'};
+    }
+  }
+
+  /**
+   * (lane READY) After a crossing's exit opened: the rest of the destination's preparation goes on in the journey's play pacing — the
+   * same job, or (its first view stalled / cancelled) a fresh one, whose compiled items are cache hits — and the left world's queued GPU
+   * releases follow its scene pass (as the journey's arrival). Returns what is left to prepare (null: nothing; the caller tells the
+   * player: real counts, never fake-ready).
+   */
+  continueCrossingPreparation(): {left: number; total: number} | null {
+    let job = this.journeyCompile;
+    if (!job?.running && this.crossingView && this.crossingView.end !== 'ready' && this.world && !this.gpu?.deviceLost) {
+      void this.backgroundCompile(); // (a new job, synchronously created; its arrival gate is its own business)
+      job = this.journeyCompile;
+    }
+    if (!job?.running) { this.flushRetired(); return null; }
+    job.pace(null);
+    const t0 = performance.now(), j = job, cv = this.crossingView;
+    // (released already when the first view was ready; else this crossing's own job: once the destination's every program group is
+    // compiled — the first view's and the new ones after it, not the rest's own render objects; another job: its scene pass; 8 s at most)
+    const programs = cv && cv.job === j.stats ? j.whenScene(cv.programs.first + cv.programs.more) : j.sceneDone;
+    void Promise.race([programs, new Promise(r => setTimeout(r, 8000))]).then(() => this.flushRetired());
+    void j.done.then(() => { const r = firstViewRest(j.stats); console.info(`Terminal State: crossing compile (the rest, in play) ${j.stats.phase} — ${r.total - r.left}/${r.total} prepared, ${((performance.now() - t0) / 1000).toFixed(1)} s after the exit opened`); });
+    const rest = firstViewRest(j.stats);
+    if (this.crossingView) this.crossingView.rest = rest;
+    return rest.left > 0 ? rest : null;
+  }
+
+  /**
+   * (lane READY; QA / tests) The last crossing's first-view preparation: how it ended, its time (ms; active ms since the bound's start),
+   * the warm-up mode, the first view's plan, the tries, the job's live stats and what was left when the exit opened. Null: none yet.
+   */
+  crossingView: {end: string; why: string; ms: number; activeMs: number; mode: string; plan: FirstViewPlan['stats']; prep: {steps: number; ms: number; maxMs: number; by: Record<string, number>};
+    /** The scene lane's program groups: the first view's, the destination's others (new programs, next), the plan's already covered. */
+    programs: {first: number; more: number; covered: number}; tries: number; job: JourneyCompile['stats']; rest: {left: number; total: number} | null} | null = null;
+
+  /** (QA / tests) How the last lift ride's first-view wait ended (the lift's crossingView; null: none yet). */
+  get surfaceLiftCompile(): Game['crossingView'] { return this.liftCrossingView; }
+  private liftCrossingView: Game['crossingView'] = null;
 
   /** Lane RENDER-CPU: the journey's background preparation of the next station (render/journeyCompile.ts; QA / tests). */
   get journeyCompileStats(): JourneyCompile['stats'] | null {
@@ -2747,6 +2934,9 @@ export class Game {
   /** (lane ACCESS follow-up) The Surface Run's cargo lift runtime (world/surface/liftRuntime.ts installs itself); the last ride's [E]-press generation (ms). */
   surfaceLiftRide: SurfaceLiftRuntime | null = null;
   surfaceLiftGenMs = 0;
+  /** (task studio-surface-host-ground-connectors-20261118-053602-01) The Office / Mall connector tube's runtime (world/surface/connectorRuntime.ts installs itself). */
+  surfaceConnector: SurfaceConnectorRuntime | null = null;
+  surfaceConnectorGenMs = 0;
   /** Set only while a crossing's loading screen replaces play: the [E] press keeps the pointer captured (enterPlay resumes with it). */
   private holdPointerLock = false;
 
@@ -2785,6 +2975,14 @@ export class Game {
       if (lift?.canRide() && lift.inCar()) {
         const r = await this.rideSurfaceLift(from, to);
         if (r) return r;
+      }
+      // (task studio-surface-host-ground-connectors-20261118-053602-01) an Office / Mall connector: the player walked into the tube — the
+      // WALK is the crossing (walkSurfaceConnector; null = the destination has no tube: the loading screen below)
+      const con = this.surfaceConnector;
+      if (con?.canCross()) {
+        const r = await this.walkSurfaceConnector(from, to);
+        if (r) return r;
+        con.reset();
       }
       this.surfaceCrossCounts.started++;
       const up = !isSurfaceKey(from), station = this.surfaceStationName(up ? from : hostKeyOf(from));
@@ -2848,8 +3046,9 @@ export class Game {
    * destination is generated at the press (the one synchronous block, measured: surfaceLiftGenMs); the doors close with the player held in
    * the car; the participants depart (the old world intact); the transit gap: the old world is left (the car's view kept, drawn), the
    * destination prepared, its end's view placed with the car where it was in the shaft, the destination built PACED (frames drawn), the
-   * participants arrive, the destination compiled COMPLETELY (backgroundCompile(true): the scene pass in its render context, the shadow
-   * variants, the hidden groups, the runtime variants; no cap); only then the doors open (in a playing frame: paused, they wait). A
+   * participants arrive, the exit's FIRST VIEW prepared — compiled and drawn off-screen in the scene pass's render context, bounded
+   * (prepareCrossingView, lane READY) — and only then the doors open (in a playing frame: paused, they wait); the rest of the destination
+   * (the scene pass, the shadow variants, the hidden groups, the runtime variants) is prepared on in play pacing, reported. A
    * failure before the old world was left reopens the doors; after, the ride is reset and the left section rebuilt (recoverSurfaceCrossing,
    * behind the loading screen; the error screen if that fails too). Null: the destination has no lift (the caller crosses by loading screen).
    */
@@ -2863,6 +3062,7 @@ export class Game {
     const crossers = surfaceCrossers(this).slice();
     this.surfaceCrossing = {from, to, phase: 'depart'};
     let departed: SurfaceCrosser[] = [], left: BuiltWorld | null = null;
+    R.progress = () => this.liftStatusText(up, up ? 'the street' : station);
     try {
       if (!(await R.begin(up))) { this.pregenerated = null; return {ok: false, reason: 'cancelled', error: 'The ride was interrupted.'}; }
       try { departed = departCrossers(crossers, from, to); } catch (err) {
@@ -2888,20 +3088,33 @@ export class Game {
       const dest = liftOfLayout(layout);
       if (!dest || !R.repose(dest)) throw new Error('the destination has no lift');
       await this.warmRun;
-      await this.buildSectionPaced(to, layout, {kind: 'surface'}, false);
+      await this.buildSectionPaced(to, layout, {kind: 'surface'}, false, {sliceMs: LIFT_RIDE_WAIT.buildSliceMs}); // (only the sealed car is drawn)
       this.liftBuilt = true;
       this.surfaceCrossing.phase = 'arrive';
       const failed = arriveCrossers(departed, to);
       departed = [];
       this.surfaceCrossing.phase = 'warmup';
       this.glassMirror?.prime();
-      const c = await this.backgroundCompile(true);
-      if (c === 'cancelled') { R.reset(); this.transitGap = this.liftBuilt = false; return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'}; }
+      // (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01) bounded like the loading screen's warm-up (LIFT_RIDE_WAIT); a
+      // job that ended early on a live device (replaced under the ride, a failed step) once more within the same budget. Only a lost
+      // device ends the ride here (nothing can draw: the error screen). Otherwise the doors open on the built, live destination — never
+      // before it is built. (task studio-surface-host-ground-connectors-20261118-053602-01, lane READY) The doors wait for the FIRST VIEW
+      // from the car's gate (prepareCrossingView: drawn off-screen in the scene pass's context, not only compiled), not for the whole
+      // destination; what is left goes on in play pacing, reported with its real counts.
+      this.crossingView = null;
+      const since = this.frameBudget.activeMs, exit = R.exitPoint() ?? {x: this.player.x, y: this.player.eye, z: this.player.z, yaw: this.player.yaw};
+      let c = await this.prepareCrossingView(exit, since);
+      if (c.end === 'cancelled' && !this.gpu?.deviceLost && this.world) c = await this.prepareCrossingView(exit, since);
+      this.liftCrossingView = this.crossingView;
+      if (this.gpu?.deviceLost) { R.reset(); this.transitGap = this.liftBuilt = false; return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'}; }
       this.transitGap = this.liftBuilt = false;
       this.settleRtScene();
+      if (c.end !== 'ready') console.warn(`Terminal State: the lift opens with its first view incomplete (${c.end}${c.why ? `: ${c.why}` : ''}); the rest is prepared in play`);
       if (!(await R.markReady())) return {ok: false, reason: 'cancelled', error: 'The ride was interrupted.'};
-      this.flushRetired(); // the left section's queued releases (its programs are re-used by now)
+      const rest = this.continueCrossingPreparation(); // (the rest in play pacing; the left section's queued releases after its scene pass)
       this.hud.toast(up ? `${layout.surface?.name ?? 'The street'} — street level` : `${station} — back underground`);
+      if (c.end !== 'ready') this.hud.toast(`Graphics are still being prepared — brief stutters are possible${rest ? ` (${rest.left} of ${rest.total} left)` : ''}.`, true);
+      else if (rest) this.hud.toast(`Still preparing the rest of the area in the background (${rest.left} of ${rest.total} left).`);
       if (failed.length) this.hud.toast(`Something you carried did not come with you (${failed.join(', ')})`, true);
       this.surfaceCrossCounts.done++;
       return {ok: true, to};
@@ -2923,7 +3136,124 @@ export class Game {
       return await this.recoverSurfaceCrossing(from, up, departed, left, ui, err);
     } finally {
       this.surfaceCrossing = null;
+      R.progress = null;
     }
+  }
+
+  /**
+   * (task studio-surface-host-ground-connectors-20261118-053602-01) THE CONNECTOR WALK — the Office / Mall crossing on foot, without a
+   * loading screen or a ride (world/surface/connectorRuntime.ts). The seam fired: the player walked a metre into the tube with its walk-in
+   * flap down behind them, both flaps latched down (the tube is sealed). The destination's layout comes from the anticipation cache (made
+   * when this world was prepared) or is generated now (one synchronous block, measured: surfaceConnectorGenMs); the participants depart
+   * (the old world intact); the transit gap: the old world is left (the tube's view kept and drawn), the destination prepared, its tube
+   * placed where the player walks (identical inside) with the player carried over in the tube's frame, the destination built PACED (frames
+   * drawn: the player keeps walking and looking in the tube), the participants arrive, the destination's view prepared; only then the far
+   * flap — the destination's walk-in flap — may roll up (markReady). A failure before the old world was left releases the walk where it
+   * is; after, the tube is reset and the left section rebuilt (recoverSurfaceCrossing, behind the loading screen; the error screen if that
+   * fails too). Null: the destination has no connector (the caller crosses by loading screen).
+   */
+  private async walkSurfaceConnector(from: SectionKey, to: SectionKey): Promise<SurfaceCrossResult | null> {
+    const C = this.surfaceConnector!, up = !isSurfaceKey(from), station = this.surfaceStationName(up ? from : hostKeyOf(from));
+    const t0 = performance.now();
+    this.pregenerateSection(to, this.run);
+    this.surfaceConnectorGenMs = performance.now() - t0;
+    if (!connectorOfLayout(this.pregenerated?.layout)) { this.pregenerated = null; return null; }
+    this.surfaceCrossCounts.started++;
+    const crossers = surfaceCrossers(this).slice();
+    this.surfaceCrossing = {from, to, phase: 'depart'};
+    let departed: SurfaceCrosser[] = [], left: BuiltWorld | null = null;
+    C.begin(up);
+    C.progress = () => this.connectorStatusText(up ? 'the street' : station);
+    try {
+      try { departed = departCrossers(crossers, from, to); } catch (err) {
+        console.error('Surface Run: a participant could not depart', err);
+        this.lastError = String((err as Error)?.stack ?? err);
+        this.surfaceCrossCounts.failed++;
+        this.pregenerated = null;
+        C.reset();
+        return {ok: false, reason: 'failed', error: 'Something you carry cannot come along right now.'};
+      }
+      this.surfaceCrossing.phase = 'prepare';
+      this.cancelUse('surface');
+      this.cancelFlareHold();
+      this.aiming = false;
+      await this.warmRun;
+      this.surfaceCrossing.phase = 'build';
+      left = this.world;
+      this.transitGap = true;
+      C.holdForLeave();
+      this.leaveSection(true);
+      const layout = await this.prepareSection(to, this.run);
+      if (layout.surface) $('#station-intro').textContent = layout.surface.name;
+      const dest = connectorOfLayout(layout);
+      if (!dest || !C.repose(dest)) throw new Error('the destination has no connector');
+      await this.warmRun;
+      await this.buildSectionPaced(to, layout, {kind: 'surface'}, false, {sliceMs: LIFT_RIDE_WAIT.buildSliceMs}); // (only the sealed tube is drawn)
+      this.liftBuilt = true;
+      this.surfaceCrossing.phase = 'arrive';
+      const failed = arriveCrossers(departed, to);
+      departed = [];
+      this.surfaceCrossing.phase = 'warmup';
+      this.glassMirror?.prime();
+      // (lane READY) the far flap waits for the FIRST VIEW out of this world's walk-in mouth (prepareCrossingView: compiled and drawn
+      // off-screen in the scene pass's render context, bounded — LIFT_RIDE_WAIT), not for the whole destination; once more for a job
+      // that ended early on a live device; the rest goes on in play pacing, reported with its real counts
+      this.crossingView = null;
+      const since = this.frameBudget.activeMs, exit = C.exitPoint() ?? {x: this.player.x, y: this.player.eye, z: this.player.z, yaw: this.player.yaw};
+      let c = await this.prepareCrossingView(exit, since);
+      if (c.end === 'cancelled' && !this.gpu?.deviceLost && this.world) c = await this.prepareCrossingView(exit, since);
+      if (this.gpu?.deviceLost) { C.reset(); this.transitGap = this.liftBuilt = false; return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'}; }
+      this.transitGap = this.liftBuilt = false;
+      this.settleRtScene();
+      if (c.end !== 'ready') console.warn(`Terminal State: the passage opens with its first view incomplete (${c.end}${c.why ? `: ${c.why}` : ''}); the rest is prepared in play`);
+      C.markReady();
+      const rest = this.continueCrossingPreparation(); // (the rest in play pacing; the left section's queued releases after its scene pass)
+      this.hud.toast(up ? `${layout.surface?.name ?? 'The street'} — through the passage to the command tent` : `${station} — back inside`);
+      if (c.end !== 'ready') this.hud.toast(`Graphics are still being prepared — brief stutters are possible${rest ? ` (${rest.left} of ${rest.total} left)` : ''}.`, true);
+      else if (rest) this.hud.toast(`Still preparing the rest of the area in the background (${rest.left} of ${rest.total} left).`);
+      if (failed.length) this.hud.toast(`Something you carried did not come with you (${failed.join(', ')})`, true);
+      this.surfaceCrossCounts.done++;
+      return {ok: true, to};
+    } catch (err) {
+      this.transitGap = this.liftBuilt = false;
+      C.reset();
+      if (err instanceof PacedBuildCancelled) return {ok: false, reason: 'cancelled', error: 'The crossing was interrupted.'};
+      console.error('Surface Run: the connector crossing failed', err);
+      this.lastError = String((err as Error)?.stack ?? err);
+      this.surfaceCrossCounts.failed++;
+      if (!left) {
+        abortCrossers(departed, from);
+        this.hud.toast(`${up ? 'The way out' : 'The way back'} is blocked — you are still here.`, true);
+        return {ok: false, reason: 'failed', error: String((err as Error)?.message ?? err).slice(0, 120)};
+      }
+      this.holdPointerLock = true;
+      const ui = this.showLoading(up ? `${station} · the street` : station, 'The passage is blocked — going back…');
+      this.holdPointerLock = false;
+      return await this.recoverSurfaceCrossing(from, up, departed, left, ui, err);
+    } finally {
+      this.surfaceCrossing = null;
+      C.progress = null;
+    }
+  }
+
+  /**
+   * The held walker's status line while the far flap waits for the destination: what is actually happening (the destination being built;
+   * then — lane READY — its first view's real units done of all: render/firstView.ts firstViewStatus).
+   */
+  private connectorStatusText(where: string): string {
+    if (this.transitGap && !this.liftBuilt) return `The passage — preparing ${where}…`;
+    return this.transitGap ? firstViewStatus('The passage', this.journeyCompile?.stats ?? null) ?? '' : '';
+  }
+
+  /**
+   * (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01) The held rider's status line while the car waits for the
+   * destination: what is actually happening (the destination being generated / built; then — lane READY — its first view's real units
+   * done of all: representatives compiled, renderables drawn, casters, the real-view frame; render/firstView.ts firstViewStatus).
+   */
+  private liftStatusText(up: boolean, where: string): string {
+    const go = up ? 'Going up' : 'Going down';
+    if (this.transitGap && !this.liftBuilt) return `${go} — preparing ${where}…`;
+    return this.transitGap ? firstViewStatus(go, this.journeyCompile?.stats ?? null) ?? '' : '';
   }
 
   /**
@@ -3589,7 +3919,12 @@ export class Game {
     if (!this.transitGap || this.liftBuilt) this.world?.culler.update(this.camera); // Iteration 08 (Lane G): level / fog culling (cheap; skipped while still); (lane BUILD) never in the transit gap: no station is live (a paced build is in progress)
     this.prof.lap(SPAN.draw); // lane MEASURE
     this.rtTraceFrame = true; // (RT Flashlight: this frame traces the bounce; the warm-up's hidden frames do not)
-    this.drawFrame();
+    // (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01) a sealed cargo-lift car: its own view only (the world crossing
+    // the virtual shaft is not drawn through the rider; layers restored right after this draw — liftRuntime.ts drawSealed)
+    const lift = this.surfaceLiftRide, con = this.surfaceConnector;
+    if (lift?.sealed) lift.drawSealed(this.scene, [this.camera, this.fx.group], () => this.drawFrame());
+    else if (con?.sealed) con.drawSealed(this.scene, [this.camera, this.fx.group], () => this.drawFrame()); // (the connector's sealed tube, likewise)
+    else this.drawFrame();
     return true;
   }
 
@@ -3863,6 +4198,9 @@ export class Game {
       this.syncHeld();
       return;
     }
+    // (task studio-surface-host-ground-connectors-20261118-053602-01) the connector tube is off the host's grid and a crossing may leave
+    // either world under the walker: nothing is put down in the passage (as a carried body: corpses.ts CORPSE_TEXT.passage)
+    if (this.surfaceConnector?.holding) { this.hud.toast('Not in the passage — step out first', true); this.sfx.denied(); return; }
     const st = this.inv.detach(ref, count);
     if (!st) return;
     if (this.use && !this.inv.find(this.use.uid)) this.cancelUse('dropped');
@@ -4132,7 +4470,10 @@ export class Game {
     const laneOwns = this.inputOwners.some(f => f()); // Iteration 16 (lane GEAR): a readied / open backpack owns the mouse buttons
     // (lane RIDE) riding the moving train: no gunfire / melee / flare throws (the world's hitscan / bodies would not match the moving
     // car); aiming, reloading, consumables, gear, inventory, the flashlight and the Lockbox stay usable
-    const rideHolster = this.trainRide.blocksWeapons;
+    // (task studio-surface-host-ground-connectors-20261118-053602-01) in the connector tube likewise: it stands off the host's grid / on the
+    // district's sealed footprint, where the world's hitscan and thrown bodies have no floor or walls that match it
+    const tubeHolster = this.surfaceConnector?.holding === true;
+    const rideHolster = this.trainRide.blocksWeapons || tubeHolster;
     // task fuel-feedback: a lane giving the mouse back with the left button still held (a fuel pour ends / is cancelled, a backpack is
     // put away) never bleeds into the gun — the button is released first (as after a flare)
     if (this.laneOwnedLast && !laneOwns && inp.mouse[0]) this.lmbLatch = true;
@@ -4155,7 +4496,7 @@ export class Game {
       if ((e.type === 'release' || e.type === 'cancel') && inp.mouse[0]) this.lmbLatch = true; // never bleeds into the gun
     }
     const flareOwns = this.flareHold.active || this.lmbLatch || laneOwns;
-    if (rideHolster && !flareOwns && ((inp.mousePressed[0] && (wdef || heldDef?.kind === 'throwable')) || inp.hit('KeyG') || inp.hit('KeyT'))) this.trainRide.refuseFire(); // (lane RIDE) the note
+    if (rideHolster && !flareOwns && ((inp.mousePressed[0] && (wdef || heldDef?.kind === 'throwable')) || inp.hit('KeyG') || inp.hit('KeyT'))) { if (tubeHolster) this.hud.toast('Not in the passage — step out first', true); else this.trainRide.refuseFire(); } // (lane RIDE) the note
     // A fresh sprint (Shift while moving forward) interrupts a timed use. Until the consume view has
     // brought the gun back up it stays lowered: no aiming, firing or reloading.
     if (this.use && (inp.hit('ShiftLeft') || inp.hit('ShiftRight')) && (inp.down('KeyW') || inp.down('ArrowUp'))) this.cancelUse('sprint');
@@ -4165,7 +4506,8 @@ export class Game {
     // (lane RIDE) riding: car pose -> the player's car-local step -> the world pose (TrainRide.stepPlayer); else the world body as ever
     // (lane CAR) driving the Skyways prize car: the car's step puts the player in the driver seat (world/skywaysCar.ts stepPlayer)
     // (lane ACCESS follow-up) held in the Surface Run's cargo lift car while its doors close / open: the car's own model (liftRuntime.ts)
-    const step = this.surfaceLiftRide?.holding ? this.surfaceLiftRide.stepPlayer(dt, inp, moveOpts) : this.trainRide.riding ? this.trainRide.stepPlayer(dt, inp, moveOpts) : this.skywaysCar.driving ? this.skywaysCar.stepPlayer(dt, inp) : p.update(dt, inp, this.levels, this.propIndex, moveOpts);
+    // (task studio-surface-host-ground-connectors-20261118-053602-01) walking in the Office / Mall connector tube: the tube's own model
+    const step = this.surfaceLiftRide?.holding ? this.surfaceLiftRide.stepPlayer(dt, inp, moveOpts) : this.surfaceConnector?.holding ? this.surfaceConnector.stepPlayer(dt, inp, moveOpts) : this.trainRide.riding ? this.trainRide.stepPlayer(dt, inp, moveOpts) : this.skywaysCar.driving ? this.skywaysCar.stepPlayer(dt, inp) : p.update(dt, inp, this.levels, this.propIndex, moveOpts);
     if (step) this.sfx.footstep(p.sprinting, p.crouched);
     if (p.justJumped) this.sfx.jump();
     if (p.justLanded) this.sfx.land(Math.min(1, p.landSpeed / 6));

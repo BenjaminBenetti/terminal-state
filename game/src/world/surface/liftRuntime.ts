@@ -28,8 +28,10 @@ import type {SurfaceLift} from '../../gen/surface/surfaceTypes';
 import {LIFT_CAR} from '../../gen/surface/accessLift';
 import {CAB_ACCEL, CAB_SPEED, DOOR_TIME, buildElevatorView, elevatorMaterials, planElevator, type ElevatorPlan, type ElevatorView} from '../elevator';
 import {towerCue} from '../towerShared';
-import type {MoveInput} from '../../player/player';
+import {CULL_LAYER} from '../levelCulling';
+import {STAND_EYE, type MoveInput} from '../../player/player';
 import {LIFT_LABELS, carFrame, carModel, carToWorldXZ, liftElevatorInfo, liftHome, liftStops, worldToCarXZ, type CarFrame, type CarModel} from './liftInfo';
+import {LIFT_CAB_LAMP, liftCabFinish, loadLiftCabTextures} from './liftCabFinish';
 
 /** Ride phases (QA / tests read them): idle -> closing -> travel -> (arrived, waiting for ready) -> opening -> idle. */
 export type LiftPhase = 'idle' | 'closing' | 'travel' | 'waiting' | 'opening' | 'reopening';
@@ -45,11 +47,29 @@ export const LIFT_RIDE = {
 } as const;
 
 /**
- * The destination's compile while the ride waits for it (Game.backgroundCompile(true); render/journeyCompile.ts options): only the sealed
- * car is drawn, so the job steps every frame (maxStaleMs 0: the scheduler's bounded overdue rule, never a held frame) with bigger scene
- * chunks and slices than a train journey's play-time pacing. Coverage is the journey's 'full' plan, uncapped.
+ * The destination's compile while a crossing waits for its exit's first view (Game.prepareCrossingView; render/journeyCompile.ts
+ * options; the lift ride and the on-foot connector): only the sealed car / tube is drawn, so the job steps every frame (maxStaleMs 0: the
+ * scheduler's bounded overdue rule, never a held frame) with bigger scene chunks and slices than a train journey's play-time pacing;
+ * once the exit opens the rest runs in the journey's play pacing (JourneyCompile.pace(null)). Coverage is the journey's 'full' plan.
+ * (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01: "the lift never opens … and so you are stuck" — the uncapped
+ * wait for ~5000 scene items in chunks of 8, ONE compile call in flight, each launch waiting up to 20 frames for a background-priority
+ * task: ~630 launches, at least one frame each and up to a third of a second each where the browser defers background tasks under the
+ * ride's own frames. Now the loading screen's own chunk sizes (render/warmup.ts WARMUP_DEFAULTS compileChunk 48 / frameChunk 96: ~106
+ * launches), a launch run directly after 3 frames, and the wait BOUNDED like the loading screen's: see LIFT_RIDE_WAIT.)
  */
-export const LIFT_RIDE_COMPILE = {chunk: 8, shadowChunk: 16, maxStaleMs: 0, sliceMs: 8, shadowTargetMs: 6} as const;
+export const LIFT_RIDE_COMPILE = {chunk: 48, shadowChunk: 96, maxStaleMs: 0, sliceMs: 8, shadowTargetMs: 6, postStallFrames: 3} as const;
+
+/**
+ * A crossing's wait for its exit's first view (render/firstView.ts waitForFirstView; active time = playing frames only,
+ * core/frameBudget.ts activeMs): the loading screen's own budget (render/warmup.ts WARMUP_DEFAULTS.budgetMs: its warm-up ends 'partial'
+ * there and play goes on), or no first-view progress for `stallMs` — then the exit opens on the BUILT, live destination with the rest
+ * prepared in spare frame time (the journey's play pacing), reported. Never longer; a job that ended early (cancelled / failed) is retried
+ * once, `pollMs` the check's period. The paced build's slice while only the sealed car is drawn (the journey's default:
+ * core/pacedBuild.ts PACED_BUILD.sliceMs 6).
+ * (task studio-surface-host-ground-connectors-20261118-053602-01, lane READY: the ride's old wait for the WHOLE job — waitForLiftCompile —
+ * is gone; the first view's wait replaced it, tests/crossing-first-view.test.ts.)
+ */
+export const LIFT_RIDE_WAIT = {budgetMs: 120_000, stallMs: 30_000, pollMs: 200, buildSliceMs: 12} as const;
 
 /** One end's drawn lift. */
 interface LiftEnd {
@@ -62,12 +82,17 @@ interface LiftEnd {
   lamp: THREE.Mesh;
   /** Owned by the section's world group (true) or held by the ride (false). */
   inWorld: boolean;
+  /** Built with the PBR finish (liftCabFinish.ts; false: the earlier lit finish): a ride's destination end keeps its origin's. */
+  finished: boolean;
 }
 
 /** The lift end of a layout (null: none — a version-1 section). */
 export function liftOfLayout(layout: Pick<StationLayout, 'surfaceAccess' | 'surface'> | null | undefined): SurfaceLift | null {
   return layout?.surfaceAccess?.lift ?? layout?.surface?.portal.lift ?? null;
 }
+
+/** Layers.mask of a renderable a sealed frame leaves out (the level culler's CULL_LAYER: no camera renders it). */
+const SEAL_MASK = (1 << CULL_LAYER) >>> 0;
 
 const sameLift = (a: SurfaceLift, b: SurfaceLift) => JSON.stringify(a) === JSON.stringify(b);
 const runtimes = new WeakMap<object, SurfaceLiftRuntime>();
@@ -92,11 +117,13 @@ export class SurfaceLiftRuntime {
   ready = false;
   /** The destination end was placed (the view swapped). */
   reposed = false;
+  /** (Game, during a ride) the truthful status line while the car waits for the destination (HUD prompt; null: none). */
+  progress: (() => string) | null = null;
   private local = {x: 0, y: 0, z: 0, yaw: 0, vx: 0, vz: 0};
   private model: CarModel | null = null;
   private humT = 0;
   private waiters: {phase: 'shut' | 'open'; resolve: (ok: boolean) => void}[] = [];
-  readonly counts = {sites: 0, adopted: 0, views: 0, disposed: 0, rides: 0, reposes: 0, opened: 0, resets: 0, heldFrames: 0};
+  readonly counts = {sites: 0, adopted: 0, views: 0, disposed: 0, rides: 0, reposes: 0, opened: 0, resets: 0, heldFrames: 0, sealedFrames: 0, sealedMax: 0};
 
   constructor(readonly game: Game) {}
 
@@ -106,19 +133,73 @@ export class SurfaceLiftRuntime {
     (g as unknown as {surfaceLiftRide: SurfaceLiftRuntime | null}).surfaceLiftRide = this;
     g.sectionHooks.push({build: layout => this.build(layout as StationLayout), teardown: () => this.teardown()});
     g.frameHooks.push(dt => this.tick(dt));
+    g.promptProviders.unshift(() => this.statusLine());
+    // the car's PBR finish: fetched before the build of any section with a lift end (bounded: then the earlier finish)
+    g.sectionPreloads?.push(layout => (liftOfLayout(layout)
+      ? Promise.race([loadLiftCabTextures().then(() => undefined), new Promise<void>(r => setTimeout(r, LIFT_CAB_LAMP.waitMs))]) : Promise.resolve()));
     return this;
   }
+
+  /** The ride's status line (the HUD prompt while held in a travelling / waiting car, until the destination is ready; null: none). */
+  statusLine(): string | null {
+    if (!this.holding || this.ready || (this.phase !== 'travel' && this.phase !== 'waiting') || !this.progress) return null;
+    return this.progress() || null;
+  }
+
+  /**
+   * (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01: "when riding the lift up a black plane passes through you")
+   * The car is SEALED: shut and away from an open stop (travelling or waiting). The ride's shaft is virtual — its 9 m column lies in the
+   * drawn end's world frame, where that world's own geometry crosses it (the tent's floor 1 cm under the street stop; the host's hall
+   * ceiling over the station stop; an Office / Mall host's upper storeys, their floors, ceilings, walls and furniture, through the column):
+   * while sealed nothing of the world can be seen from inside (the cab walls and roof, the barred gate and the shaft liner with its closed
+   * landing doors enclose the rider), so a sealed frame draws the car's own view only (Game.render: drawSealed).
+   */
+  get sealed(): boolean {
+    return (this.phase === 'travel' || this.phase === 'waiting') && this.door <= 0 && !!this.current();
+  }
+
+  /**
+   * Draw one frame (`draw`: Game.drawFrame) sealed: every renderable of `scene` outside the car's view and the `keep` roots is moved to
+   * CULL_LAYER for that call only and given its layers back right after (the camera's layers, the lights, materials, the level culler's
+   * state, the compile's plan: all untouched — no program, light-set or culling change; a renderable already culled stays as it was).
+   */
+  drawSealed(scene: THREE.Object3D, keep: readonly THREE.Object3D[], draw: () => void): void {
+    const e = this.current();
+    if (!e) { draw(); return; }
+    const objs = this.sealObjs, masks = this.sealMasks, stack = this.sealStack;
+    objs.length = masks.length = stack.length = 0;
+    for (const c of scene.children) stack.push(c);
+    while (stack.length) {
+      const o = stack.pop()!;
+      if (o === e.view.root || keep.includes(o)) continue;
+      const r = o as THREE.Mesh & {isPoints?: boolean; isLine?: boolean; isSprite?: boolean};
+      if ((r.isMesh || r.isPoints || r.isLine || r.isSprite) && o.layers.mask !== SEAL_MASK) { objs.push(o); masks.push(o.layers.mask); o.layers.mask = SEAL_MASK; }
+      for (const c of o.children) stack.push(c);
+    }
+    this.counts.sealedFrames++;
+    this.counts.sealedMax = Math.max(this.counts.sealedMax, objs.length);
+    try { draw(); } finally {
+      for (let i = 0; i < objs.length; i++) objs[i].layers.mask = masks[i];
+      objs.length = masks.length = 0;
+    }
+  }
+  private readonly sealObjs: THREE.Object3D[] = [];
+  private readonly sealMasks: number[] = [];
+  private readonly sealStack: THREE.Object3D[] = [];
 
   // -------------------------------------------------------------------------------------------
   // The site
 
-  private makeEnd(l: SurfaceLift): LiftEnd | null {
+  private makeEnd(l: SurfaceLift, like: LiftEnd | null = null): LiftEnd | null {
     const mats = (this.game as unknown as {mats?: unknown}).mats;
     if (!mats) return null;
     const info = liftElevatorInfo(l), plan = planElevator(info);
-    const view = buildElevatorView(plan, mats as Parameters<typeof buildElevatorView>[1], {cargo: true, cargoLit: true});
-    // (the car's OWN lit finish — world/elevator.ts cargoLitMaterials: the car, its gate, the landing door and the shaft liner carry the
-    // cab lamp's light as a self-glow in their own colours, so they read with the flashlight off at rest and through the whole ride, in
+    // (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01: the car's PBR finish — liftCabFinish.ts — once its maps arrived;
+    // a ride's destination end (`like`: the held origin) keeps the origin's finish: no material swap or new program mid-ride)
+    const finish = like && !like.finished ? null : liftCabFinish();
+    const view = buildElevatorView(plan, mats as Parameters<typeof buildElevatorView>[1], {cargo: true, cargoLit: true, cargoFinish: finish});
+    // (the car's OWN lit finish — world/elevator.ts cargoLitMaterials, or the PBR finish's lamp emissive: the car, its gate, the landing door
+    // and the shaft liner carry the cab lamp's light themselves, so they read with the flashlight off at rest and through the whole ride, in
     // the rock / between storeys where the baked field does not reach. No scene light.)
     view.root.name = 'cargo-lift-surface';
     view.root.userData.surfaceLift = true;
@@ -135,7 +216,7 @@ export class SurfaceLiftRuntime {
     view.cab.add(lamp); // (cab space: y relative to the cab floor)
     this.game.atmosphere?.markShadows(view.root, false);
     this.counts.views++;
-    return {lift: l, plan, view, frame, stops, home, lamp, inWorld: false};
+    return {lift: l, plan, view, frame, stops, home, lamp, inWorld: false, finished: !!finish};
   }
 
   /** Poses an end's view: the car at its travel progress `s` from the ride's origin stop, the doors at `door`. */
@@ -244,8 +325,9 @@ export class SurfaceLiftRuntime {
    * disposed, the player carried over in the car frame. After this the destination's site adopts the held view.
    */
   repose(dest: SurfaceLift): boolean {
-    const from = this.held, e = this.makeEnd(dest);
+    const from = this.held, e = this.makeEnd(dest, from);
     if (!e) return false;
+    if (from && this.holding) this.foldLook(from); // (the look since the last step, in the frame it was applied in)
     this.game.scene.add(e.view.root);
     this.held = e;
     this.pose(e, 0);
@@ -255,6 +337,17 @@ export class SurfaceLiftRuntime {
     this.counts.reposes++;
     this.writePlayer(e);
     return true;
+  }
+
+  /**
+   * (task studio-surface-host-ground-connectors-20261118-053602-01, lane READY) Where the rider comes out: the eye at the gate of the end
+   * the ride draws now (the destination's once reposed) at its home stop, facing out of the car (render/firstView.ts CrossingExit; the
+   * first view is prepared from here). Null: no end.
+   */
+  exitPoint(): {x: number; y: number; z: number; yaw: number} | null {
+    const e = this.current();
+    if (!e) return null;
+    return {x: e.lift.door.x, y: e.stops[e.home] + STAND_EYE, z: e.lift.door.z, yaw: e.frame.yaw};
   }
 
   /** The destination is ready (built and compiled): the car may finish its travel and open. */
@@ -342,7 +435,7 @@ export class SurfaceLiftRuntime {
       }
     }
     this.pose(e, this.door);
-    if (this.holding) this.writePlayer(e);
+    if (this.holding) { this.foldLook(e); this.writePlayer(e); }
   }
 
   // -------------------------------------------------------------------------------------------
@@ -380,6 +473,17 @@ export class SurfaceLiftRuntime {
       this.writePlayer(e);
     }
     return step;
+  }
+
+  /**
+   * (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01: "you cannot look left and right when in the lift only up and
+   * down") The mouse look turns the player's WORLD yaw (applyMouseLook); the car-local yaw takes it in before anything writes the world
+   * pose back from the car frame. Game.update steps the player (stepPlayer folds it) before the frame hooks tick the car, but
+   * Game.updateTransitGap ticks the car first — its writePlayer put back the previous local yaw every frame of the transit gap, i.e.
+   * nearly the whole ride: the turn was lost, the pitch (never car-local) kept. Folding here too makes the order irrelevant.
+   */
+  private foldLook(e: LiftEnd): void {
+    this.local.yaw = this.game.player.yaw - e.frame.yaw;
   }
 
   private writePlayer(e: LiftEnd): void {

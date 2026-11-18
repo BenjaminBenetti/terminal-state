@@ -57,6 +57,12 @@ export interface WindowPlan {
    * (world/windowBreach.ts). Absent (the tower / Skyways): room-side hits only, as before.
    */
   outer?: number;
+  /**
+   * Task studio-surface-host-ground-connectors-20261118-053602-01: the OPEN DOORWAY through the boarding (WindowSpan.doorway: the Surface
+   * Run Office connector): no plank, bottom frame or mullion stands in it below its head; a timber lining frames it through the wall; the
+   * collider keeps nothing out of it (towerRuntime windowConstraints).
+   */
+  doorway?: {a0: number; a1: number; y1: number};
 }
 
 /**
@@ -96,7 +102,7 @@ export function planWindows(info: Pick<TowerInfo, 'windows' | 'seed'>): WindowPl
     // collider: the span box, at least 0.35 m thick, extended outward (never into the room)
     const cMin = out > 0 ? inner : Math.min(c0, inner - 0.35), cMax = out > 0 ? Math.max(c1, inner + 0.35) : inner;
     const collider: Rect2 = along === 'x' ? {x0: a0, x1: a1, z0: cMin, z1: cMax} : {x0: cMin, x1: cMax, z0: a0, z1: a1};
-    return {index: si, span, level: span.level, baseY: span.baseY, n, along, a0, a1, glass, inner, y0, y1, mullions, transom, panes, collider};
+    return {index: si, span, level: span.level, baseY: span.baseY, n, along, a0, a1, glass, inner, y0, y1, mullions, transom, panes, collider, ...(span.doorway ? {doorway: {...span.doorway}} : {})};
   });
 }
 
@@ -329,11 +335,20 @@ function buildStorey(plans: readonly WindowPlan[], mats: WorldMaterials, glassTe
     const g0 = p.glass - fd / 2, g1 = p.glass + fd / 2;
     // outer frame + mullions + transom
     const frame = (a0: number, a1: number, y0: number, y1: number) => frames.push({g: planBox(p, a0, a1, g0, g1, y0, y1)});
-    frame(p.a0, p.a1, p.y0, p.y0 + fwid);
+    // (task studio-surface-host-ground-connectors-20261118-053602-01) the connector's open doorway: nothing of the glazing / boarding in it
+    // below its head (`cut`: an along range minus the doorway), its timber lining through the wall's thickness
+    const D = p.doorway, jw = 0.06;
+    const cut = (a0: number, a1: number, y0: number): [number, number][] => !D || y0 >= D.y1 || a1 <= D.a0 - 0.04 || a0 >= D.a1 + 0.04 ? [[a0, a1]]
+      : ([[a0, D.a0 - 0.04], [D.a1 + 0.04, a1]] as [number, number][]).filter(([u, v]) => v - u > 0.05);
+    for (const [a, b] of cut(p.a0, p.a1, p.y0)) frame(a, b, p.y0, p.y0 + fwid);
     frame(p.a0, p.a1, p.y1 - fwid, p.y1);
     frame(p.a0, p.a0 + fwid, p.y0, p.y1);
     frame(p.a1 - fwid, p.a1, p.y0, p.y1);
-    for (const m of p.mullions) frame(m - fwid / 2, m + fwid / 2, p.y0, p.y1);
+    for (const m of p.mullions) frame(m - fwid / 2, m + fwid / 2, D && m > D.a0 - jw && m < D.a1 + jw ? Math.max(p.y0, D.y1) : p.y0, p.y1);
+    if (D) {
+      const [c0, c1] = p.along === 'x' ? [p.span.z0, p.span.z1] : [p.span.x0, p.span.x1];
+      boards.push({g: planBox(p, D.a0 - jw, D.a0, c0, c1, p.y0, D.y1)}, {g: planBox(p, D.a1, D.a1 + jw, c0, c1, p.y0, D.y1)}, {g: planBox(p, D.a0 - jw, D.a1 + jw, c0, c1, D.y1, D.y1 + jw)});
+    }
     if (p.transom !== null) frame(p.a0, p.a1, p.transom - fwid / 2, p.transom + fwid / 2);
     // interior sill board (laminate ledge proud of the wall face)
     const s0 = p.inner - out * 0.02, s1 = p.inner - out * 0.2;
@@ -361,15 +376,19 @@ function buildStorey(plans: readonly WindowPlan[], mats: WorldMaterials, glassTe
         const bc0 = p.inner - out * 0.01, bc1 = p.inner - out * 0.035;
         for (let k = 0; k < nb; k++) {
           const yc = pane.y0 + (pane.y1 - pane.y0) * ((k + 0.5) / nb) + (rnd() - 0.5) * 0.08;
-          const b = planBox(p, pane.a0 - 0.08, pane.a1 + 0.08, Math.min(bc0, bc1), Math.max(bc0, bc1), yc - 0.11, yc + 0.11);
           const tilt = (rnd() - 0.5) * 0.16;
-          const ac = (pane.a0 + pane.a1) / 2, cc = (bc0 + bc1) / 2;
-          // rotate about the board's own centre around the wall normal
-          const m = new THREE.Matrix4().makeTranslation(p.along === 'x' ? ac : cc, yc, p.along === 'x' ? cc : ac)
-            .multiply(new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(p.n[0], 0, p.n[1]), tilt))
-            .multiply(new THREE.Matrix4().makeTranslation(-(p.along === 'x' ? ac : cc), -yc, -(p.along === 'x' ? cc : ac)));
-          b.applyMatrix4(m);
-          boards.push({g: b});
+          // (a plank across the connector's doorway: the two pieces either side of it, each about its own centre, a quarter of the tilt)
+          const pieces = cut(pane.a0 - 0.08, pane.a1 + 0.08, yc - 0.11), split = pieces.length !== 1 || pieces[0][0] !== pane.a0 - 0.08 || pieces[0][1] !== pane.a1 + 0.08;
+          for (const [pa, pb] of pieces) {
+            const b = planBox(p, pa, pb, Math.min(bc0, bc1), Math.max(bc0, bc1), yc - 0.11, yc + 0.11);
+            const ac = (pa + pb) / 2, cc = (bc0 + bc1) / 2;
+            // rotate about the board's own centre around the wall normal
+            const m = new THREE.Matrix4().makeTranslation(p.along === 'x' ? ac : cc, yc, p.along === 'x' ? cc : ac)
+              .multiply(new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(p.n[0], 0, p.n[1]), split ? tilt * 0.25 : tilt))
+              .multiply(new THREE.Matrix4().makeTranslation(-(p.along === 'x' ? ac : cc), -yc, -(p.along === 'x' ? cc : ac)));
+            b.applyMatrix4(m);
+            boards.push({g: b});
+          }
         }
       }
     }

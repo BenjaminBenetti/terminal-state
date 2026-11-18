@@ -618,7 +618,9 @@ describe('game.ts: the bake may wait for workers only where the drain can wait',
     expect(src).toContain('private *buildSectionSteps(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean, offThread = false): BuildSteps<void> {');
     expect(src).toContain('const enhanced = yield* this.enhancedLighting.bakeSteps(stationBakeInput(this.layout), this.world.drawn, {max3DTextureSize: max3D, offThread});');
     expect(src).toContain('buildSection(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean): void { drainSync(this.buildSectionSteps(key, layout, arrival, fresh)); }');
-    expect(src).toContain('await runPaced(this.buildSectionSteps(key, layout, arrival, fresh, true), {...this.buildPacing, stats, alive: () => gen === this.stationGen});');
+    // (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01: `pacing` = the caller's slice length — the lift ride's
+    // LIFT_RIDE_WAIT.buildSliceMs; the journey passes none — under the QA override, stats and the alive check)
+    expect(src).toContain('await runPaced(this.buildSectionSteps(key, layout, arrival, fresh, true), {...pacing, ...this.buildPacing, stats, alive: () => gen === this.stationGen});');
     expect(src).toContain('await runSliced(stageLabels(this.buildSectionSteps(key, layout, arrival, fresh, true), started), {...this.slicePacing, stats, alive: () => gen === this.stationGen});');
     expect(src.split('this.buildSectionSteps(').length - 1, 'no other caller').toBe(3);
   });

@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 100646,
-      "sha256": "d87931917479c3ee1d19769b0cd692203a187fef6fd923bab5bb0bc751061b0d"
+      "bytes": 102747,
+      "sha256": "d31e2a4f98fac5e549f589bbc148856eb4b07f08b93ec2b47887d58f3588bfae"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -2392,6 +2392,36 @@
       "path": "assets/derivatives/item-sushi-bento.json",
       "bytes": 4538,
       "sha256": "bc9c7b5834707c8b9516bd03a5af37786650a05e4dbe01fbe3d481ecdfed6c44"
+    },
+    {
+      "path": "assets/derivatives/lift-cab-bumper-board.json",
+      "bytes": 5107,
+      "sha256": "d9999468614da6b8e323d0b80d6187c31ed7a4551d8e984027c0389dcabcc2b8"
+    },
+    {
+      "path": "assets/derivatives/lift-cab-floor-tread.json",
+      "bytes": 5268,
+      "sha256": "bb5567750a1516911bdd22ea4a4898840e84edf3cc8d87e1698883d8d6b74d76"
+    },
+    {
+      "path": "assets/derivatives/lift-cab-hazard-stripe.json",
+      "bytes": 5172,
+      "sha256": "d64f9134618f732462f538121842ac583c12b02f0f0b0a3f77a39ed74169512a"
+    },
+    {
+      "path": "assets/derivatives/lift-cab-placards.json",
+      "bytes": 3300,
+      "sha256": "495b5af1fe23ecf73d2e2e23ed0d87fa3c5140415844bd012b4abd89787c2b25"
+    },
+    {
+      "path": "assets/derivatives/lift-cab-shaft-concrete.json",
+      "bytes": 5121,
+      "sha256": "08320908c7282c1e44f7addfe58534d738609593978ef65fd903ce5a5375115c"
+    },
+    {
+      "path": "assets/derivatives/lift-cab-wall-paint.json",
+      "bytes": 5156,
+      "sha256": "0a8cf0cf532df425c66709e94288e82324c22dbf93a5b03ccb6ce0d82797d795"
     },
     {
       "path": "assets/derivatives/light-lod-iteration03.json",
@@ -5882,6 +5912,86 @@
       "path": "assets/textures/ceiling-working-face-orm.jpg",
       "bytes": 160656,
       "sha256": "bd068b213befd43bbb63b06e77c86c6bb12b697810c4a4d81a921b8abd02f7a3"
+    },
+    {
+      "path": "assets/textures/lift/lift-cab-bumper-board-color.jpg",
+      "bytes": 233977,
+      "sha256": "ba5c658aaa0f27532da8fd61e4c17a43b471a73de0a10b014641ebe4531edc55"
+    },
+    {
+      "path": "assets/textures/lift/lift-cab-bumper-board-normal.jpg",
+      "bytes": 275794,
+      "sha256": "5c7a33e686bb5c58084523a31537bf96315e84e02e46bd4e34c9b2fc1bf9a485"
+    },
+    {
+      "path": "assets/textures/lift/lift-cab-bumper-board-orm.jpg",
+      "bytes": 275468,
+      "sha256": "23ae96b94ebf78327b1a43131718bb3900109ad3b764c4d311bb6721b4235a35"
+    },
+    {
+      "path": "assets/textures/lift/lift-cab-floor-tread-color.jpg",
+      "bytes": 190027,
+      "sha256": "e8d90c03dd3be618c3f9da9b51ec78d20d1de3a221bc190e54efa719a97f7516"
+    },
+    {
+      "path": "assets/textures/lift/lift-cab-floor-tread-normal.jpg",
+      "bytes": 518584,
+      "sha256": "9ae00a72aa0a6be161cfc7c5d96326848a0d9945dfa47b133dee3780e005d295"
+    },
+    {
+      "path": "assets/textures/lift/lift-cab-floor-tread-orm.jpg",
+      "bytes": 300062,
+      "sha256": "f99908d73967fa339b5cbdf70dd03f3561121f5ddf1ad73c3ee3c239ba97b431"
+    },
+    {
+      "path": "assets/textures/lift/lift-cab-hazard-stripe-color.jpg",
+      "bytes": 124372,
+      "sha256": "461ce9b595432691fb372b4ecc2186950fe4517d57694950f32458d9916b04f6"
+    },
+    {
+      "path": "assets/textures/lift/lift-cab-hazard-stripe-normal.jpg",
+      "bytes": 274309,
+      "sha256": "77c9a8e46e3f10af573006a03cb988fa5d564166c6ea77f9c3a793d31e937715"
+    },
+    {
+      "path": "assets/textures/lift/lift-cab-hazard-stripe-orm.jpg",
+      "bytes": 223257,
+      "sha256": "fc980ba72f9f48c098307d9625bc91ace46aa49a8a6d240dec72730a398111a8"
+    },
+    {
+      "path": "assets/textures/lift/lift-cab-placards-color.jpg",
+      "bytes": 124872,
+      "sha256": "62aeaf14b8e49ee8a8162e39ec1566616bf6e178ea1dff492297f9c12f3675b4"
+    },
+    {
+      "path": "assets/textures/lift/lift-cab-shaft-concrete-color.jpg",
+      "bytes": 136883,
+      "sha256": "60e688bc5cea4cc50e93c5b125efb61d7ef72a2aa19290309f8c832a617e722f"
+    },
+    {
+      "path": "assets/textures/lift/lift-cab-shaft-concrete-normal.jpg",
+      "bytes": 259604,
+      "sha256": "dccaa76dc919d85a5cd0720882256500b66741c7eaad41d1ad9d49470b6213ed"
+    },
+    {
+      "path": "assets/textures/lift/lift-cab-shaft-concrete-orm.jpg",
+      "bytes": 235798,
+      "sha256": "bca8a5325c8e04dfaeb86a80d0ee331ed7bed563980256d05e0ba89972d1bcf8"
+    },
+    {
+      "path": "assets/textures/lift/lift-cab-wall-paint-color.jpg",
+      "bytes": 72062,
+      "sha256": "f8bb2d5581147b4ea651ec2fe6083911a3f087d96ed2c85fe1c75cc8fc0bdc3a"
+    },
+    {
+      "path": "assets/textures/lift/lift-cab-wall-paint-normal.jpg",
+      "bytes": 212042,
+      "sha256": "9e67f46865ba8589034568dfd8b80ff5370e749f36aefdf7d4fd858b823a6ec9"
+    },
+    {
+      "path": "assets/textures/lift/lift-cab-wall-paint-orm.jpg",
+      "bytes": 227921,
+      "sha256": "749eab8bc3c9c274086049243925631c9fa200b2e0939f01b09cd3d7912847fd"
     },
     {
       "path": "assets/textures/mall/ads-lingerie/ad-lingerie-dressform.jpg",

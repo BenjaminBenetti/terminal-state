@@ -6,6 +6,7 @@
 import {CELL, SOLID, type Grid} from '../gen/grid';
 import {mallTowerRecord} from '../gen/mall/elevator'; // Task track3-eaton-centre-20261031 (lane GEN): the mall's glass elevator
 import {bunkerTowerRecord} from '../gen/bunker/v2/liftPlan'; // task studio-bunker-rework-20261109-205115-01: the Bunker's cargo lift
+import {CONNECTOR} from '../gen/surface/connectorShape'; // task studio-surface-host-ground-connectors-20261118-053602-01: the Office connector tube
 
 export type Side = 'N' | 'S' | 'E' | 'W';
 export interface Rect2 { x0: number; z0: number; x1: number; z1: number }
@@ -63,6 +64,11 @@ export interface WindowSpan extends Rect2 {
   /** Storey (layout.levels index) and its floor (absolute y). */
   level: number;
   baseY: number;
+  /**
+   * Task studio-surface-host-ground-connectors-20261118-053602-01: the OPEN DOORWAY cut through this span's boarding (the Surface Run
+   * version-2 Office connector's doorway: layout.surfaceAccess.connector) — its range along the span's axis and its head (absolute y).
+   */
+  doorway?: {a0: number; a1: number; y1: number};
 }
 
 /** LIFT's view of layout.office (v2, normalised). */
@@ -74,6 +80,8 @@ export interface TowerInfo {
   storeys: StoreyInfo[];
   elevator: ElevatorInfo | null;
   windows: WindowSpan[];
+  /** (task studio-surface-host-ground-connectors-20261118-053602-01) The Office connector tube's clear width over the street (world rect). */
+  tube?: Rect2;
   /** Tower footprint (outer wall faces). */
   exterior: Rect2;
   stairs: {well: Rect2 | null; landings: {floor: number; levelId: number; x: number; z: number}[]};
@@ -126,6 +134,31 @@ export interface TowerLayoutLike {
   mall?: unknown;
   /** Task studio-bunker-rework-20261109-205115-01: a version-2 Bunker's record (its cargo lift rides the same runtime). */
   bunker?: unknown;
+  /** (task studio-surface-host-ground-connectors-20261118-053602-01) The Surface Run access (an Office connector's doorway: WindowSpan.doorway). */
+  surfaceAccess?: unknown;
+}
+
+/** The Office connector tube's clear width over the street outside the facade: s 0..len, |t| < width / 2 (world rect). Null: none. */
+export function officeConnectorTube(layout: Pick<TowerLayoutLike, 'surfaceAccess'>): Rect2 | null {
+  const a = layout.surfaceAccess as {kind?: string; connector?: {host?: string; end?: string; x: number; z: number; yaw: number; len: number}} | undefined;
+  const c = a?.kind === 'connector' ? a.connector : undefined;
+  if (!c || c.host !== 'office' || c.end !== 'host') return null;
+  const fx = -Math.sin(c.yaw), fz = -Math.cos(c.yaw), rx = -fz, rz = fx, W = CONNECTOR.width / 2;
+  const pts = [[0, -W], [0, W], [c.len, -W], [c.len, W]].map(([s, t]) => [c.x + fx * s + rx * t, c.z + fz * s + rz * t]);
+  const r = (v: number) => Math.round(v * 1000) / 1000;
+  return {x0: r(Math.min(...pts.map(p => p[0]))), z0: r(Math.min(...pts.map(p => p[1]))), x1: r(Math.max(...pts.map(p => p[0]))), z1: r(Math.max(...pts.map(p => p[1])))};
+}
+
+/**
+ * The Office connector's doorway through the lobby's boarded street doors (gen/surface/accessConnector.ts): its level, its range along
+ * the facade and its head (absolute y). Null: no Office connector.
+ */
+export function officeConnectorDoorway(layout: Pick<TowerLayoutLike, 'surfaceAccess'>): {level: number; along: 'x' | 'z'; a0: number; a1: number; y1: number} | null {
+  const a = layout.surfaceAccess as {kind?: string; connector?: {host?: string; end?: string; x: number; z: number; y: number; yaw: number; level: number; door: {width: number; height: number}}} | undefined;
+  const c = a?.kind === 'connector' ? a.connector : undefined;
+  if (!c || c.host !== 'office' || c.end !== 'host') return null;
+  const along: 'x' | 'z' = Math.abs(Math.sin(c.yaw)) < 0.5 ? 'x' : 'z', mid = along === 'x' ? c.x : c.z, h = c.door.width / 2;
+  return {level: c.level, along, a0: mid - h, a1: mid + h, y1: c.y + c.door.height};
 }
 
 /**
@@ -204,6 +237,11 @@ export function readTowerInfo(layout: TowerLayoutLike): TowerInfo | null {
     const baseY = num(w.baseY, lv(level)?.baseY ?? storeys.find(s => s.levelId === level)?.baseY ?? 0);
     return [{...r, side: w.side, sill, head, kind: w.kind === 'entrance' ? 'entrance' as const : 'window' as const, level, baseY}];
   }) : [];
+  // (task studio-surface-host-ground-connectors-20261118-053602-01) the Office connector's doorway, on its entrance span
+  const dw = officeConnectorDoorway(layout);
+  const ent = dw && windows.find(w => w.kind === 'entrance' && w.level === dw.level && (dw.along === 'x' ? w.x0 <= dw.a0 + 1e-6 && w.x1 >= dw.a1 - 1e-6 : w.z0 <= dw.a0 + 1e-6 && w.z1 >= dw.a1 - 1e-6));
+  if (dw && ent) ent.doorway = {a0: dw.a0, a1: dw.a1, y1: dw.y1};
+  const tube = officeConnectorTube(layout);
   const exterior = normRect(o.exterior) ?? boundsOf(layout.grid, windows, cab);
   const st = (o.stairs ?? {}) as Record<string, unknown>;
   const landings = Array.isArray(st.landings) ? (st.landings as Record<string, unknown>[]).flatMap(l => {
@@ -212,6 +250,7 @@ export function readTowerInfo(layout: TowerLayoutLike): TowerInfo | null {
   }) : [];
   return {
     floors, floorHeight, groundY, storeys, elevator, windows, exterior, stairs: {well: normRect(st.well), landings},
+    ...(tube ? {tube} : {}),
     seed: layout.seed >>> 0, name: typeof o.name === 'string' ? o.name : '',
   };
 }

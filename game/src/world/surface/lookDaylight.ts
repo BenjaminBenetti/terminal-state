@@ -15,6 +15,7 @@
 // Never green: the overcast is a warm grey with a faint yellow cast (DAYLIGHT.tint); the toxic gas is AIR's own visible term.
 
 import {CELL, FLOOR} from '../../gen/grid';
+import {CONNECTOR} from '../../gen/surface/connectorShape';
 import type {StationLayout} from '../../gen/stationTypes';
 import type {BuildSteps} from '../../core/pacedBuild';
 import {ContentHasher} from '../../core/contentHash';
@@ -117,6 +118,7 @@ export function obstructionTops(layout: StationLayout, plan: SurfaceLookPlan): F
     } else if (o === OWNER.cordon) out[i] = plan.wall ? LOOK_TUNE.cordonH + 0.2 : 0; // (lane FOG: a v2 district's undrawn last-resort ring casts nothing)
     else if (o === OWNER.tent) out[i] = tent ? tent.eave : LOOK_TUNE.tentEave;
     else if (o === OWNER.debris) out[i] = LOOK_TUNE.debrisH;
+    else if (o === OWNER.connector) out[i] = (plan.connector?.rec.y ?? 0) + CONNECTOR.crownH; // (task studio-surface-host-ground-connectors-20261118-053602-01: the tube's crown)
     else if (tent && plan.ground[i] === GROUND.tent) out[i] = tent.ridge;
     else out[i] = g.cells[i] === FLOOR ? g.floor[i] : 0;
   }
