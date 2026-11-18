@@ -38,7 +38,7 @@ interface Priv { saveSectionMemory(): void; transitGap: boolean; liftBuilt: bool
 export interface ConnectorWalkReport { marks: string[]; frames: {out: number; back: number}; gapFrames: {out: number; back: number}; maxStep: number; looks: {moved: number; lost: number} }
 
 /** The walk from `host`'s doorway through the tube to the tent and back (the test body of one host's file). */
-export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?: boolean} = {}): Promise<ConnectorWalkReport> {
+export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?: boolean; save?: string} = {}): Promise<ConnectorWalkReport> {
   const T0 = performance.now(), marks: string[] = [];
   const mark = (s: string) => marks.push(`${s} ${((performance.now() - T0) / 1000).toFixed(1)} s`);
   for (const k of ['log', 'info', 'debug', 'warn'] as const) vi.spyOn(console, k).mockImplementation(() => {});
@@ -106,12 +106,14 @@ export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?:
     };
     const diag = () => JSON.stringify({state: game.state, gap: G.transitGap, counts: game.surfaceCrossCounts, walk: C.qa(), compile: game.journeyCompileStats, errors: errors.slice(0, 2), frameErrors: frameErrors.slice(0, 2)}).slice(0, 1800);
     const until = async (f: () => boolean, max = 6000) => { for (let i = 0; i < max && !f(); i++) await h.waitFrames(1); return f(); };
-    /** Walk (W held) steering along the tube's axis toward tube-local s = `to`, until `stop` (or `frames`). */
-    const walkTo = async (to: number, stop: () => boolean, frames = 12000) => { // (bounded: a Mall's first view keeps the far flap down for ~3500 frames here)
+    /** Walk (W held) steering along the tube's axis toward tube-local s = `to` (re-read every step: the far side's record changes at the
+     *  swap), until `stop` (or `frames`: a bound — the far flap stays down until the destination's first view is ready). */
+    const walkTo = async (to: number | (() => number), stop: () => boolean, frames = 12000) => {
       game.input.keys.add('KeyW');
       try {
         for (let i = 0; i < frames && !stop(); i++) {
-          const r = C.record()!, [s, t] = worldToConnector(r, P.x, P.z), ahead = Math.sign(to - s) * Math.min(1.2, Math.abs(to - s)) || 0.01;
+          const goal = typeof to === 'number' ? to : to();
+          const r = C.record()!, [s, t] = worldToConnector(r, P.x, P.z), ahead = Math.sign(goal - s) * Math.min(1.2, Math.abs(goal - s)) || 0.01;
           const [tx, tz] = connectorToWorld(r, s + ahead, t * 0.3);
           if (!G.transitGap) P.yaw = Math.atan2(-(tx - P.x), -(tz - P.z)); // (in the gap: the mouse turns only — the tube is straight)
           await h.waitFrames(1);
@@ -122,7 +124,9 @@ export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?:
     /** One crossing through the tube from this world's walk-in side, out of the far mouth. */
     const crossing = async (label: string, dir: 'out' | 'back') => {
       const n0 = samples.length, done0 = game.surfaceCrossCounts.done, c0 = {...game.lifecycleCounts}, s0 = states.length, key0 = {...game.run.current};
-      const r0 = C.record()!, far = r0.end === 'host' ? r0.len + 1.2 : -r0.door.depth - 1.2;
+      // out of the far mouth: the tent side, or the host side past ITS doorway (the host record's depth — a Mall's vestibule is 2.5 m; the
+      // district's record carries only the shape's default doorway, so the goal is read from the current world's record)
+      const r0 = C.record()!, fromHost = r0.end === 'host', far = () => { const r = C.record()!; return fromHost ? r.len + 1.2 : -r.door.depth - 1.2; };
       expect(qa.surface.connectorGo(1.2), `${label}: at the walk-in side`).toBe(true);
       await h.waitFrames(2);
       await walkTo(far, () => game.surfaceCrossCounts.done > done0 && !C.holding);
@@ -160,9 +164,23 @@ export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?:
         + `${j?.viewDone}/${j?.viewItems} drawn, tries ${cv?.tries}, left in play ${cv?.rest ? `${cv.rest.left}/${cv.rest.total}` : 'none'}`);
     };
 
-    expect(await game.newCampaign(1, {overwrite: true, networkSeed: pick.seed, dev: {level: host}})).toMatchObject({ok: true, saved: true});
+    if (opts.save) {
+      // (QA) start from an exported save's text instead (Load Save into slot 1, then Continue): a station saved before this change
+      expect(await game.saves.importFile(1, opts.save, {confirmReplace: true})).toMatchObject({ok: true});
+      expect(await game.continueCampaign(1)).toMatchObject({ok: true});
+    } else expect(await game.newCampaign(1, {overwrite: true, networkSeed: pick.seed, dev: {level: host}})).toMatchObject({ok: true, saved: true});
     expect(await until(() => game.state === 'playing')).toBe(true);
-    mark('new game');
+    expect(game.run.current, 'the host station').toEqual(hostKey);
+    if (opts.save) {
+      // the saved host's every remembered holder is a placed holder again — the Office's moved barricade pieces keep their saved
+      // identity (PropPlacement.memAt) — read before any capture writes the memory
+      const {holderKeyOf} = await import('../../src/run/worldMemory');
+      const held = Object.keys(game.run.peekMemory(hostKey)?.holders ?? {}), placed = new Set((game.containers?.all ?? []).map(x => holderKeyOf(x)));
+      expect(held.length, 'the save remembers holders').toBeGreaterThan(0);
+      expect(held.filter(k => !placed.has(k)), 'saved holders without their placed holder').toEqual([]);
+      marks.push(`saved holders ${held.length}, all placed; moved pieces ${game.layout.props.filter(p => p.memAt).length}`);
+    }
+    mark(opts.save ? 'save continued' : 'new game');
     const acc = game.layout.surfaceAccess!;
     expect(acc, 'the host has its way out').toBeTruthy();
     expect(acc).toMatchObject({v: 2, kind: 'connector'});
