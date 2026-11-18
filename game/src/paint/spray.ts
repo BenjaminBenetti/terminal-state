@@ -74,7 +74,8 @@ export class SprayPaint {
     this.clear();
     this.section='station/'+sectionId(this.g.run.current);
     for (const p of this.g.layout.props) {
-      if (p.cargoGone) continue;
+      // Arrival builds the appended cargo while its riding copy is still visible. Release restores
+      // the same hidden placement after the build. The appended copy follows any gone original.
       const id=this.g.trainPropCargo.idOf(p);
       if (id) this.props.set('prop/'+id,p);
     }

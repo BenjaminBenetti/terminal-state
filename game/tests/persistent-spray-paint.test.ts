@@ -47,7 +47,7 @@ describe('finite paint and campaign ownership',()=>{
     wall.position.set(4,1,2); wall.userData.paintSurface=true;
     const bin = new THREE.InstancedMesh(new THREE.BoxGeometry(.6,.7,.5),new THREE.MeshBasicMaterial(),1);
     group.add(wall,bin);scene.add(group);
-    const prop = {x:4,y:.85,z:3,rot:0,hx:.3,hz:.25,h:.7,kind:'bin',level:0,area:0};
+    const prop = {x:4,y:.85,z:3,rot:0,hx:.3,hz:.25,h:.7,kind:'bin',level:0,area:0,cargoGone:false};
     const matrix = new THREE.Matrix4().makeTranslation(4,1.2,3);
     bin.setMatrixAt(0,matrix);group.updateMatrixWorld(true);
     const scope = {station:'st-01',section:'main',level:'subway'};
@@ -95,6 +95,12 @@ describe('finite paint and campaign ownership',()=>{
     expect(batch.mesh.visible).toBe(true);expect(batch.mesh.matrix.equals(body)).toBe(true);
     expect(spray.record.targets.get('prop/st-01:main#8')).toHaveLength(2);
     expect(spray.record.targets.get('prop/st-01:main#8')![0]).toEqual(mark[0][1][0]);
+    // Arrival builds with the parked prop hidden behind its riding copy. The cargo system then
+    // releases the same placement without rebuilding the station or allocating another identity.
+    hooks[0].teardown();scope.station='st-02';prop.cargoGone=true;hooks[0].build();
+    expect(spray.batches.has('prop/st-01:main#8')).toBe(false);
+    prop.cargoGone=false;spray.sync();
+    expect(spray.batches.get('prop/st-01:main#8')!.mesh.matrix.equals(body)).toBe(true);
   });
   it('retains the same can through payment, resale, empty stock, chest, loose pickups and cargo',()=>{
     const inv=new Inventory(), make=(id:string,n:number)=>inv.makeStack(id,n);
