@@ -26,10 +26,12 @@ const runs = SEEDS.map(seed => {
   return {seed, L, ms: CREVICE_GEN_STATS.ms, attempts: CREVICE_GEN_STATS.attempts};
 });
 
-/** Version 4 fingerprints of origin/main 9d7a1c52's generator (computed in a worktree of it and on this branch: identical). */
+/** Version 4 fingerprints of origin/main 9d7a1c52's generator (computed in a worktree of it and on this branch: identical). Re-pinned by
+ *  task studio-market-readable-shop-signs-20261118-022405-01: only the bar's name board rose above its pendants (the rest of a recorded market is still
+ *  origin/main 1e08fa41's, market-sign-readability.test.ts). */
 const V4_SHIPPED: Record<number, string> = {
-  1: 'c70ff11cc4f765f2', 2: '217ad0458f388a34', 3: 'dd2bceeb8cc6d3e8', 6: '6d97dbd76aebde0a', 42: '309347ccc469b61f',
-  777: 'e08a2eca3a30ba92', 4242: 'b1f8553e21388ca0', 9001: 'f0526c5095f9c861', 31337: 'bd42d8c6a9d318a4',
+  1: 'bda7edd87c1966b8', 2: '4baf62957324ee8a', 3: 'e19113c8686fcce8', 6: 'e4a0f7668f003ce6', 42: '39f5eb6429ceb834',
+  777: '818e6c1270e8093f', 4242: '6d9da1d6e61067f9', 9001: '70b8c65879e413c1', 31337: '0c5dccbae77854fa',
 };
 function fingerprint(l: StationLayout): string {
   const g = l.levels.map(L => crypto.createHash('sha256').update(Buffer.from(L.grid.cells)).update(Buffer.from(L.grid.area.buffer)).update(Buffer.from(L.grid.floor.buffer)).update(Buffer.from(L.grid.ceil.buffer)).update(Buffer.from(L.grid.blocked)).update(Buffer.from(L.grid.sightBlocked)).digest('hex'));
