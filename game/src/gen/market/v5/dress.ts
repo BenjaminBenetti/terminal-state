@@ -27,7 +27,8 @@
 //    over every stair foot and nook — never high in the open void. (The crevice's walks are open to its top: a pendant there would draw
 //    a rod up to 19.5 m — world/builder.ts rods reach min(area ceiling, local ceiling) — so a wall lamp on an open floor names the
 //    container it is fixed to (or the nearest open container of its storey) as its area: the rod is the 0.2 m bracket under that
-//    container's roof edge.)
+//    container's roof edge.) A wall lamp keeps clear of the boards and blades on its wall (task
+//    studio-market-readable-shop-signs-20261118-022405-01: its fixture stood through / in front of their lettering).
 //  - SIGNS: each stall's painted board over its front and a blade sign standing out from it, painted notices over the services, the
 //    bar's board on the rock over the backbar, the platform's name plates and MARKET boards.
 //
@@ -58,6 +59,19 @@ export const CREVICE_DRESS = {
   wallLampOff: 0.15,
   /** Wall lamps along a frontage: about every `lampEvery` m (seeded +-1 m). */
   lampEvery: 5.0,
+  /** (task studio-market-readable-shop-signs-20261118-022405-01) A wall lamp's 1.2 m fixture stands 0.75 m out from its wall at sign
+   *  height, so its centre keeps `signClear` m along the wall from every sign on that frontage: a blade's plane, a board's end. A lamp due
+   *  nearer is fixed at the nearest clear row within `lampShift` rows (forward first), else at the row there that keeps clearest of them
+   *  (a run of shops: between two blades), `lampGap` rows past the lamp before it. */
+  signClear: {blade: 1.25, board: 1.0},
+  lampShift: 4,
+  lampGap: 4,
+  /** (same task) No wall lamp hangs nearer a sign than this share of its clearance (it would stand through the plate: one with no room
+   *  is left out); a blade prefers the side of its shop's opening with `bladeRun` rows of plain wall (room for the lamps past it). */
+  signMin: 0.3,
+  bladeRun: 5,
+  /** (same task) The bar's board on the rock: high enough that its wall lamps (2.18-2.4 m) stay under its lettering. */
+  barBoardY: 2.75,
   /** Cells next to a frontage that may be dressed: the terraces' first two (1 m), the storey-0 floor's first (0.5 m); the rest of the
    *  walk is the clear lane (>= 2 m on the 3 m terraces and the 2.5 m low walks). */
   dressCells: {walk: 2, low: 1},
@@ -178,6 +192,17 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
     count('lights');
   };
   const sign = (s: SignPlacement) => { layout.signs.push({...s, x: r3(s.x), y: r3(s.y), z: r3(s.z)}); count('signs'); };
+  /** (task studio-market-readable-shop-signs-20261118-022405-01) Every frontage sign's extent along its wall: storey, side, the wall's
+   *  plane (world x), world z (a board over an opening; a blade: its plane) and the clearance a wall lamp keeps from it. */
+  const signSpans: {kind: 'board' | 'blade'; L: number; s: 'W' | 'E'; wx: number; z0: number; z1: number; need: number}[] = [];
+  /** How clear of the signs of storey L that `mine` picks a wall lamp at row y is: the least (distance along the wall / that sign's
+   *  D.signClear); >= 1 = clear. */
+  const signClearance = (L: number, y: number, mine: (q: typeof signSpans[number]) => boolean) => {
+    const z = (y + 0.5) * CELL;
+    let c = Infinity;
+    for (const q of signSpans) if (q.L === L && mine(q)) c = Math.min(c, Math.max(q.z0 - z, z - q.z1, 0) / q.need);
+    return c;
+  };
   /** Keep cells (no props) over the cells a world box overlaps, on storey L (only cells of `areaId` when given). */
   const keepBox = (L: number, x0: number, z0: number, x1: number, z1: number, areaId?: number) => {
     const ctx = ctxs[L], g = ctx.g;
@@ -379,10 +404,11 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
   /** The board over an opening (on the walk face of its front wall) at `y` above the storey floor. */
   const boardOver = (c: CrevContainer, text: string, style: SignPlacement['style'] | undefined, y: number, w?: number) => {
     if (!c.door) return;
-    const dir = c.face === 'E' ? 1 : -1, d = c.door;
+    const dir = c.face === 'E' ? 1 : -1, d = c.door, z = (d.y + d.h / 2) * CELL, bw = w ?? Math.min(3.4, d.h * CELL + 0.4);
     const x = dir > 0 ? (d.x + 1) * CELL + 0.02 : d.x * CELL - 0.02;
     const onto = layout.doors.find(q => q.b === c.area)?.a ?? c.area;
-    sign({kind: 'info', text, area: onto, x, z: (d.y + d.h / 2) * CELL, y: B[c.level] + y, rot: dir > 0 ? Math.PI / 2 : -Math.PI / 2, w: w ?? Math.min(3.4, d.h * CELL + 0.4), ...(style ? {style} : {}), ...(c.level ? {level: c.level} : {})});
+    sign({kind: 'info', text, area: onto, x, z, y: B[c.level] + y, rot: dir > 0 ? Math.PI / 2 : -Math.PI / 2, w: bw, ...(style ? {style} : {}), ...(c.level ? {level: c.level} : {})});
+    signSpans.push({kind: 'board', L: c.level, s: c.side, wx: x - dir * 0.02, z0: z - bw / 2, z1: z + bw / 2, need: D.signClear.board});
   };
   for (const c of cc.containers) {
     if (c.use !== 'shop' || !c.stall || c.area < 0) continue;
@@ -398,11 +424,27 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
     boardOver(c, short, STALL_SIGNS[c.stall].style, 2.42);
     // a blade sign standing out from the front beside the opening (two plates back to back), under the deck / the walk above
     if (c.door) {
-      const dir = c.face === 'E' ? 1 : -1, d = c.door;
-      const zb = rng.chance(0.5) ? d.y * CELL - 0.8 : (d.y + d.h) * CELL + 0.8;
+      const dir = c.face === 'E' ? 1 : -1, d = c.door, g = gridOf(c.level);
+      // (task studio-market-readable-shop-signs-20261118-022405-01: the coin's side of the opening unless the other has more room —
+      // first no other shop's blade within two blade clearances (blades facing across a short wall hide each other's lettering), then
+      // more plain wall beside the opening, up to D.bladeRun rows (not the den's front, a stair bay, another opening, a step in the
+      // fronts): room for the frontage's lamps clear of the blade)
+      const zAt = (north: boolean) => (north ? d.y * CELL - 0.8 : (d.y + d.h) * CELL + 0.8);
+      const room = (north: boolean) => {
+        let n = 0;
+        for (let y = north ? d.y - 1 : d.y + d.h; n < D.bladeRun; y += north ? -1 : 1, n++) {
+          if (!g.inBounds(d.x + dir, y) || g.cells[g.idx(d.x, y)] !== SOLID || g.cells[g.idx(d.x + dir, y)] !== FLOOR || g.rampIdx[g.idx(d.x + dir, y)] >= 0) break;
+          if (den && den.level === c.level && den.side === c.side && y >= den.box.y - 1 && y < den.box.y + den.box.h + 1) break;
+        }
+        const facing = signSpans.some(q => q.kind === 'blade' && q.L === c.level && q.s === c.side && Math.abs(q.z0 - zAt(north)) < 2 * D.signClear.blade);
+        return (facing ? 0 : D.bladeRun + 1) + n;
+      };
+      const coin = rng.chance(0.5);
+      const zb = zAt(room(coin) >= room(!coin) ? coin : !coin);
       const xb = (dir > 0 ? (d.x + 1) * CELL : d.x * CELL) + dir * 0.62; // (its 1.2 m plate touching the wall)
       const onto = layout.doors.find(q => q.b === c.area)?.a ?? c.area;
       for (const flip of [0, Math.PI]) sign({kind: 'info', text: short, area: onto, x: xb, z: zb + (flip ? 0.012 : -0.012), y: B[c.level] + 2.22, rot: flip, w: 1.2, style: STALL_SIGNS[c.stall].style, ...(c.level ? {level: c.level} : {})});
+      signSpans.push({kind: 'blade', L: c.level, s: c.side, wx: xb - dir * 0.62, z0: zb, z1: zb, need: D.signClear.blade});
     }
   }
 
@@ -483,7 +525,8 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
     // aisle from the cellar's roof edge; the board on the rock over the backbar
     const canopy = canopyOf(1);
     for (const u of [uc0 + (uc1 - uc0) * 0.25, uc0 + (uc1 - uc0) * 0.75, wU, eU]) light(canopy ?? a, L, x(u), z(D.wallLampOff), B[1] + D.wallLampY, 0.85);
-    sign({kind: 'info', text: names[BAR_STALL].split(' — ')[0], area: a.id, x: x(uMid), z: Z0 + 0.02, y: B[1] + 2.28, rot: 0, w: 2.8, style: STALL_SIGNS[BAR_STALL].style, level: 1});
+    // (task studio-market-readable-shop-signs-20261118-022405-01: the board above those lamps — it was at 2.28 m, behind them)
+    sign({kind: 'info', text: names[BAR_STALL].split(' — ')[0], area: a.id, x: x(uMid), z: Z0 + 0.02, y: B[1] + D.barBoardY, rot: 0, w: 2.8, style: STALL_SIGNS[BAR_STALL].style, level: 1});
     const [cxA, cxB] = [x(uc0), x(uc1)];
     anchors.stalls.push({
       id: BAR_STALL, area: a.id, level: 1,
@@ -831,17 +874,37 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
       } else y += 1;
     }
     // wall lamps: about every 6 m on the container fronts (never the den's entry; a shop's board keeps its own lamp-free stretch)
+    // (task studio-market-readable-shop-signs-20261118-022405-01: the stride and its draws are as before — nothing else in the market
+    // moves — but a lamp due within D.signClear of a sign, a board's end or the blade beside a shop's opening, is fixed at the nearest
+    // clear row instead, else the clearest one in reach: its fixture no longer stands through or in front of the lettering)
     const g = gridOf(fr.L);
-    let ly = fr.y0 + 2 + rng.int(0, 4);
+    const lampRow = (y: number) => {
+      if (y < fr.y0 || y >= fr.y1 - 1) return false;
+      const lc = fr.colAt(y);
+      const okWall = g.inBounds(lc - fr.dir, y) && g.cells[g.idx(lc - fr.dir, y)] === SOLID && g.cells[g.idx(lc, y)] === FLOOR;
+      const nearDen = den && den.level === fr.L && den.side === fr.s && y >= den.box.y - 1 && y < den.box.y + den.box.h + 1;
+      const onBoard = band.some(q => q.door && (q.use === 'shop' || noticeOf(q)) && y >= q.door.y - 1 && y < q.door.y + q.door.h + 1);
+      return okWall && !nearDen && !onBoard;
+    };
+    let ly = fr.y0 + 2 + rng.int(0, 4), last = -Infinity;
     while (ly < fr.y1 - 1) {
-      const c = at(ly);
-      const lc = fr.colAt(ly);
-      const okWall = g.inBounds(lc - fr.dir, ly) && g.cells[g.idx(lc - fr.dir, ly)] === SOLID && g.cells[g.idx(lc, ly)] === FLOOR;
-      const nearDen = den && den.level === fr.L && den.side === fr.s && ly >= den.box.y - 1 && ly < den.box.y + den.box.h + 1;
-      const onBoard = band.some(q => q.door && (q.use === 'shop' || noticeOf(q)) && ly >= q.door.y - 1 && ly < q.door.y + q.door.h + 1);
-      if (!okWall || nearDen || onBoard) { ly++; continue; }
-      const canopy = c && c.area >= 0 && c.use !== 'den' ? area(c.area) : canopyOf(fr.L, {s: fr.s, y: ly});
-      if (canopy) light(canopy, fr.L, fr.wallXAt(ly) + fr.dir * D.wallLampOff, (ly + 0.5) * CELL, B[fr.L] + D.wallLampY, fr.L === 0 ? 0.8 : 0.7);
+      if (!lampRow(ly)) { ly++; continue; }
+      // (its row: the first, nearest to `ly` (forward first), of the clearest rows within D.lampShift, D.lampGap past the last lamp;
+      // `ly` itself when that is clear, as before)
+      let ry = ly;
+      const hangs = (y: number) => g.rampIdx[g.idx(fr.colAt(y), y)] < 0; // (light() hangs no lamp over a stair: one due there stays refused)
+      const front = (q: typeof signSpans[number]) => q.s === fr.s;
+      if (hangs(ly) && (signClearance(fr.L, ly, front) < 1 || ly - last < D.lampGap)) {
+        let bc = -1;
+        for (let k = 0; k <= D.lampShift; k++) for (const y of k ? [ly + k, ly - k] : [ly]) {
+          if (!lampRow(y) || !hangs(y) || y - last < D.lampGap) continue;
+          const cl = Math.min(1, signClearance(fr.L, y, front));
+          if (cl > bc + 1e-9) { ry = y; bc = cl; }
+        }
+      }
+      const c = at(ry);
+      const canopy = c && c.area >= 0 && c.use !== 'den' ? area(c.area) : canopyOf(fr.L, {s: fr.s, y: ry});
+      if (canopy && signClearance(fr.L, ry, front) >= D.signMin) { light(canopy, fr.L, fr.wallXAt(ry) + fr.dir * D.wallLampOff, (ry + 0.5) * CELL, B[fr.L] + D.wallLampY, fr.L === 0 ? 0.8 : 0.7); last = ry; }
       ly += Math.round((D.lampEvery + rng.range(-1, 1)) / CELL);
     }
     // a resident or two at the railing / chatting on every terrace and low walk (the lane's middle: posts, never props)
@@ -917,14 +980,21 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
     const f = area(st.foot);
     light(f, st.from, (f.x + f.w / 2) * CELL, (f.y + 1.5) * CELL, B[st.from] + D.wallLampY + 0.05, 0.65);
     // and over its head (the storey above, just past the run's top: the walk there, its rod a canopy bracket)
-    // (on the wall beside the run's head: the first clear row past its top whose outer column (either side) is solid)
+    // (on the wall beside the run's head: the first clear row past its top whose outer column (either side) is solid — task
+    // studio-market-readable-shop-signs-20261118-022405-01: and clear of the signs on that wall, else the clearest such row)
     const up = st.from + 1, gu = gridOf(up), canopy = canopyOf(up, {s: st.side, y: st.rect.y + st.rect.h});
-    for (let k = 0; k < 8 && canopy; k++) {
+    let head: [number, number] | null = null, hc = -1;
+    for (let k = 0; k < 8 && canopy && hc < 1; k++) {
       const y = st.rect.y + st.rect.h + k;
-      const xs: [number, number, number][] = [[st.rect.x, st.rect.x - 1, st.rect.x * CELL + D.wallLampOff], [st.rect.x + st.rect.w - 1, st.rect.x + st.rect.w, (st.rect.x + st.rect.w) * CELL - D.wallLampOff]];
-      const hit = xs.find(([fx, wx]) => gu.inBounds(wx, y) && gu.cells[gu.idx(fx, y)] === FLOOR && gu.rampIdx[gu.idx(fx, y)] < 0 && gu.cells[gu.idx(wx, y)] === SOLID);
-      if (hit) { light(canopy, up, hit[2], (y + 0.5) * CELL, B[up] + D.wallLampY, 0.6); break; }
+      const xs: [number, number, number][] = [[st.rect.x, st.rect.x - 1, st.rect.x * CELL], [st.rect.x + st.rect.w - 1, st.rect.x + st.rect.w, (st.rect.x + st.rect.w) * CELL]];
+      for (const [fx, wx, plane] of xs) {
+        if (!(gu.inBounds(wx, y) && gu.cells[gu.idx(fx, y)] === FLOOR && gu.rampIdx[gu.idx(fx, y)] < 0 && gu.cells[gu.idx(wx, y)] === SOLID)) continue;
+        const cl = Math.min(1, signClearance(up, y, q => Math.abs(q.wx - plane) <= 1));
+        if (cl > hc + 1e-9) { head = [plane + (wx < fx ? 1 : -1) * D.wallLampOff, y]; hc = cl; }
+        if (hc >= 1) break;
+      }
     }
+    if (canopy && head && hc >= D.signMin) light(canopy, up, head[0], (head[1] + 0.5) * CELL, B[up] + D.wallLampY, 0.6);
   }
   for (const b of cc.bridges) {
     // under the deck: over the walk / low walk below its two ends (the deck lowers their ceiling)
