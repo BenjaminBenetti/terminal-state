@@ -47,9 +47,10 @@ export const LIFT_RIDE = {
 } as const;
 
 /**
- * The destination's compile while the ride waits for it (Game.backgroundCompile(true); render/journeyCompile.ts options): only the sealed
- * car is drawn, so the job steps every frame (maxStaleMs 0: the scheduler's bounded overdue rule, never a held frame) with bigger scene
- * chunks and slices than a train journey's play-time pacing. Coverage is the journey's 'full' plan.
+ * The destination's compile while a crossing waits for its exit's first view (Game.prepareCrossingView; render/journeyCompile.ts
+ * options; the lift ride and the on-foot connector): only the sealed car / tube is drawn, so the job steps every frame (maxStaleMs 0: the
+ * scheduler's bounded overdue rule, never a held frame) with bigger scene chunks and slices than a train journey's play-time pacing;
+ * once the exit opens the rest runs in the journey's play pacing (JourneyCompile.pace(null)). Coverage is the journey's 'full' plan.
  * (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01: "the lift never opens … and so you are stuck" — the uncapped
  * wait for ~5000 scene items in chunks of 8, ONE compile call in flight, each launch waiting up to 20 frames for a background-priority
  * task: ~630 launches, at least one frame each and up to a third of a second each where the browser defers background tasks under the
@@ -59,40 +60,16 @@ export const LIFT_RIDE = {
 export const LIFT_RIDE_COMPILE = {chunk: 48, shadowChunk: 96, maxStaleMs: 0, sliceMs: 8, shadowTargetMs: 6, postStallFrames: 3} as const;
 
 /**
- * The ride's wait for that compile (Game.liftCompile; active time = playing frames only, render/../core/frameBudget.ts activeMs): the
- * loading screen's own budget (render/warmup.ts WARMUP_DEFAULTS.budgetMs: its warm-up ends 'partial' there and play goes on), or a job that
- * made no progress for `stallMs` — then the doors open on the BUILT, live destination with the rest compiling in spare frame time (the
- * journey's play pacing), reported. Never longer; a job that ended early (cancelled / failed) is retried once, `pollMs` the check's period.
- * The paced build's slice while only the sealed car is drawn (the journey's default: core/pacedBuild.ts PACED_BUILD.sliceMs 6).
+ * A crossing's wait for its exit's first view (render/firstView.ts waitForFirstView; active time = playing frames only,
+ * core/frameBudget.ts activeMs): the loading screen's own budget (render/warmup.ts WARMUP_DEFAULTS.budgetMs: its warm-up ends 'partial'
+ * there and play goes on), or no first-view progress for `stallMs` — then the exit opens on the BUILT, live destination with the rest
+ * prepared in spare frame time (the journey's play pacing), reported. Never longer; a job that ended early (cancelled / failed) is retried
+ * once, `pollMs` the check's period. The paced build's slice while only the sealed car is drawn (the journey's default:
+ * core/pacedBuild.ts PACED_BUILD.sliceMs 6).
+ * (task studio-surface-host-ground-connectors-20261118-053602-01, lane READY: the ride's old wait for the WHOLE job — waitForLiftCompile —
+ * is gone; the first view's wait replaced it, tests/crossing-first-view.test.ts.)
  */
 export const LIFT_RIDE_WAIT = {budgetMs: 120_000, stallMs: 30_000, pollMs: 200, buildSliceMs: 12} as const;
-
-/** What the ride's wait reads of its compile job (render/journeyCompile.ts JourneyCompile). */
-export interface LiftCompileJob {
-  readonly stats: {phase: string; sceneDone: number; shadowDone: number; twoPassDone: number; cancelReason: string | null};
-  readonly done: Promise<void>;
-}
-
-/**
- * The ride's wait for its compile job (Game.backgroundCompile(true)): the job's own end ('done', or 'cancelled' with its reason), or
- * 'partial' once `W.budgetMs` of ACTIVE time (`activeMs`: core/frameBudget.ts activeMs — playing frames only, so a paused ride waits)
- * passed since `since` ('budget'), or the job made no progress — items settled / drawn — for `W.stallMs` of active time ('stalled').
- * Checked every `W.pollMs`; never rejects.
- */
-export function waitForLiftCompile(job: LiftCompileJob, activeMs: () => number, since: number, W: {budgetMs: number; stallMs: number; pollMs: number} = LIFT_RIDE_WAIT): Promise<{end: 'done' | 'partial' | 'cancelled'; why: string}> {
-  let seen = -1, seenAt = activeMs();
-  return new Promise(resolve => {
-    let open = true;
-    const finish = (end: 'done' | 'partial' | 'cancelled', why: string) => { if (!open) return; open = false; clearInterval(timer); resolve({end, why}); };
-    const timer = setInterval(() => {
-      const st = job.stats, n = st.sceneDone + st.shadowDone + st.twoPassDone, now = activeMs();
-      if (n !== seen) { seen = n; seenAt = now; }
-      if (now - since >= W.budgetMs) finish('partial', 'budget');
-      else if (now - seenAt >= W.stallMs) finish('partial', 'stalled');
-    }, W.pollMs);
-    void job.done.then(() => finish(job.stats.phase === 'done' ? 'done' : 'cancelled', job.stats.phase === 'done' ? '' : job.stats.cancelReason ?? 'cancelled'));
-  });
-}
 
 /** One end's drawn lift. */
 interface LiftEnd {

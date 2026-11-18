@@ -6,12 +6,13 @@
 //     also a draw that throws — every mask exactly as before. `sealed`: travel / waiting with the doors shut only.
 //  2. LOOK: the car's tick folds the mouse-applied world yaw into the car-local yaw before writing the pose back (the transit gap ticks
 //     the car BEFORE stepping the player: the turn used to be put back every frame).
-//  3. The ride's BOUNDED compile wait (waitForLiftCompile): done / cancelled (with the job's reason) / 'partial' at the budget or after a
-//     stall of active time; progress resets the stall clock; a paused ride (no active time) never times out.
+//  3. The ride's wait is BOUNDED like the loading screen's warm-up (LIFT_RIDE_WAIT). (task studio-surface-host-ground-connectors-20261118-
+//     053602-01, lane READY: the ride waits for its exit's FIRST VIEW now — render/firstView.ts waitForFirstView, its ready / cancelled /
+//     budget / stall / paused cases in tests/crossing-first-view.test.ts; the old whole-job wait, waitForLiftCompile, is gone.)
 import * as THREE from 'three';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {CULL_LAYER} from '../src/world/levelCulling';
-import {LIFT_RIDE_WAIT, SurfaceLiftRuntime, waitForLiftCompile, type LiftCompileJob} from '../src/world/surface/liftRuntime';
+import {LIFT_RIDE_WAIT, SurfaceLiftRuntime} from '../src/world/surface/liftRuntime';
 
 const CULL = (1 << CULL_LAYER) >>> 0;
 
@@ -100,52 +101,7 @@ describe('Surface lift: the held rider\'s look', () => {
   });
 });
 
-describe('Surface lift: the bounded compile wait', () => {
-  const job = () => {
-    let resolve!: () => void;
-    const j = {stats: {phase: 'scene', sceneDone: 0, shadowDone: 0, twoPassDone: 0, cancelReason: null as string | null}, done: new Promise<void>(r => { resolve = r; })};
-    return {j: j as LiftCompileJob & typeof j, end: (phase: string, reason: string | null = null) => { j.stats.phase = phase; j.stats.cancelReason = reason; resolve(); }};
-  };
-  const W = {budgetMs: 10_000, stallMs: 3000, pollMs: 100};
-
-  it('ends with the job: done / cancelled with its reason', async () => {
-    vi.useFakeTimers();
-    let t = 0;
-    const a = job(), pa = waitForLiftCompile(a.j, () => t, 0, W);
-    t = 500; await vi.advanceTimersByTimeAsync(500);
-    a.end('done');
-    await expect(pa).resolves.toEqual({end: 'done', why: ''});
-    const b = job(), pb = waitForLiftCompile(b.j, () => t, t, W);
-    b.end('cancelled', 'error');
-    await expect(pb).resolves.toEqual({end: 'cancelled', why: 'error'});
-  });
-
-  it('ends partial after a stall of active time; progress resets the stall clock', async () => {
-    vi.useFakeTimers();
-    let t = 0, out: unknown = null;
-    const a = job();
-    void waitForLiftCompile(a.j, () => t, 0, W).then(r => { out = r; });
-    for (let i = 0; i < 25; i++) { t += 100; a.j.stats.sceneDone += 3; await vi.advanceTimersByTimeAsync(100); }
-    expect(out, 'progressing: still waiting').toBe(null);
-    for (let i = 0; i < 29; i++) { t += 100; await vi.advanceTimersByTimeAsync(100); }
-    expect(out, 'stalled 2.9 s: still waiting').toBe(null);
-    t += 200; await vi.advanceTimersByTimeAsync(200);
-    expect(out).toEqual({end: 'partial', why: 'stalled'});
-  });
-
-  it('ends partial at the budget even while it progresses; a paused ride (no active time) never times out', async () => {
-    vi.useFakeTimers();
-    let t = 0, out: unknown = null;
-    const a = job();
-    void waitForLiftCompile(a.j, () => t, 0, W).then(r => { out = r; });
-    await vi.advanceTimersByTimeAsync(60_000); // paused: wall time passes, active time does not
-    expect(out).toBe(null);
-    for (let i = 0; i < 99; i++) { t += 100; a.j.stats.shadowDone++; await vi.advanceTimersByTimeAsync(100); }
-    expect(out).toBe(null);
-    t += 200; a.j.stats.twoPassDone++; await vi.advanceTimersByTimeAsync(200);
-    expect(out).toEqual({end: 'partial', why: 'budget'});
-  });
-
+describe('Surface lift: the bounded wait', () => {
   it('bounds the ride like the loading screen\'s warm-up', async () => {
     const {WARMUP_DEFAULTS} = await import('../src/render/warmup');
     expect(LIFT_RIDE_WAIT.budgetMs).toBe(WARMUP_DEFAULTS.budgetMs);

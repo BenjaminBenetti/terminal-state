@@ -982,6 +982,16 @@ export class ContainerManager {
     this.display.pulse(time);
   }
 
+  /**
+   * (task studio-surface-host-ground-connectors-20261118-053602-01, lane READY) The item instances as the first frame from `eye` shows
+   * them — a crossing's exit before the player stands there (the next play refresh from the real eye takes over): its first view
+   * (render/firstView.ts) then plans and draws the loot batches that frame will draw, instead of leaving them to it.
+   */
+  showFrom(eye: THREE.Vector3): void {
+    this.lastEye.copy(eye);
+    this.refresh();
+  }
+
   /** Rewrites the visible item instances: nearby holders whose contents can be seen. */
   private refresh(): void {
     this.dirty = false;

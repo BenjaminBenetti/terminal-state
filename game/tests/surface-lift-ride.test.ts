@@ -3,9 +3,11 @@
 // on the validating no-op device (helpers/headlessGame.ts).
 //  1. A new campaign at a Surface Run Subway station (version 2): its access is the cargo lift; standing in the car the prompt rides up.
 //  2. [E] -> the doors close with the player held in the car -> the old world is left, the district generated (at the press, measured),
-//     built paced and compiled completely — every frame meanwhile DRAWN (never a loading state, no warm-up behind a hidden canvas) — and
-//     the doors stay SHUT until the compile is done; paused mid-ride they stay shut until play resumes. Arrival: standing in the tent's
-//     car, doors open, released; the eye's gas exposure 0 in the tent with its flap shut.
+//     built paced and its exit's FIRST VIEW prepared (task studio-surface-host-ground-connectors-20261118-053602-01, lane READY:
+//     Game.prepareCrossingView — here, the atmosphere off, compiled: the direct path cannot draw off-screen) — every frame meanwhile DRAWN
+//     (never a loading state, no warm-up behind a hidden canvas) — and the doors stay SHUT until that first view is ready; paused mid-ride
+//     they stay shut until play resumes. Arrival: standing in the tent's car, doors open, released; the eye's gas exposure 0 in the tent
+//     with its flap shut.
 //  3. The tent's doorway is a real opening: with the flap shut the player cannot walk out; opened, they walk out through it and back in
 //     on the real collision (Player.update in the game loop, held W).
 //  4. [E] in the tent's car rides down: back in the station's car, the station exactly as left, no district objects / resources / frame
@@ -13,7 +15,8 @@
 //  5. A ride whose destination cannot be prepared (QA failure injection) returns the player to the car they left (recovered).
 //  6. (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01: "the lift never opens … and so you are stuck") a ride whose
 //     compile job is cancelled under it (retried once) and whose retry never progresses (QA injections) opens BOUNDED — the stall rule of
-//     LIFT_RIDE_WAIT, active time — on the BUILT district, never before; the rest compiles in play (a new job); no loading screen.
+//     LIFT_RIDE_WAIT (no first-view progress), active time — on the BUILT district, never before; the rest compiles in play (a new job);
+//     no loading screen.
 //  Every ride: the mouse turns the held rider in the transit gap ("you cannot look left and right when in the lift"), and a SEALED frame
 //  (the shut car between its stops) draws nothing of the world but the car's own view ("a black plane passes through you": the world's
 //  geometry crossing the virtual shaft); the held rider's status line says what is being prepared.
@@ -69,7 +72,7 @@ interface Priv {
 }
 
 describe('Surface Run v2: the cargo lift ride (real Game, validating device)', () => {
-  it('rides up and down with no loading screen; doors shut until the destination is compiled; the tent walk-through; recovery; bounded', async () => {
+  it('rides up and down with no loading screen; doors shut until the exit\'s first view is ready; the tent walk-through; recovery; bounded', async () => {
     const T0 = performance.now(), marks: string[] = [];
     const mark = (s: string) => marks.push(`${s} ${((performance.now() - T0) / 1000).toFixed(1)} s`);
     const quiet = () => {};
@@ -168,7 +171,7 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       expect(R, 'the lift runtime is installed').toBeTruthy();
       const liftViews = () => { let n = 0; game.scene.traverse(o => { if (o.name === 'cargo-lift-surface') n++; }); return n; };
       // every drawn frame: the ride's phase / doors, the transit gap, the compile, the state
-      const samples: {gap: boolean; phase: string; door: number; compile: string | null; job: object | null; state: string; built: boolean}[] = [];
+      const samples: {gap: boolean; phase: string; door: number; compile: string | null; fv: string | null; job: object | null; state: string; built: boolean}[] = [];
       // the held rider's look: a mouse turn armed after a frame's input reset (applied by the next frame's update), checked at its draw
       const look = {armed: false, yaw: 0, moved: 0, lost: 0, gap: 0};
       const status = new Set<string>();
@@ -176,7 +179,7 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       G.render = () => {
         if (look.armed) { look.armed = false; if (Math.abs(game.player.yaw - look.yaw) > 1e-6) look.moved++; else look.lost++; }
         const r = render0(); const j = game.journeyCompileStats;
-        samples.push({gap: G.transitGap, phase: R.phase, door: R.door, compile: j?.phase ?? null, job: j, state: game.state, built: G.liftBuilt});
+        samples.push({gap: G.transitGap, phase: R.phase, door: R.door, compile: j?.phase ?? null, fv: j?.firstView ?? null, job: j, state: game.state, built: G.liftBuilt});
         const line = R.statusLine(); if (line) status.add(line.replace(/\d+ %/, 'N %'));
         return r;
       };
@@ -270,11 +273,11 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       expect(seal.builtDraws, 'sealed draws checked with the destination built').toBeGreaterThan(0);
       expect(seal.leaks, `nothing of the world drawn in a sealed car (${seal.worst})`).toBe(0);
       expect([...status].some(x => x.includes('preparing the street')), 'status: the street being prepared').toBe(true);
-      expect([...status].some(x => x.includes('preparing graphics N %')), 'status: the compile\'s real share').toBe(true);
-      expect(game.surfaceLiftCompile, 'the compile completed').toMatchObject({end: 'done', tries: 1});
+      expect([...status].some(x => /^Going up — preparing the view \d+ \/ \d+$/.test(x)), 'status: the first view\'s real units done / of all').toBe(true);
+      expect(game.surfaceLiftCompile, 'the first view ready (compiled: no off-screen scene pass with the atmosphere off), the first try').toMatchObject({end: 'ready', why: 'compiled, not drawn (no off-screen scene pass)', tries: 1});
       const shut = ride.findIndex(s => s.phase === 'travel');
       expect(shut).toBeGreaterThan(0);
-      for (const s of ride.slice(shut)) if (s.door > 0) expect(s.compile, `doors opening only after the compile: ${JSON.stringify(s)}`).toBe('done');
+      for (const s of ride.slice(shut)) if (s.door > 0) expect(s.fv, `doors opening only after the first view is ready: ${JSON.stringify({...s, job: null})}`).toBe('ready');
       expect(ride.slice(shut).some(s => s.door === 0 && s.compile === 'scene'), 'the compile ran while the doors were shut').toBe(true);
       expect(game.surfaceLiftGenMs).toBeGreaterThan(0);
       expect(game.run.current).toEqual(surfKey);
@@ -329,7 +332,7 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       mark('[E] down');
       const down = samples.slice(n1), shut2 = down.findIndex(s => s.phase === 'travel');
       expect(shut2).toBeGreaterThan(0);
-      for (const s of down.slice(shut2)) if (s.door > 0) { expect(s.job, 'the station\'s own compile (not the last ride\'s)').not.toBe(staleJob); expect(s.compile).toBe('done'); }
+      for (const s of down.slice(shut2)) if (s.door > 0) { expect(s.job, 'the station\'s own compile (not the last ride\'s)').not.toBe(staleJob); expect(s.fv, 'the station\'s first view ready').toBe('ready'); }
       marks.push(`ride down: ${down.length} frames drawn, ${down.filter(s => s.gap).length} in the transit gap; generation at the press ${game.surfaceLiftGenMs.toFixed(0)} ms; look ${JSON.stringify(look)}; sealed ${JSON.stringify(seal)}`);
       expect(look.lost, 'ride down: every mouse turn turned the rider').toBe(0);
       expect(seal.builtDraws, 'ride down: sealed draws checked with the station built (its hall ceiling over the stop)').toBeGreaterThan(0);

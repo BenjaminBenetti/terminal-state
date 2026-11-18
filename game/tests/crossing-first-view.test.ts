@@ -17,12 +17,14 @@
 //     first-view progress (progress resets the stall clock) / 'cancelled' with the job's reason; a paused crossing (no active time) waits;
 //  6. planFirstView: what a frame can draw from the exit (near radius incl. culled; the culler's stand-in sweep beyond it; nothing hidden,
 //     nothing past the far plane), one representative per program group nearest first, casters within the torch's reach, and the culler's
-//     decisions put back for the game camera.
+//     decisions put back for the game camera — after every sweep yaw (planFirstViewSteps: one step each; inFrameStep: a frame each);
+//  7. until the first view is ready the frames are its own: the scene lane compiles only its lead, the shadow lane draws only its casters,
+//     the two-pass lane waits; then the rest of the job (all of it) follows.
 import * as THREE from 'three';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {FrameBudget} from '../src/core/frameBudget';
 import {CASTER_LAYER, FIRST_VIEW_DRAW, JOURNEY_COMPILE, JourneyCompile, PREP_LAYER} from '../src/render/journeyCompile';
-import {FIRST_VIEW, firstViewProgress, firstViewRest, firstViewStatus, planFirstView, waitForFirstView, type FirstViewSweep} from '../src/render/firstView';
+import {FIRST_VIEW, firstViewCoverage, firstViewProgress, firstViewRest, firstViewStatus, inFrameStep, planFirstView, planFirstViewSteps, waitForFirstView, type FirstViewSweep} from '../src/render/firstView';
 import type {WarmItem} from '../src/render/warmup';
 import {CULL_LAYER} from '../src/world/levelCulling';
 import {LIFT_RIDE_COMPILE, LIFT_RIDE_WAIT} from '../src/world/surface/liftRuntime';
@@ -190,12 +192,17 @@ describe('crossing readiness: the exit\'s first view (render/firstView.ts, the j
     expect(job.running).toBe(true);
     const r0 = firstViewRest(job.stats);
     expect(r0.left).toBeGreaterThan(0);
+    // whenScene: at once for what is compiled; the rest's count once the lane reaches it
+    let at = -1;
+    await job.whenScene(job.stats.sceneDone);
+    void job.whenScene(job.stats.sceneDone + 5).then(() => { at = job.stats.sceneDone; });
     job.pace(null);
     const sizes: number[] = [];
     const ca = k.R.compileAsync.bind(k.R);
     k.R.compileAsync = (s: THREE.Object3D, v: THREE.Camera) => { let n = 0; s.traverse(x => { if ((x as THREE.Mesh).isMesh && x.layers.test(v.layers)) n++; }); sizes.push(n); return ca(s, v); };
     for (let f = 0; f < 400 && job.running; f++) await k.frame();
     expect(job.stats.phase).toBe('done');
+    expect(at, 'whenScene resolved as the lane reached its count').toBeGreaterThanOrEqual(0);
     expect(sizes.length).toBeGreaterThan(0);
     expect(sizes.every(n => n === JOURNEY_COMPILE.chunk), 'play pacing: one item per call').toBe(true);
     expect(firstViewRest(job.stats)).toEqual({left: 0, total: r0.total});
@@ -312,23 +319,38 @@ describe('crossing readiness: the exit\'s first view (render/firstView.ts, the j
 
   it('planFirstView: what a frame can draw from the exit (any yaw), one representative per program group, casters in reach, the culler put back', () => {
     const k = rig({reps: 5, copies: 3});
+    // drawn by every frame wherever it is (no frustum test; an effect pool with no instance yet): in, past the far plane too
+    const fx = new THREE.InstancedMesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshStandardMaterial(), 16);
+    fx.count = 0;
+    fx.frustumCulled = false;
+    k.scene.add(fx);
+    fx.position.set(0, 0, -200);
     const before = new Map<THREE.Object3D, number>();
     k.scene.traverse(x => before.set(x, x.layers.mask));
     const plan = k.fvPlan();
     const all = new Set([...plan.reps, ...plan.others].map(i => i.object));
+    expect(all.has(fx), 'an always-drawn renderable on the camera\'s layers, past the far plane').toBe(true);
+    expect(plan.stats.always).toBe(1);
+    expect(plan.reps.at(-1)!.object, 'the farthest (sorted at the far plane)').toBe(fx);
     expect(all.has(k.culledNear), 'culled within the radius').toBe(true);
     expect(all.has(k.sweptFar), 'beyond the radius, shown by the culler from the exit').toBe(true);
     expect(all.has(k.pastFar), 'past the far plane').toBe(false);
     expect(all.has(k.pooled), 'hidden (a pool: its first use)').toBe(false);
     for (const m of k.farItems) expect(all.has(m), 'culled beyond the radius, shown from nowhere').toBe(false);
-    // a group's caster is its own program group (the shadow flags are part of the key): 5 x 2 + the culled near + the swept far
-    expect(plan.reps.length).toBe(5 * 2 + 2);
+    // a group's caster is its own program group (the shadow flags are part of the key): 5 x 2 + the culled near + the swept far + fx
+    expect(plan.reps.length).toBe(5 * 2 + 3);
     expect(plan.others.length).toBe(5 * 2);
+    // the destination plan's items by the first view's program groups: a group's other copy is covered, a far item's own material is new
+    const copy: WarmItem = {object: new THREE.Mesh(k.groups[0][1].geometry, k.groups[0][1].material) as never, flips: [], caster: false};
+    copy.object.position.set(500, 0, 500);
+    copy.object.receiveShadow = true; // (as the group's: the shadow flags are part of the program group)
+    const far: WarmItem = {object: k.farItems[0] as never, flips: [], caster: false};
+    expect(firstViewCoverage([far, copy], plan, false)).toEqual({fresh: [far], covered: [copy]});
     const d = (o: THREE.Object3D) => o.position.length();
     for (let i = 1; i < plan.reps.length; i++) expect(d(plan.reps[i].object)).toBeGreaterThanOrEqual(d(plan.reps[i - 1].object) - 1);
     expect(plan.casters.map(i => i.object)).toEqual(k.groups.map(g => g[0]).sort((a, b) => d(a) - d(b)));
     expect(plan.stats.poses).toBe(FIRST_VIEW.yaws * FIRST_VIEW.pitches.length);
-    expect([k.sweep.updates, k.sweep.restores]).toEqual([plan.stats.poses, 1]);
+    expect([k.sweep.updates, k.sweep.restores], 'the culler put back after each yaw').toEqual([plan.stats.poses, FIRST_VIEW.yaws]);
     const after = new Map<THREE.Object3D, number>();
     k.scene.traverse(x => after.set(x, x.layers.mask));
     expect(after, 'every layer as the game camera\'s culler left it').toEqual(before);
@@ -337,5 +359,72 @@ describe('crossing readiness: the exit\'s first view (render/firstView.ts, the j
     expect(() => planFirstView(k.scene, {exit: {x: 0, y: 1.6, z: 0}, cameraMask: 1, camera: k.cam, sweep: bad})).toThrow('culler');
     expect(bad.restore).toHaveBeenCalledTimes(1);
     expect(LIFT_RIDE_WAIT.stallMs).toBeLessThan(LIFT_RIDE_WAIT.budgetMs);
+  });
+
+  it('planFirstViewSteps: one step per sweep yaw, the culler put back before each (a frame between two sees the game camera\'s), the same plan', async () => {
+    const k = rig({reps: 5, copies: 3});
+    const whole = k.fvPlan();
+    k.sweep.updates = k.sweep.restores = 0;
+    const g = planFirstViewSteps(k.scene, {exit: {x: 0, y: 1.6, z: 0, yaw: 0}, cameraMask: k.cam.layers.mask, camera: k.cam, sweep: k.sweep, casters: true});
+    let steps = 0, r = g.next();
+    while (!r.done) {
+      steps++;
+      expect(k.sweep.restores, 'restored before the step returned').toBe(steps);
+      expect(k.sweptFar.layers.mask, 'the game camera\'s decision between steps').toBe(CULLED);
+      r = g.next();
+    }
+    expect(steps + 1).toBe(FIRST_VIEW.yaws);
+    const plan = r.value;
+    expect(plan.reps.map(i => i.object)).toEqual(whole.reps.map(i => i.object));
+    expect(plan.others.map(i => i.object)).toEqual(whole.others.map(i => i.object));
+    expect(plan.casters.map(i => i.object)).toEqual(whole.casters.map(i => i.object));
+    // inFrameStep: each in a frame of its own (the next frame's scheduler run), its value or its error; a world change cancels it
+    const frames: number[] = [];
+    const a = inFrameStep(k.fb, 'crossing.plan', () => { frames.push(k.fb.frame); return 7; });
+    expect(frames).toEqual([]);
+    await k.frame();
+    expect(await a).toBe(7);
+    const b = expect(inFrameStep(k.fb, 'crossing.plan', () => { throw new Error('boom'); })).rejects.toThrow('boom');
+    await k.frame();
+    await b;
+    const c = expect(inFrameStep(k.fb, 'crossing.plan', () => 1)).rejects.toThrow(/crossing step/);
+    k.fb.bumpGeneration();
+    await c;
+    expect(firstViewStatus('The passage', null), 'no job yet: being planned').toBe('The passage — preparing the view…');
+  });
+
+  it('until the first view is ready its lanes have the frames: the scene lane\'s lead only, its casters only, no two-pass draw; then all the rest', async () => {
+    const k = rig({reps: 6, copies: 2, far: 30, newMs: 1});
+    const plan = k.fvPlan();
+    // more casters (outside the first view) and a two-pass scene item outside it
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({transparent: true, side: THREE.DoubleSide}));
+    glass.position.set(40, 1, -40);
+    glass.layers.mask = CULLED;
+    k.scene.add(glass);
+    const glassItem: WarmItem = {object: glass as never, flips: [], caster: false};
+    const farCasters: WarmItem[] = k.farItems.map(m => ({object: m as never, flips: [], caster: true}));
+    const lead = new Set(plan.reps.map(i => i.object));
+    const items = [...plan.reps, glassItem, ...k.farItems.map(m => ({object: m as never, flips: [], caster: false})).filter(i => !lead.has(i.object))];
+    const job = k.make(plan, {chunk: 4, items, casters: [...plan.casters, ...farCasters]}).start();
+    expect(job.stats.twoPass).toBe(1);
+    const compiledObjs = new Set<THREE.Object3D>();
+    const ca = k.R.compileAsync.bind(k.R);
+    k.R.compileAsync = (s: THREE.Object3D, v: THREE.Camera) => { s.traverse(x => { if ((x as THREE.Mesh).isMesh && x.visible && x.layers.test(v.layers)) compiledObjs.add(x); }); return ca(s, v); };
+    for (let f = 0; f < 600 && job.stats.firstView !== 'ready'; f++) {
+      await k.frame();
+      if ((job.stats.firstView as string) === 'ready') break; // (set by the frame)
+      expect(job.stats.sceneDone, 'the scene lane: its lead only').toBeLessThanOrEqual(plan.reps.length);
+      expect(job.stats.shadowDone, 'the shadow lane: the first view\'s casters only').toBeLessThanOrEqual(plan.casters.length);
+      expect(job.stats.twoPassDone).toBe(0);
+    }
+    expect(job.stats.firstView).toBe('ready');
+    expect(compiledObjs.has(glass), 'the two-pass item (outside the first view) not compiled yet').toBe(false);
+    for (const m of k.farItems) expect(compiledObjs.has(m)).toBe(false);
+    expect(k.draws.some(d => d.objects.includes(glass))).toBe(false);
+    job.pace(null);
+    for (let f = 0; f < 2000 && job.running; f++) await k.frame();
+    expect(job.stats.phase).toBe('done');
+    expect([job.stats.sceneDone, job.stats.shadowDone, job.stats.twoPassDone]).toEqual([job.stats.sceneItems, job.stats.casters, 1]);
+    expect(firstViewRest(job.stats).left).toBe(0);
   });
 });

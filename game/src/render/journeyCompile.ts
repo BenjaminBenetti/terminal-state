@@ -67,7 +67,10 @@
 //    level culler left them, the shadow pass's real casters) into the scene pass's target — the frame that would otherwise have been
 //    the door-open frame;
 //  - stats.firstView says where it is ('pending' compile -> 'drawing' -> 'frame' -> 'ready'); `viewReady` resolves then (or when the
-//    job ended). The rest of the job goes on; pace() hands it the journey's play pacing once the exit is open. Without a scene pass
+//    job ended). Until then the frames are the first view's: the scene lane compiles only its lead (the items up to the last
+//    representative), the shadow lane draws only its casters, the two-pass lane waits (measured on the Subway lift ride in Node: the
+//    whole job's other lanes, side by side, had drawn every caster of the destination and a third of its scene items by then — frames
+//    the first view waited for). Then the rest of the job; pace() hands it the journey's play pacing once the exit is open. Without a scene pass
 //    target (the direct path: an off-screen draw would land on the canvas) the first view is COMPILED only (stats.viewDrawn false).
 
 import * as THREE from 'three';
@@ -210,6 +213,8 @@ export class JourneyCompile {
   /** (lane READY) Resolves when the first view is ready (stats.firstView 'ready'), at once without one, or when the job ended. */
   readonly viewReady: Promise<void>;
   private resolveScene!: () => void;
+  /** (lane READY) whenScene's waiters: resolved once sceneDone reaches their count (or the job ended). */
+  private sceneWaiters: {n: number; resolve: () => void}[] = [];
   private resolveDone!: () => void;
   private resolveView!: () => void;
   /** (lane READY) The first view (null: none); its representatives' compile state by object; the compiled leading run; the next to draw. */
@@ -218,6 +223,8 @@ export class JourneyCompile {
   private readonly repCompiled: boolean[] = [];
   private repPrefix = 0;
   private repsCompiledN = 0;
+  /** (lane READY) The scene items up to the last first-view representative (the lane's lead while the first view is not ready). */
+  private leadScene = 0;
   private nextView = 0;
   private viewN = 1;
   private viewAt = -1;
@@ -275,6 +282,7 @@ export class JourneyCompile {
         if (!scene.has(obj)) this.repsCompiledN++;
         else if (!this.repIndex.has(obj)) this.repIndex.set(obj, k);
       }
+      o.items.forEach((i, k) => { if (this.repIndex.has(i.object)) this.leadScene = k + 1; });
       this.advanceReps();
     }
     this.stats = {phase: 'scene', sceneItems: o.items.length, sceneDone: 0, casters: this.o.receiver ? o.casters.length : 0, shadowDone: 0,
@@ -318,9 +326,9 @@ export class JourneyCompile {
     // (a two-pass item that never reached the queue — the scene lane ended without it — cannot be drawn: nothing is left to wait for)
     if (!this.sceneLeft && !this.shadowLeft && !(this.sidesLeft && this.nextSides < this.sides.length) && !this.viewLeft) { this.end('done', null); return; }
     this.stats.phase = this.sceneLeft ? 'scene' : 'shadow';
-    if ((this.nextScene < this.o.items.length && !this.inFlight) || this.posted) this.request('scene');
-    if (this.shadowLeft) this.request('shadow');
-    if (this.nextSides < this.sides.length) this.request('sides');
+    if ((this.nextScene < this.sceneEnd && !this.inFlight) || this.posted) this.request('scene');
+    if (this.nextShadow < this.shadowEnd) this.request('shadow');
+    if (this.nextSides < this.sides.length && !this.viewLeft) this.request('sides');
     if (this.viewDrawable) this.request('view');
   }
 
@@ -329,6 +337,14 @@ export class JourneyCompile {
 
   /** First-view work left (not ready yet). */
   private get viewLeft(): boolean { return !!this.fv && this.stats.firstView !== 'ready'; }
+
+  /**
+   * While the first view is not ready the frames are its own: the scene lane compiles only its lead (up to the last representative), the
+   * shadow lane draws only the first view's casters, the two-pass lane waits (the first view's own two-pass items are drawn by its
+   * draws). The rest of the job follows once it is ready (in the pacing the caller sets then: a crossing's play pacing).
+   */
+  private get sceneEnd(): number { return this.viewLeft ? this.leadScene : this.o.items.length; }
+  private get shadowEnd(): number { return this.viewLeft ? this.fv!.casters : this.stats.casters; }
 
   /** The first view's casters drawn (the shadow lane's leading ones). */
   private get viewCastersDone(): boolean { return !this.fv || this.stats.shadowDone >= this.fv.casters; }
@@ -464,6 +480,20 @@ export class JourneyCompile {
   /** The job has not ended (still preparing something). */
   get running(): boolean { return !this.ended; }
 
+  /**
+   * (lane READY) Resolves once the scene lane has compiled its first `n` items (stats.sceneDone >= n) — a crossing: the destination's
+   * new program groups, before the rest's own render objects — or when the job ended.
+   */
+  whenScene(n: number): Promise<void> {
+    if (this.ended || this.stats.sceneDone >= n) return Promise.resolve();
+    return new Promise(resolve => { this.sceneWaiters.push({n, resolve}); });
+  }
+
+  private settleSceneWaiters(): void {
+    const done = this.stats.sceneDone;
+    this.sceneWaiters = this.sceneWaiters.filter(w => { if (done < w.n) return true; w.resolve(); return false; });
+  }
+
   private request(lane: Lane): void {
     if (this.ended || this.requested[lane]) return;
     this.requested[lane] = true;
@@ -540,7 +570,7 @@ export class JourneyCompile {
       this.compileNext();
       return;
     }
-    if (this.inFlight || this.nextScene >= this.o.items.length) return;
+    if (this.inFlight || this.nextScene >= this.sceneEnd) return;
     this.stats.slices++;
     this.sliceFrame = this.frameNo();
     this.sliceStart = this.now();
@@ -571,7 +601,8 @@ export class JourneyCompile {
     if (this.ended) { this.inFlight = false; return; }
     if (this.o.scheduler.generation !== this.generation) { this.inFlight = false; this.end('cancelled', 'generation'); return; }
     const {renderer: r, items, chunk} = this.o;
-    const part = items.slice(this.nextScene, this.nextScene + chunk);
+    const part = items.slice(this.nextScene, Math.min(this.nextScene + chunk, this.sceneEnd));
+    if (!part.length) { this.inFlight = false; queueMicrotask(() => this.progress()); return; }
     this.nextScene += part.length;
     this.flight = part;
     this.stats.sceneChunks++;
@@ -606,6 +637,7 @@ export class JourneyCompile {
     if (this.ended) return;
     if (this.o.scheduler.generation !== this.generation) { this.end('cancelled', 'generation'); return; }
     this.stats.sceneDone += n;
+    if (this.sceneWaiters.length) this.settleSceneWaiters();
     for (const i of this.flight) if (this.twoPass.has(i)) this.sides.push(i); // (lane PLAY: compiled — the 'sides' lane may draw it now)
     if (this.repIndex.size) {
       // (lane READY) a first-view representative compiled: the 'view' lane may draw it now (in order)
@@ -616,7 +648,7 @@ export class JourneyCompile {
     const sameFrame = this.frameNo() === this.sliceFrame, ms = this.now() - this.sliceStart;
     if (this.sliceCount > this.stats.maxPerSlice) this.stats.maxPerSlice = this.sliceCount;
     if (sameFrame && ms > this.stats.sliceMaxMs) this.stats.sliceMaxMs = ms;
-    if (sameFrame && ms < (this.o.sliceMs ?? JOURNEY_COMPILE.sliceMs) && this.sliceCount < JOURNEY_COMPILE.maxPerSlice && this.nextScene < this.o.items.length) { this.launch(); return; }
+    if (sameFrame && ms < (this.o.sliceMs ?? JOURNEY_COMPILE.sliceMs) && this.sliceCount < JOURNEY_COMPILE.maxPerSlice && this.nextScene < this.sceneEnd) { this.launch(); return; }
     this.progress();
   }
 
@@ -653,8 +685,9 @@ export class JourneyCompile {
 
   private shadowStep(): void {
     const {casters, shadowChunk, receiver} = this.o;
-    if (!receiver || this.nextShadow >= this.stats.casters) return;
-    const part = casters.slice(this.nextShadow, this.nextShadow + Math.min(shadowChunk, this.shadowN));
+    const end = this.shadowEnd;
+    if (!receiver || this.nextShadow >= end) return;
+    const part = casters.slice(this.nextShadow, Math.min(end, this.nextShadow + Math.min(shadowChunk, this.shadowN)));
     this.nextShadow += part.length;
     const t0 = performance.now();
     if (!this.offscreen([[receiver, PREP_MASK], ...part.map(i => [i, CASTER_MASK] as [WarmItem, number])], 'shadow')) return;
@@ -666,7 +699,7 @@ export class JourneyCompile {
 
   /** (lane PLAY) The 'sides' step: ONE compiled two-pass item drawn off-screen by the scene pass (its BackSide and FrontSide pipelines). */
   private sidesStep(): void {
-    if (this.nextSides >= this.sides.length) return;
+    if (this.nextSides >= this.sides.length || this.viewLeft) return;
     const item = this.sides[this.nextSides++];
     if (!this.offscreen([[item, PREP_MASK]], 'two-pass')) return;
     this.stats.twoPassDone++;
@@ -678,6 +711,7 @@ export class JourneyCompile {
     this.stats.cancelReason = reason;
     if (phase === 'cancelled') for (const lane of LANES) { const k = `${JOURNEY_COMPILE.key}.${lane}`; if (this.o.scheduler.has(k)) this.o.scheduler.cancel(k); }
     this.resolveScene();
+    for (const w of this.sceneWaiters.splice(0)) w.resolve();
     this.resolveView(); // (stats.firstView keeps where it got: a waiter reads it)
     this.resolveDone();
   }
