@@ -107,7 +107,7 @@ export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?:
     const diag = () => JSON.stringify({state: game.state, gap: G.transitGap, counts: game.surfaceCrossCounts, walk: C.qa(), compile: game.journeyCompileStats, errors: errors.slice(0, 2), frameErrors: frameErrors.slice(0, 2)}).slice(0, 1800);
     const until = async (f: () => boolean, max = 6000) => { for (let i = 0; i < max && !f(); i++) await h.waitFrames(1); return f(); };
     /** Walk (W held) steering along the tube's axis toward tube-local s = `to`, until `stop` (or `frames`). */
-    const walkTo = async (to: number, stop: () => boolean, frames = 4000) => {
+    const walkTo = async (to: number, stop: () => boolean, frames = 12000) => { // (bounded: a Mall's first view keeps the far flap down for ~3500 frames here)
       game.input.keys.add('KeyW');
       try {
         for (let i = 0; i < frames && !stop(); i++) {
