@@ -392,7 +392,7 @@ describe('crossing readiness: the exit\'s first view (render/firstView.ts, the j
     k.R.compileAsync = (s: THREE.Object3D, v: THREE.Camera) => { s.traverse(x => { if ((x as THREE.Mesh).isMesh && x.visible && x.layers.test(v.layers)) compiledObjs.add(x); }); return ca(s, v); };
     for (let f = 0; f < 600 && job.stats.firstView !== 'ready'; f++) {
       await k.frame();
-      if (job.stats.firstView === 'ready') break;
+      if ((job.stats.firstView as string) === 'ready') break; // (set by the frame)
       expect(job.stats.sceneDone, 'the scene lane: its lead only').toBeLessThanOrEqual(plan.reps.length);
       expect(job.stats.shadowDone, 'the shadow lane: the first view\'s casters only').toBeLessThanOrEqual(plan.casters.length);
       expect(job.stats.twoPassDone).toBe(0);
