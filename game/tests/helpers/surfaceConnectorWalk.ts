@@ -153,7 +153,11 @@ export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?:
       expect(inTube.length, `${label}: frames in the tube in play`).toBeGreaterThan(0);
       expect(Math.max(...inTube.map(s => s.gas)), `${label}: no gas at the eye in the tube`).toBe(0);
       expect(maxStep, `${label}: no jump in the walk`).toBeLessThan(0.35);
-      marks.push(`${label}: ${rs.length} frames (${report.gapFrames[dir]} in the gap), generation ${game.surfaceConnectorGenMs.toFixed(0)} ms, sealed leaks ${seal.leaks}`);
+      const cv = game.crossingView, j = cv?.job;
+      expect(cv?.end, `${label}: the far flap opened on a prepared first view (${cv?.why})`).toBe('ready');
+      marks.push(`${label}: ${rs.length} frames (${report.gapFrames[dir]} in the gap), generation ${game.surfaceConnectorGenMs.toFixed(0)} ms, sealed leaks ${seal.leaks}; `
+        + `first view ${cv?.end}${cv?.why ? ` (${cv.why})` : ''} in ${((cv?.ms ?? 0) / 1000).toFixed(1)} s (active ${((cv?.activeMs ?? 0) / 1000).toFixed(1)} s), ${j?.viewRepsCompiled}/${j?.viewReps} representatives, `
+        + `${j?.viewDone}/${j?.viewItems} drawn, tries ${cv?.tries}, left in play ${cv?.rest ? `${cv.rest.left}/${cv.rest.total}` : 'none'}`);
     };
 
     expect(await game.newCampaign(1, {overwrite: true, networkSeed: pick.seed, dev: {level: host}})).toMatchObject({ok: true, saved: true});
