@@ -113,7 +113,7 @@ export function hostPins(L: StationLayout, mode: HostMode, mask: readonly MaskRe
   let props: PropPlacement[] = L.props, pickups = L.pickups, areas = L.areas, lights = L.lights, signs = L.signs;
   let masks: {blocked: Uint8Array; sight: Uint8Array}[] | undefined;
   if (mode === 'lift' && a?.kind === 'lift') {
-    // (gen/surface/accessLiftHost.ts finish: one area, one light, one sign appended last)
+    // (the retired gen/surface/accessLiftHost.ts finish: one area, one light, one sign appended last)
     areas = L.areas.slice(0, -1); lights = L.lights.slice(0, -1); signs = L.signs.slice(0, -1);
   }
   if (mode === 'connector') {

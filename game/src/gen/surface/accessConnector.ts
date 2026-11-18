@@ -1,9 +1,9 @@
 // Task studio-surface-host-ground-connectors-20261118-053602-01: SURFACE RUN version 2 — the OFFICE / MALL host's end of the on-foot
 // CONNECTOR (gen/surface/connectorShape.ts: one level canvas tube from the host's street door to the command tent). User: "Office and
 // Mall already exit at ground level, so their elevators make no sense … Replace Office/Mall Surface elevators BOTH WAYS with believable
-// level-ground ON-FOOT connectors". Replaces the version-2 cargo lift of these two hosts (gen/surface/accessLiftHost.ts); the Subway keeps
-// its lift. The host grid is NOT carved: the tube stands outside it, over the street (world/surface/connectorView.ts draws it, the walk
-// model carries the player through the doorway and the tube).
+// level-ground ON-FOOT connectors". Replaces the version-2 cargo lift of these two hosts (the retired gen/surface/accessLiftHost.ts); the
+// Subway keeps its lift. The host grid is NOT carved: the tube stands outside it, over the street (world/surface/connectorView.ts draws
+// it, the walk model carries the player through the doorway and the tube).
 //  - OFFICE: the version-1 way out exactly (gen/surface/accessDoor.ts carveOfficeAccess: the makeshift door's position in the lobby's
 //    boarded street doors, the barricade pieces in front of it MOVED aside along the barricade for a 1.2 m walk-up with what rests on them,
 //    the 'EXIT · STREET' plate appended). Every moved piece keeps its MEMORY ANCHOR (PropPlacement.memAt = where it stood): its holder key
