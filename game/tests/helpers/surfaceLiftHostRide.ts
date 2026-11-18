@@ -1,7 +1,8 @@
 // Task studio-surface-run-field-followup-20261116-211729-01 (lane ACCESS, follow-up 2): SURFACE RUN version 2 — the cargo lift ride from
 // an OFFICE tower and a MALL, both ways, on the REAL Game in Node (helpers/headlessGame.ts; the validating no-op device):
 //  - the host's access is its cargo lift inside the building (gen/surface/accessLiftHost.ts); standing in the car [E] rides up: never a
-//    loading state, every frame drawn, the doors SHUT until the destination's warm-up reports complete; arrival standing in the tent's car;
+//    loading state, every frame drawn, the doors SHUT until the exit's FIRST VIEW is ready (lane READY: Game.prepareCrossingView; the
+//    atmosphere off here: compiled, the direct path cannot draw off-screen); arrival standing in the tent's car;
 //  - [E] in the tent's car rides down: back in the host's car, the host's memory exactly as left, one lift view in the scene.
 // (CI runtime, as tests/surface-lift-ride.test.ts: the atmosphere off and the warm-up's 'view' coverage — a real, complete job the doors
 // wait for; SURFACE_LIFT_FULL=1 runs the default quality and the full coverage. One host per test file — each ~4-5 min on one worker:
@@ -71,20 +72,20 @@ export async function liftHostRide(host: 'office' | 'mall'): Promise<void> {
     vi.spyOn(game.player, 'takeDamage').mockImplementation(() => {}); // (the district's hunters: not applied)
     const R = surfaceLiftOf(game)!;
     const liftViews = () => { let n = 0; game.scene.traverse(o => { if (o.name === 'cargo-lift-surface') n++; }); return n; };
-    const samples: {phase: string; door: number; compile: string | null; job: object | null}[] = [];
+    const samples: {phase: string; door: number; compile: string | null; fv: string | null; job: object | null}[] = [];
     const render0 = G.render.bind(game);
-    G.render = () => { const r = render0(); const j = game.journeyCompileStats; samples.push({phase: R.phase, door: R.door, compile: j?.phase ?? null, job: j}); return r; };
+    G.render = () => { const r = render0(); const j = game.journeyCompileStats; samples.push({phase: R.phase, door: R.door, compile: j?.phase ?? null, fv: j?.firstView ?? null, job: j}); return r; };
     const diag = () => JSON.stringify({state: game.state, gap: G.transitGap, counts: game.surfaceCrossCounts, ride: qa.surface.lift(), compile: game.journeyCompileStats, errors: errors.slice(0, 2), frameErrors: frameErrors.slice(0, 2)}).slice(0, 1500);
     const until = async (f: () => boolean, max = 6000) => { for (let i = 0; i < max && !f(); i++) await h.waitFrames(1); return f(); };
     const inCar = (l: {cab: {x0: number; z0: number; x1: number; z1: number}}) => { const P = game.player; return P.x > l.cab.x0 && P.x < l.cab.x1 && P.z > l.cab.z0 && P.z < l.cab.z1; };
-    /** [E] in the car: the ride; every frame after the doors shut opens them only with the (new) warm-up complete. */
+    /** [E] in the car: the ride; every frame after the doors shut opens them only with the (new) job's first view ready. */
     const ride = async (label: string) => {
       const n0 = samples.length, done0 = game.surfaceCrossCounts.done, c0 = {...game.lifecycleCounts}, s0 = states.length, stale = game.journeyCompileStats;
       G.interact();
       expect(await until(() => game.surfaceCrossCounts.done === done0 + 1 && R.phase === 'idle'), diag()).toBe(true);
       const rs = samples.slice(n0), shut = rs.findIndex(s => s.phase === 'travel');
       expect(shut, `${label}: the doors shut and the car moved`).toBeGreaterThan(0);
-      for (const s of rs.slice(shut)) if (s.door > 0) { expect(s.job, `${label}: this ride's warm-up`).not.toBe(stale); expect(s.compile, `${label}: doors open only when complete`).toBe('done'); }
+      for (const s of rs.slice(shut)) if (s.door > 0) { expect(s.job, `${label}: this ride's warm-up`).not.toBe(stale); expect(s.fv, `${label}: doors open only with the first view ready`).toBe('ready'); }
       expect(rs.slice(shut).some(s => s.door === 0 && s.compile === 'scene'), `${label}: the warm-up ran with the doors shut`).toBe(true);
       expect(states.slice(s0), `${label}: never a loading state`).toEqual([]);
       expect(game.lifecycleCounts.loading - c0.loading).toBe(0);
