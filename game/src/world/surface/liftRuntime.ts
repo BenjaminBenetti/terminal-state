@@ -29,7 +29,7 @@ import {LIFT_CAR} from '../../gen/surface/accessLift';
 import {CAB_ACCEL, CAB_SPEED, DOOR_TIME, buildElevatorView, elevatorMaterials, planElevator, type ElevatorPlan, type ElevatorView} from '../elevator';
 import {towerCue} from '../towerShared';
 import {CULL_LAYER} from '../levelCulling';
-import type {MoveInput} from '../../player/player';
+import {STAND_EYE, type MoveInput} from '../../player/player';
 import {LIFT_LABELS, carFrame, carModel, carToWorldXZ, liftElevatorInfo, liftHome, liftStops, worldToCarXZ, type CarFrame, type CarModel} from './liftInfo';
 import {LIFT_CAB_LAMP, liftCabFinish, loadLiftCabTextures} from './liftCabFinish';
 
@@ -360,6 +360,17 @@ export class SurfaceLiftRuntime {
     this.counts.reposes++;
     this.writePlayer(e);
     return true;
+  }
+
+  /**
+   * (task studio-surface-host-ground-connectors-20261118-053602-01, lane READY) Where the rider comes out: the eye at the gate of the end
+   * the ride draws now (the destination's once reposed) at its home stop, facing out of the car (render/firstView.ts CrossingExit; the
+   * first view is prepared from here). Null: no end.
+   */
+  exitPoint(): {x: number; y: number; z: number; yaw: number} | null {
+    const e = this.current();
+    if (!e) return null;
+    return {x: e.lift.door.x, y: e.stops[e.home] + STAND_EYE, z: e.lift.door.z, yaw: e.frame.yaw};
   }
 
   /** The destination is ready (built and compiled): the car may finish its travel and open. */
