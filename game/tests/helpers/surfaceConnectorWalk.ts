@@ -192,7 +192,8 @@ export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?:
     expect(report.looks.lost, 'no turn lost in the gap').toBe(0);
 
     if (opts.extras) {
-      const inv0 = JSON.stringify(canon(game.inv.toJSON())), started0 = game.surfaceCrossCounts.started;
+      const carried = () => { const j = {...game.inv.toJSON()} as Record<string, unknown>; delete j.nextUid; return JSON.stringify(canon(j)); }; // (the uid counter moves with the rebuilt section's pickups; every carried stack keeps its uid)
+      const inv0 = carried(), started0 = game.surfaceCrossCounts.started;
       // ---- a REFUSAL at the seam (a participant that cannot come along now: QA injection): no crossing; the prompt says why; walk back out
       const refuse = vi.spyOn(game, 'surfaceCrossRefusal').mockReturnValue({code: 'carrying', text: 'qa: that cannot come along'});
       expect(qa.surface.connectorGo(1.2)).toBe(true);
@@ -226,7 +227,7 @@ export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?:
       expect(sr, 'recovered on the lobby floor, not in the tube').toBeLessThan(-rr.door.depth);
       expect(game.levels.supportIn(P.x, P.z, P.y + 0.05), 'on the host grid\'s floor').not.toBe(null);
       expect(game.levels.grid(rr.level).circleClear(P.x, P.z, 0.25), 'standing clear').toBe(true);
-      expect(JSON.stringify(canon(game.inv.toJSON())), 'everything carried kept').toBe(inv0);
+      expect(carried(), 'everything carried kept (the same stacks, uids, counts)').toBe(inv0);
       await h.waitFrames(10);
       expect(snap(), 'the host exactly as left after the recovery').toBe(host0);
     }
