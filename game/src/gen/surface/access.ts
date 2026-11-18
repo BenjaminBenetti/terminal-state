@@ -9,6 +9,9 @@
 //    in-place change: the barricade pieces in front of the door slide aside for a 1.2 m walk-up — same indices / kinds, moved, never
 //    removed; a station without the access is byte-identical to the plain one);
 //  - Mall: a plausible exterior exit from the mall's street-level entrance — gen/surface/accessDoor.ts carveMallAccess.
+// Version 2: the Subway's way up is a cargo lift at a closed street exit (gen/surface/accessLift.ts); the Office / Mall walk out on foot
+// through a level canvas CONNECTOR tube from that same version-1 doorway (task studio-surface-host-ground-connectors-20261118-053602-01:
+// gen/surface/accessConnector.ts — no lift: both exit at ground level).
 // Writes layout.surfaceAccess (gen/surface/surfaceTypes.ts SurfaceAccessInfo).
 //
 // Lane ACCESS: a station whose roll is present but has no room for an access (never seen for a generated Subway / Office / Mall:
@@ -18,8 +21,8 @@ import type {StationLayout} from '../stationTypes';
 import {surfaceFeatures, surfacePresent, type SurfaceHost} from './surfaceRun';
 import {carveSubwayAccess} from './accessStair';
 import {carveSubwayLift} from './accessLift';
-import {carveMallLift, carveOfficeLift} from './accessLiftHost';
 import {carveMallAccess, carveOfficeAccess} from './accessDoor';
+import {carveMallConnector, carveOfficeConnector} from './accessConnector';
 
 /** Adds the station's surface access when present for its version / roll; returns whether it did. */
 export function applySurfaceAccess(layout: StationLayout, host: SurfaceHost, levelSeed: number, version: number): boolean {
@@ -27,8 +30,12 @@ export function applySurfaceAccess(layout: StationLayout, host: SurfaceHost, lev
   if (layout.surfaceAccess) return true; // (idempotent: never carved twice)
   // (version 2, lane ACCESS follow-up: the Subway's way up is a cargo lift at a normal closed street exit — gen/surface/accessLift.ts;
   // a station whose closed halls cannot take it keeps the version-1 stairwell, its record saying so: v 1)
-  const v2 = surfaceFeatures(version).closedExitAccess;
-  const info = host === 'subway' ? (v2 ? carveSubwayLift(layout, levelSeed) : null) ?? carveSubwayAccess(layout, levelSeed) : host === 'office' ? (v2 ? carveOfficeLift(layout) : null) ?? carveOfficeAccess(layout) : (v2 ? carveMallLift(layout, levelSeed) : null) ?? carveMallAccess(layout, levelSeed);
+  // (version 2, task studio-surface-host-ground-connectors-20261118-053602-01: an Office / Mall walks out through the connector tube
+  // from its version-1 doorway — the same door position / usable exit, so nothing else of the station moves)
+  const F = surfaceFeatures(version), v2 = F.closedExitAccess;
+  const info = host === 'subway' ? (v2 ? carveSubwayLift(layout, levelSeed) : null) ?? carveSubwayAccess(layout, levelSeed)
+    : host === 'office' ? (F.connector ? carveOfficeConnector(layout) : carveOfficeAccess(layout))
+    : F.connector ? carveMallConnector(layout, levelSeed) : carveMallAccess(layout, levelSeed);
   if (!info) return false;
   layout.surfaceAccess = info;
   return true;

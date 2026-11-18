@@ -26,6 +26,7 @@
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {CELL} from '../../gen/grid';
+import {CONNECTOR, connectorAxes, connectorToWorld} from '../../gen/surface/connectorShape';
 import type {Level} from '../../gen/levels';
 import type {Area, Side, StationLayout} from '../../gen/stationTypes';
 import type {BuiltFace} from '../levelGeometry';
@@ -293,6 +294,18 @@ export class SurfaceArch {
     return GROUND_KEYS[this.plan.ground[i]] ?? null;
   }
 
+  /**
+   * (task studio-surface-host-ground-connectors-20261118-053602-01) Floor runs beside the cells' own (world/builder.ts): the connector
+   * tube's RING cells — SOLID (its footprint) yet open ground beside its canvas — carry the compound's ground at the cell's kerb height
+   * (the clear width has the tube's own groundsheet: none here, no coplanar floors).
+   */
+  floorFills(L: number): {key: string; x0: number; z0: number; x1: number; z1: number; y: number}[] {
+    const C = this.plan.connector, lvl = this.levels[L];
+    if (!C || !lvl || L !== 0) return [];
+    const key = GROUND_KEYS[GROUND.check], W = this.plan.W, g = lvl.grid;
+    return C.ring.map(i => ({key, x0: (i % W) * CELL, z0: Math.floor(i / W) * CELL, x1: (i % W + 1) * CELL, z1: (Math.floor(i / W) + 1) * CELL, y: g.floor[i] || C.rec.y}));
+  }
+
   /** Ceiling key of a run: none outdoors / over the tent (false), the programme's indoors, else the builder's rule. */
   ceilKey(_L: number, areaId: number, i?: number): string | false | null {
     if (this.isOutdoorArea(areaId) || this.plan.tentAreas.has(areaId) || this.roofs.has(areaId)) return false; // (v2 roof: open sky)
@@ -359,6 +372,9 @@ export class SurfaceArch {
       const ci = (x: number, z: number) => { const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL); return cx < 0 || cz < 0 || cx >= W || cz >= P.H ? -1 : cz * W + cx; };
       const bi = ci(bx, bz), fi = ci(fx, fz);
       const own = bi >= 0 ? P.owner[bi] : OWNER.cordon;
+      // (task studio-surface-host-ground-connectors-20261118-053602-01) a face backed by the connector tube's footprint drops: the tent's
+      // inner wall across the tube's mouth, the compound's edge along its ring (the tube's own canvas stands there)
+      if (own === OWNER.connector) continue;
       // (v2, lane INTERIOR) a reachable roof's cell faces drop: against the parapet ring stands LOOK's parapet inner face, against the
       // stair bulkhead its level-0 walls (roofAccessView.ts: seen from the street like the facade they stand on)
       if (this.roofs.has(f.area)) continue;
@@ -847,6 +863,22 @@ export class SurfaceArch {
       two([[r.x0, eave, r.z1], [r.x0, eave, r.z0], [xm, ridge, r.z0], [xm, ridge, r.z1]], [-0.6, 0.8, 0]);
       two([[r.x1, eave, r.z0], [r.x1, eave, r.z1], [xm, ridge, r.z1], [xm, ridge, r.z0]], [0.6, 0.8, 0]);
       for (const z of [r.z0, r.z1]) { q.tri([[r.x0, eave, z], [r.x1, eave, z], [xm, ridge, z]], [0, 0, z === r.z0 ? -1 : 1], [[0, 0], [1, 0], [0.5, 1]]); q.tri([[r.x1, eave, z], [r.x0, eave, z], [xm, ridge, z]], [0, 0, z === r.z0 ? 1 : -1], [[0, 0], [1, 0], [0.5, 1]]); }
+    }
+    // (task studio-surface-host-ground-connectors-20261118-053602-01) the connector tube's mouth through the tent's wall: canvas closing
+    // the wall's outer plane round the tube (the ring beside it, base to eave; over the clear width, the tube's arc to the eave)
+    const con = this.plan.connector?.rec;
+    if (con) {
+      const Wc = CONNECTOR.width / 2, R = Wc + CONNECTOR.ring, sm = con.len - CELL, a = connectorAxes(con);
+      const P3 = (t: number, y: number): number[] => { const [x, z] = connectorToWorld(con, sm, t); return [x, y, z]; };
+      const nrm = [-a.fx, 0, -a.fz]; // (facing the host: the compound side of the wall)
+      const H = CONNECTOR.wallH, Cr = CONNECTOR.crownH, h = Cr - H, Ra = (Wc * Wc + h * h) / (2 * h);
+      const arc = (t: number) => con.y + Cr - Ra + Math.sqrt(Math.max(0, Ra * Ra - t * t));
+      for (const [t0, t1] of [[-R, -Wc + 0.01], [Wc - 0.01, R]]) two([P3(t0, T.base), P3(t1, T.base), P3(t1, eave), P3(t0, eave)], nrm);
+      const N = 8;
+      for (let k = 0; k < N; k++) {
+        const t0 = -Wc + (2 * Wc * k) / N, t1 = -Wc + (2 * Wc * (k + 1)) / N;
+        if (Math.max(arc(t0), arc(t1)) < eave - 0.005) two([P3(t0, arc(t0) - 0.01), P3(t1, arc(t1) - 0.01), P3(t1, eave), P3(t0, eave)], nrm);
+      }
     }
     // guy lines (thin ropes from the eaves to stakes) and frame poles at the corners
     for (const g of T.guys) orientedBar(ropes, [g.ex, g.ey, g.ez], [g.ax, T.base + 0.05, g.az], 0.02);

@@ -18,8 +18,10 @@
 // Deterministic from the district seed (its own hash streams: never GEN's generator streams). Memoized per layout.
 
 import {CELL, FLOOR, SOLID} from '../../gen/grid';
+import {CONNECTOR} from '../../gen/surface/connectorShape';
 import type {Side, StationLayout} from '../../gen/stationTypes';
-import type {SRect, SurfaceBuilding, SurfaceInfo, SurfaceStreet, SurfaceWindowSpan} from '../../gen/surface/surfaceTypes';
+import type {SRect, SurfaceBuilding, SurfaceConnector, SurfaceInfo, SurfaceStreet, SurfaceWindowSpan} from '../../gen/surface/surfaceTypes';
+import {connectorCells, connectorRect} from '../../gen/surface/connectorFootprint';
 import {mulberry32} from '../../core/rng';
 import {drainSync, type BuildSteps} from '../../core/pacedBuild';
 import {DEFAULT_CEIL} from '../levelGeometry';
@@ -55,7 +57,8 @@ export const GROUND_KEYS: Readonly<Record<number, string>> = {
 };
 
 /** Owner codes of SOLID cells that are not a building (plan.owner). */
-export const OWNER = {none: -1, cordon: -2, tent: -3, debris: -4} as const;
+/** (task studio-surface-host-ground-connectors-20261118-053602-01) connector: the Office / Mall connector tube's SOLID footprint (its own view). */
+export const OWNER = {none: -1, cordon: -2, tent: -3, debris: -4, connector: -5} as const;
 
 /** Look tunables (metres). */
 export const LOOK_TUNE = {
@@ -233,6 +236,12 @@ export interface SurfaceLookPlan {
    * (surface.boundary) — and its thin last-resort SOLID ring is never drawn (the surroundings are pulled in to it: lookCity.ts).
    */
   wall: boolean;
+  /**
+   * (task studio-surface-host-ground-connectors-20261118-053602-01) An Office / Mall district's connector tube (surface.portal.connector):
+   * its footprint's cells are OWNER.connector (no builder face backs onto them, the host facade above them is whole), its RING cells
+   * (`ring`: level-0 indices) carry the compound's ground, its clear width none (the tube's own groundsheet). Null: no connector.
+   */
+  connector: {rec: SurfaceConnector; ring: readonly number[]} | null;
   stats: Record<string, number>;
 }
 
@@ -370,6 +379,14 @@ function* planSurfaceLook(layout: StationLayout, S: SurfaceInfo): BuildSteps<Sur
   };
   const tentB = S.buildings.find(b => tentIds.has(b.id));
   const tentR = tentB ? tentB.footprint : S.checkpoint.tent.rect;
+  // (task studio-surface-host-ground-connectors-20261118-053602-01) the connector's footprint (before the tent's ±0.6 m catch: the strip
+  // runs right up to the tent's wall; the tent's own wall cells beside its mouth stay canvas)
+  const con = S.portal.connector ?? null, conRing: number[] = [];
+  if (con) for (const {i, role} of connectorCells(con, W, H)) {
+    if (role === 'tent' || g.cells[i] !== SOLID || owner[i] !== OWNER.none) continue;
+    owner[i] = OWNER.connector;
+    if (role === 'ring') conRing.push(i);
+  }
   for (let i0 = 0; i0 < n; i0 += PLAN_CELLS) {
     for (let i = i0, e = Math.min(n, i0 + PLAN_CELLS); i < e; i++) {
       if (g.cells[i] !== SOLID || owner[i] !== OWNER.none) continue;
@@ -572,6 +589,8 @@ function* planSurfaceLook(layout: StationLayout, S: SurfaceInfo): BuildSteps<Sur
   yield PLAN_STEP;
   // the tent is drawn by the tent build (canvas walls via OWNER.tent, the roof, the flap): no facade parts of its own
   for (const bl of buildings) if (tentIds.has(bl.id)) { bl.sides = []; bl.holes = []; bl.signs = []; bl.escapes = []; bl.decks = []; bl.detail = EMPTY_FACADE_DETAIL; }
+  // (task studio-surface-host-ground-connectors-20261118-053602-01) the host facade the connector tube butts against: plain wall round it
+  if (con) for (const bl of buildings) clearConnectorSpan(bl, con);
   // scorch decals on the ground below burnt-out openings (soot fans) — on the sidewalk only
   for (const bl of buildings) for (const h of bl.holes) {
     if (!h.scorch || h.storey !== 0) continue;
@@ -627,7 +646,8 @@ function* planSurfaceLook(layout: StationLayout, S: SurfaceInfo): BuildSteps<Sur
   stats.depotTracks = depot?.tracks.length ?? 0;
   stats.depotPits = depot?.pits.length ?? 0;
   stats.depotCrane = depot?.crane ? 1 : 0;
-  return {W, H, seed, ground, owner, outdoorAreas, areaBuilding, tentAreas, doorCells, segments, decals, discs, buildings, spans, tent, rail, depot, placements, inner, wall: !S.boundary, stats};
+  return {W, H, seed, ground, owner, outdoorAreas, areaBuilding, tentAreas, doorCells, segments, decals, discs, buildings, spans, tent, rail, depot, placements, inner, wall: !S.boundary,
+    connector: con ? {rec: con, ring: conRing} : null, stats};
 }
 
 function axisRect(kind: DecalKind, axis: 'x' | 'z', s0: number, s1: number, c0: number, c1: number, y: number): Decal {
@@ -916,7 +936,49 @@ function planTent(S: SurfaceInfo, owner: Int16Array, W: number, tb: SurfaceBuild
     else { guys.push({ax: r.x0 - g, az: a, ex: r.x0, ey: eave, ez: a}); guys.push({ax: r.x1 + g, az: a, ex: r.x1, ey: eave, ez: a}); }
   }
   const door = te ? {x: te.x, z: te.z, side: te.side, width: te.width, height: Math.min(te.height, LOOK_TUNE.tentEave - 0.05)} : {...t.door, width: 1.4, height: 2.0};
-  return {rect: {...r}, door, base, eave, ridge, ridgeX, guys, carved};
+  // (task studio-surface-host-ground-connectors-20261118-053602-01) no guy line runs over the connector tube's footprint (stake to eave)
+  const con = S.portal.connector;
+  const kept = con ? guys.filter(q => !guyCrosses(connectorRect(con), q)) : guys;
+  return {rect: {...r}, door, base, eave, ridge, ridgeX, guys: kept, carved};
+}
+
+/** The facade kept plain over the connector tube's host mouth: its footprint's width (+ margin), up to its crown + this (m: the name plate). */
+export const CONNECTOR_FACADE = {margin: 0.1, above: 0.75, minHole: 1.0, minStrip: 0.2} as const;
+
+/**
+ * Task studio-surface-host-ground-connectors-20261118-053602-01: no opening, sign, fire escape, closed window, awning or relief of the
+ * facade the connector tube butts against stands in the tube's span below its crown + CONNECTOR_FACADE.above — the tube meets plain wall
+ * (the name plate over it): openings / relief / awnings keep what lies beside the span (narrow remnants dropped), the rest go.
+ */
+export function clearConnectorSpan(bl: BuildingLook, con: SurfaceConnector): void {
+  const alongX = Math.abs(Math.sin(con.yaw)) < 0.5, plane = alongX ? con.z : con.x;
+  const sd = bl.sides.find(q => q.alongX === alongX && Math.abs(q.plane - plane) < 0.01);
+  if (!sd) return;
+  const r = connectorRect(con), M = CONNECTOR_FACADE, top = con.y + CONNECTOR.crownH + M.above;
+  const lo = (alongX ? r.x0 : r.z0) - M.margin, hi = (alongX ? r.x1 : r.z1) + M.margin;
+  const hits = (o: {side: Side; s0: number; s1: number}, y0: number) => o.side === sd.side && o.s1 > lo && o.s0 < hi && y0 < top;
+  const clip = <T extends {side: Side; s0: number; s1: number}>(list: T[], y0: (o: T) => number, min: number): T[] => list.flatMap(o => {
+    if (!hits(o, y0(o))) return [o];
+    const parts: T[] = [];
+    if (lo - o.s0 >= min) parts.push({...o, s1: lo});
+    if (o.s1 - hi >= min) parts.push({...o, s0: hi});
+    return parts;
+  });
+  bl.holes = clip(bl.holes, h => h.y0, M.minHole);
+  bl.signs = bl.signs.filter(q => !hits(q, q.y0));
+  bl.escapes = bl.escapes.filter(e => !(e.side === sd.side && e.s > lo - 0.6 && e.s < hi + 0.6));
+  const d = bl.detail;
+  if (d === EMPTY_FACADE_DETAIL) return;
+  bl.detail = {...d, blinds: d.blinds.filter(q => !hits(q, q.y0)), awnings: clip(d.awnings, q => q.y - q.drop, M.minHole), relief: clip(d.relief, q => q.y0, M.minStrip)};
+}
+
+/** Does a guy line (stake to eave, in plan) pass over a footprint box (with a 0.05 m margin)? */
+export function guyCrosses(r: SRect, q: {ax: number; az: number; ex: number; ez: number}): boolean {
+  for (let k = 0; k <= 16; k++) {
+    const x = q.ax + ((q.ex - q.ax) * k) / 16, z = q.az + ((q.ez - q.az) * k) / 16;
+    if (x > r.x0 - 0.05 && x < r.x1 + 0.05 && z > r.z0 - 0.05 && z < r.z1 + 0.05) return true;
+  }
+  return false;
 }
 
 /** GEN's rail spur (when published): the track's centre line along its corridor rects, from the cordon to the shed. */
@@ -1040,6 +1102,9 @@ export function bareRuns(layout: StationLayout, owner: Int16Array, buildings: re
       else if (own === OWNER.cordon) y0 = layout.surface?.boundary ? base0 : LOOK_TUNE.cordonH + 0.18;
       else if (own === OWNER.debris) y0 = LOOK_TUNE.debrisH;
       else if (own === OWNER.tent) y0 = tent ? tent.ridge : LOOK_TUNE.tentRidge;
+      // (task studio-surface-host-ground-connectors-20261118-053602-01) the connector tube butts against the host facade: the facade stands
+      // whole behind its host mouth (the tube's flap / header in front of it), from the building's base
+      else if (own === OWNER.connector) y0 = base0;
     }
     if (!Number.isFinite(y0) || !(topAt(sd, s, bl.top) > y0 + 0.05)) continue;
     const a = Math.max(sd.s0, c * CELL), b = Math.min(sd.s1, (c + 1) * CELL), l = out[out.length - 1];

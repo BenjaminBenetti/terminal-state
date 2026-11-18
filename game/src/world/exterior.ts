@@ -66,6 +66,11 @@ export interface ExteriorPlan {
   props: PropPlace[];
   buildings: BuildingPlace[];
   skyline: {wraps: number; offset: number; e0: number; e1: number};
+  /**
+   * Task studio-surface-host-ground-connectors-20261118-053602-01: ground rects left open (the Surface Run Office connector tube's clear
+   * width over the street: its own groundsheet there, no coplanar ground), no street prop within reach of them.
+   */
+  cuts?: Rect2[];
 }
 
 export const EXTERIOR = {
@@ -107,7 +112,7 @@ function blockSpan(c: number, k: number): [number, number] {
   return [s, s + EXTERIOR.block];
 }
 
-export function planExterior(o: {foot: Rect2; groundY: number; eyeAbove: number; seed: number}): ExteriorPlan {
+export function planExterior(o: {foot: Rect2; groundY: number; eyeAbove: number; seed: number; cuts?: readonly Rect2[]}): ExteriorPlan {
   const rnd = mulberry32((o.seed ^ 0x7e57c17) >>> 0);
   const {foot} = o;
   const center = {x: (foot.x0 + foot.x1) / 2, z: (foot.z0 + foot.z1) / 2};
@@ -199,9 +204,13 @@ export function planExterior(o: {foot: Rect2; groundY: number; eyeAbove: number;
   onRing('rubble', EXTERIOR.rubble, 2.5);
   // rubble mounds in front of collapsed buildings are part of the building layer (instanced mounds)
   const eyeAbove = Math.max(0, o.eyeAbove);
+  const cuts = (o.cuts ?? []).map(c => ({...c}));
+  const reach = (p: PropPlace) => (p.kind === 'bus' ? 6.3 : p.kind === 'car' ? 2.6 : 1.6);
+  const kept = cuts.length ? props.filter(p => cuts.every(c => p.x < c.x0 - reach(p) || p.x > c.x1 + reach(p) || p.z < c.z0 - reach(p) || p.z > c.z1 + reach(p))) : props;
   return {
-    groundY: o.groundY, eyeAbove, foot, center, half: H, streets, props, buildings,
+    groundY: o.groundY, eyeAbove, foot, center, half: H, streets, props: kept, buildings,
     skyline: {wraps: 5, offset: rnd(), e0: -0.035 - Math.min(0.06, eyeAbove / 600), e1: 0.42},
+    ...(cuts.length ? {cuts} : {}),
   };
 }
 
@@ -720,6 +729,17 @@ export function buildExterior(plan: ExteriorPlan, models: ExteriorModels = {}): 
   const quads: [number, number, number, number][] = [
     [c.x - H, c.z - H, c.x + H, f.z0], [c.x - H, f.z1, c.x + H, c.z + H], [c.x - H, f.z0, f.x0, f.z1], [f.x1, f.z0, c.x + H, f.z1],
   ];
+  // (task studio-surface-host-ground-connectors-20261118-053602-01) the plan's open cuts subtracted from the ground rects
+  for (const c of plan.cuts ?? []) {
+    const next: [number, number, number, number][] = [];
+    for (const [x0, z0, x1, z1] of quads) {
+      if (c.x1 <= x0 || c.x0 >= x1 || c.z1 <= z0 || c.z0 >= z1) { next.push([x0, z0, x1, z1]); continue; }
+      const cx0 = Math.max(x0, c.x0), cx1 = Math.min(x1, c.x1), cz0 = Math.max(z0, c.z0), cz1 = Math.min(z1, c.z1);
+      next.push([x0, z0, x1, cz0], [x0, cz1, x1, z1], [x0, cz0, cx0, cz1], [cx1, cz0, x1, cz1]);
+    }
+    quads.length = 0;
+    quads.push(...next);
+  }
   const pos: number[] = [];
   for (const [x0, z0, x1, z1] of quads) {
     if (x1 <= x0 || z1 <= z0) continue;
