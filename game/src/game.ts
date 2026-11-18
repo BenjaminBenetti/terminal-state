@@ -1441,7 +1441,8 @@ export class Game {
   private surfaceAnticipateOther(key: SectionKey, run: RunState, layout: StationLayout): void {
     const kind = isSurfaceKey(key) ? layout.surface?.portal.kind : layout.surfaceAccess?.kind;
     if (kind !== 'connector' && kind !== 'lift') return;
-    const other = this.surfaceCrossTarget(key);
+    // (the layout being prepared, not the current world's: surfaceCrossTarget reads the live one, still the previous world here)
+    const other = isSurfaceKey(key) ? hostKeyOf(key) : key.section === 'main' && isSurfaceHost(key.level) && layout.surfaceAccess ? surfaceKeyOf(key) : null;
     if (!other) return;
     try {
       const {ctx} = this.sectionGenInputs(other, run);
