@@ -5,7 +5,8 @@
 //   (the Subway host only since the Office / Mall connectors: task studio-surface-host-ground-connectors-20261118-053602-01)
 //   1. the station's cargo lift at its closed street exit; the RIDE up (frames counted while it runs, the phases, the doors' first open
 //      frame), the arrival in the command tent's lift; the tent air, the flap opened and the walk out;
-//   2. the truck: damaged (smoke / flames), the side map board, the board's map; the fog pressure at 0.5 and 1 (the HUD's text);
+//   2. the truck: damaged (smoke / flames); (task studio-surface-map-tent-cab-20261119-025201-01, lane CAB) seated, the map on the
+//      passenger-side dash and the planning map a real [E] on it opens; the fog pressure at 0.5 and 1 (the HUD's text);
 //   3. a facade / avenue view, a deep store's landing and its roof;
 //   4. the ride back down and the station's draws at the lift before / after.
 //   npm run build && node tools/qa/surface-followup-check.mjs [outDir] [--size=960x540] [--quality=low] [--network=1] [--host=subway]
@@ -138,7 +139,7 @@ await withBrowserLock(async () => {
     await frames(10);
     step('walked out', await ev(() => { const g = window.__game, t = window.__LL.surface.tent(); return {x: g.player.x, z: g.player.z, tent: t, exposure: {...g.gas.exposure}}; }).catch(e => String(e)));
 
-    // ---- 2. truck, board, fog --------------------------------------------------------------------------------------------------
+    // ---- 2. truck, dash map, fog -----------------------------------------------------------------------------------------------
     if (ONLY !== 'ride') {
     if (!SKIP.includes('truck')) {
     if (!headroom('truck')) return;
@@ -148,13 +149,31 @@ await withBrowserLock(async () => {
     await face(tr.x + tr.rx * 7, tr.z + tr.rz * 7, tr.x, tr.z);
     await ev(t => window.__LL.lookAt(t.x, t.y + 1.8, t.z), tr);
     await sleep(3000); await frames(30);
-    await shot('truck-damaged-board', 'the damaged truck (smoke, flames) and the map board on its right side');
-    step('board open', {ok: await ev(() => window.__LL.truckBoardOpen()).catch(e => String(e))});
-    await sleep(1500);
-    await shot('truck-board-map', 'the planning map opened from the truck board');
-    await page.keyboard.press('Escape');
-    await waitState('playing', 30);
+    await shot('truck-damaged', 'the damaged truck (smoke, flames)');
     await ev(() => window.__LL.truckSetCondition(1));
+    // (lane CAB) the map moved into the cab: in at the driver's door (the real controller's [E]), the view on the dash map, a real [E]
+    const door = await ev(() => { const c = window.__game.skywaysCar, b = c.body, S = c.spec, lx = -(S.width / 2 + 0.7), lz = S.exits.left.z;
+      const cs = Math.cos(b.yaw), sn = Math.sin(b.yaw); return {x: b.x + lx * cs + lz * sn, z: b.z - lx * sn + lz * cs, bx: b.x, bz: b.z, y: b.y}; });
+    await ev(d => { window.__LL.teleport(d.x, d.z, Math.atan2(-(d.bx - d.x), -(d.bz - d.z)), 0); window.__LL.lookAt(d.bx, d.y + 1.6, d.bz); }, door);
+    await frames(10);
+    await page.keyboard.press('KeyE');
+    await frames(30);
+    step('dash map look', {look: await ev(() => window.__LL.truckDashMapLook()).catch(e => String(e))});
+    await frames(10);
+    step('dash map', {map: await ev(() => window.__LL.truckDashMap()).catch(e => String(e))});
+    await shot('truck-dash-map', 'seated: the planning map on the passenger-side dash, its [E] prompt');
+    await page.keyboard.press('KeyE');
+    step('dash map open', {map: await waitState('map', 10)});
+    await sleep(1500);
+    await shot('truck-dash-map-open', 'the planning map opened from the dash');
+    await page.keyboard.press('KeyE');
+    await waitState('playing', 30);
+    await frames(20);
+    step('dash map closed', {truck: await ev(() => window.__LL.truck()?.state).catch(e => String(e)), map: await ev(() => window.__LL.truckDashMap()).catch(e => String(e))});
+    await ev(() => { const g = window.__game; g.player.yaw = g.skywaysCar.body.yaw; g.player.pitch = -0.05; });
+    await frames(10);
+    await page.keyboard.press('KeyE'); // (looking ahead: out of the truck)
+    await frames(20);
     }
     if (!SKIP.includes('fog')) {
     if (!headroom('fog')) return;

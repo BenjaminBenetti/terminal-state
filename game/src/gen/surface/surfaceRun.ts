@@ -42,7 +42,7 @@ export const SURFACE_VERSION = 2;
 /**
  * What a surface version builds (task studio-surface-run-field-followup-20261116-211729-01, primary contract). Every STRUCTURAL / access /
  * interior change of the follow-up is gated here so a version-1 host station and its district stay byte-identical (tests/
- * surface-v1-compat.test.ts pins them); runtime fixes (doors, glass, truck damage / repair, the truck's map board, the depot's one-unit
+ * surface-v1-compat.test.ts pins them); runtime fixes (doors, glass, truck damage / repair, the truck's dash map, the depot's one-unit
  * seeding of a not-yet-seeded depot) apply to every version.
  */
 export function surfaceFeatures(version: number | undefined): {

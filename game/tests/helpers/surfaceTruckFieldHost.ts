@@ -1,4 +1,4 @@
-// Task studio-surface-run-field-followup-20261116-211729-01 (lane TRUCK): a Node host for the truck's CONDITION / REPAIR / BOARD / FOG
+// Task studio-surface-run-field-followup-20261116-211729-01 (lane TRUCK): a Node host for the truck's CONDITION / REPAIR / DASH MAP / FOG
 // PRESSURE tests — the truck's own host (tests/helpers/surfaceTruckHost.ts: the vehicle controller, the REAL Player, the truck's
 // definition and its compartments over a real Inventory) with the field systems installed exactly like Game (installTruckCondition after
 // the compartments), recording fakes for what other systems own (the volumetric smoke field, the fire sprites, the sound cues, the map
@@ -54,7 +54,7 @@ export interface FieldLog {
   rings: (number | null)[];
 }
 
-export function fieldHost(o: {pose?: Partial<SPose>; props?: PropPlacement[]; levels?: Levels; boundary?: SurfaceBoundary; map?: () => PlanningMap | null; build?: boolean} = {}) {
+export function fieldHost(o: {pose?: Partial<SPose>; props?: PropPlacement[]; levels?: Levels; boundary?: SurfaceBoundary; map?: () => PlanningMap | null; open?: () => boolean; build?: boolean} = {}) {
   const r = truckHost({pose: o.pose, props: o.props, levels: o.levels, storage: true, build: false});
   const h = r.h as FieldTestHost, car = r.car;
   const log: FieldLog = {plumes: [], loops: [], smokeCalls: 0, flameCalls: 0, lastDark: 0, maxFlames: 0, groans: [], cues: [], stalls: 0, truckHits: 0, rings: []};
@@ -93,7 +93,8 @@ export function fieldHost(o: {pose?: Partial<SPose>; props?: PropPlacement[]; le
   });
   if (o.boundary) (h.layout as unknown as {surface: {boundary?: SurfaceBoundary}}).surface.boundary = o.boundary;
   const map = {opens: 0, model: o.map ?? (() => null)};
-  const sys = installTruckCondition(h as unknown as TruckFieldHost, car, {model: () => map.model(), open: () => { map.opens++; return true; }});
+  // (lane CAB: `open` = the map runtime's open() when a test wires the real one; counted either way)
+  const sys = installTruckCondition(h as unknown as TruckFieldHost, car, {model: () => map.model(), open: () => { map.opens++; return o.open ? o.open() : true; }});
   if (o.build !== false) build(h);
   return {h, car, pose: r.pose, storage: r.storage!, sys, log, map};
 }
