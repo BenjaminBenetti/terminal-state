@@ -155,9 +155,9 @@ await withBrowserLock(async () => {
         await page.keyboard.press('KeyF'); await sleep(800);
         await shot('map-fit-large', `the planning map fitted at ${MAP_SIZE.join('x')}`);
         const you = () => ev(() => { const t = [...document.querySelectorAll('#surface-planning-map svg text')].find(n => n.textContent.trim() === 'YOU'); if (!t) return null; const r = t.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; }).catch(() => null);
-        const scale = async () => ((await ev(() => window.__LL.surfaceMap()).catch(() => null))?.view?.s ?? 0) * 2;
+        const scale = async () => ((await ev(() => window.__LL.surfaceMap()).catch(() => null))?.view?.view?.s ?? 0) * 2;
         for (let i = 0; i < 12 && (await scale()) < 6.0; i++) { const p = await you(); if (!p) break; await page.mouse.move(p.x, p.y); await page.mouse.wheel({deltaY: (await scale()) * 1.35 < 6.25 ? -170 : -40}); await sleep(400); }
-        step('map zoomed at YOU', {pxPerMetre: +(await scale()).toFixed(2), you: await you(), map: await ev(() => { const q = window.__LL.surfaceMap(); return {view: q.view, labels: q.labels, markers: q.markers}; }).catch(e => String(e))});
+        step('map zoomed at YOU', {pxPerMetre: +(await scale()).toFixed(2), you: await you(), map: await ev(() => { const q = window.__LL.surfaceMap().view; return q && {view: q.view, labels: q.labels, markers: q.markers}; }).catch(e => String(e))});
         await shot('map-zoom-you-large', 'the planning map at about the user\'s zoom, centred on YOU / TRUCK / CHECKPOINT');
         await page.setViewport({width: SIZE[0], height: SIZE[1]});
         await sleep(800);
