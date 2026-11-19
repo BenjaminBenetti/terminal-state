@@ -15,11 +15,29 @@
 //  - BOARDED doorways (SOLID cells under the boards): open over the doorway.
 // Doorways stand in free cells already (an open / shut leaf is AIR's door runtime: drawn or not, the cell is open). Conservative by
 // construction: a see rect only ever opens.
+//
+// Task studio-surface-upper-storey-culling-20261119-025201-01 (user: "Moreau Pharmacy · Manager's office": from an upstairs window the
+// street stayed but the facades round it vanished — skeletal floors, columns and window blocks): the district's whole exterior (the
+// street, every facade to its roof line, the street furniture) is drawn on the STREET storey (arch.ts tags levels[0]), and an upper
+// storey joins it only through its stair runs, the culler's portal tiles: from an upstairs room the street storey rendered only within
+// PORTAL_MARGIN of a stair tile in sight. AIR's live spans are the district's glass (the culler's WINDOW TILES, as the Skyways' glazed
+// spans): a span seen from outside shows its storey; seen from its own storey it shows the outdoors — `out`, the street storey.
 
 import {CELL, SOLID} from '../../gen/grid';
 import type {StationLayout} from '../../gen/stationTypes';
-import {OCCL_TOP, type SeeRect} from '../levelCulling';
+import {OCCL_TOP, type SeeRect, type WindowSpan} from '../levelCulling';
 import {SIDE_NORMAL, surfaceLookPlan} from './archPlan';
+
+/** AIR's live window spans as the culler's window tiles: their storey, sill .. head, and the street storey outside; [] without layout.surface. */
+export function surfaceWindowSpans(layout: StationLayout): WindowSpan[] {
+  const S = layout.surface, L = layout.levels ?? [];
+  if (!S || !L.length) return [];
+  const out = L[0].id;
+  return S.windows.flatMap(w => {
+    const lv = L[w.level];
+    return lv ? [{x0: w.x0, z0: w.z0, x1: w.x1, z1: w.z1, y0: lv.baseY + w.sill, y1: lv.baseY + w.head, level: lv.id, out}] : [];
+  });
+}
 
 /** Depth (m) into the footprint a boarded doorway's see rect reaches (the wall's thickness and more). */
 const DOORWAY_DEPTH = 1.5;
