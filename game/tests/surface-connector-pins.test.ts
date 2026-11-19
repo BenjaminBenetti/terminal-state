@@ -13,6 +13,8 @@
 //    crate, gear; the compound), pickup, enemy, light (both ridge lamps), sign, door, area and the rest of the surface record is the
 //    lift era's exactly.
 //  - SUBWAY: both worlds byte-identical (full-layout digests): its cargo lift stays.
+// Task studio-surface-map-tent-cab-20261119-025201-01 (lane TENT; user: "No free gas mask in the tent"): every district is pinned with the
+// tent's removed free mask put back at layout.pickups[0] exactly as the lift era made it (helpers/tentLegacy.ts): the baseline is unchanged.
 // The same generation also sweeps what the brief requires of every case: the tube footprint clear of props / pickups / enemies / signs /
 // lights, the records' values, and the loading-screen poses (walkable, the record's area and level, facing the right way).
 import {describe, expect, it} from 'vitest';
@@ -26,6 +28,7 @@ import type {StationLayout} from '../src/gen/stationTypes';
 import type {SurfaceConnector} from '../src/gen/surface/surfaceTypes';
 import {CONNECTOR_BASELINE} from './helpers/surfaceConnectorBaseline';
 import {districtPins, hostPins, layoutDigest} from './helpers/surfaceConnectorPins';
+import {withLegacyTentMask} from './helpers/tentLegacy';
 
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
@@ -49,7 +52,7 @@ describe('Surface Run v2 connector: index stability against the lift era (+ the 
       if (c.host === 'subway') {
         expect(M.surfaceAccess?.kind, 'the Subway keeps its cargo lift').toBe('lift');
         expect(D.surface?.portal.kind).toBe('lift');
-        expect({main: layoutDigest(M), district: layoutDigest(D)}, 'the Subway worlds byte-identical').toEqual({main: c.main, district: c.district});
+        expect({main: layoutDigest(M), district: layoutDigest(withLegacyTentMask(D))}, 'the Subway worlds byte-identical (lane TENT: + the removed tent mask)').toEqual({main: c.main, district: c.district});
         return;
       }
       const a = M.surfaceAccess!, P = D.surface!.portal;
@@ -60,7 +63,7 @@ describe('Surface Run v2 connector: index stability against the lift era (+ the 
       expect(P.lift).toBeUndefined();
       // index stability: the normalized digests are the lift era's
       expect(hostPins(M, 'connector', c.hostMask!), 'the host station').toEqual(c.hostPins);
-      expect(districtPins(D, c.districtMask!), 'the district').toEqual(c.districtPins);
+      expect(districtPins(withLegacyTentMask(D), c.districtMask!), 'the district (lane TENT: + the removed tent mask)').toEqual(c.districtPins);
       // the intended differences, explicitly: the Office's moved pieces keep their anchor (memAt) and nothing else moved; the Mall moves none
       const moved = M.props.filter(p => p.memAt);
       if (c.host === 'mall') expect(moved.length).toBe(0);

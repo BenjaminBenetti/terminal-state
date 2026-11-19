@@ -6,11 +6,15 @@
 // Re-pinned for main's own Mall changes (PR #139, the open stair / escalator wells capped at the upper storey's ceiling; PR #142, the
 // Mall plan families / layout version 2 for new Malls): the Mall host digests were taken on pure main 669ad9c8 and this branch
 // reproduces them exactly for every host (subway / office / mall, main and district) — main moved them, not the follow-up.
+// Task studio-surface-map-tent-cab-20261119-025201-01 (lane TENT; user: "No free gas mask in the tent"): the v1 districts lose the tent's
+// free mask too (layout.pickups[0]); the district is hashed with that mask put back exactly as the v1 release made it
+// (helpers/tentLegacy.ts), so the pins below are unchanged and prove nothing else of a v1 district moved.
 import {describe, expect, it} from 'vitest';
 import {createHash} from 'node:crypto';
 import {LEVELS} from '../src/levels/registry';
 import {surfacePresent, type SurfaceHost} from '../src/gen/surface/surfaceRun';
 import type {StationLayout} from '../src/gen/stationTypes';
+import {withLegacyTentMask} from './helpers/tentLegacy';
 
 const bytes = (L: StationLayout) => JSON.stringify(L, (_k, v) => (ArrayBuffer.isView(v) ? Buffer.from(v.buffer, v.byteOffset, v.byteLength).toString('base64') : v));
 const digest = (L: StationLayout) => createHash('sha256').update(bytes(L)).digest('hex').slice(0, 16);
@@ -30,7 +34,7 @@ describe('Surface Run version 1: host stations and districts regenerate exactly 
         const main = LEVELS[host].generate('main', {levelSeed: s, surfaceVersion: 1});
         expect(main.surfaceAccess, `${host} ${s}`).toBeTruthy();
         const district = LEVELS[host].generate('surface', {levelSeed: s, surfaceVersion: 1});
-        return {main: digest(main), surface: digest(district)};
+        return {main: digest(main), surface: digest(withLegacyTentMask(district))}; // (lane TENT: the removed tent mask put back)
       });
       expect(got, `${host} seeds ${present(host, 2).join(', ')}`).toEqual(PINS[host]);
     }, 180_000);
