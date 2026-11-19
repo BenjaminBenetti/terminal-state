@@ -14,8 +14,7 @@ import {DRESS_CAP} from '../src/gen/surface/outdoorDress';
 import {SR_MAP_TABLE} from '../src/gen/surface/kinds';
 import {PROP_DEFS} from '../src/gen/props';
 import {propPhysics} from '../src/damage/materials';
-import {FILTER_LIFE_S} from '../src/items/gear';
-import {GAS_FILTER_ID, GAS_MASK_ID, MASK_LOOT} from '../src/gen/maskLoot';
+import {GAS_FILTER_ID, GAS_MASK_ID} from '../src/gen/maskLoot';
 import {LEVELS} from '../src/levels/registry';
 
 const HOSTS: readonly SurfaceHost[] = ['subway', 'office', 'mall'];
@@ -373,25 +372,23 @@ describe('Surface portal, checkpoint and truck', () => {
   }
 });
 
-describe('Surface checkpoint gas-mask supply (the district air is toxic; a subway arrival may have no mask)', () => {
-  it('one guaranteed mask with a fitted filter charge and one spare filter lie on the tent supply table: finite, seeded, never floating', () => {
-    const filters = new Set<number>();
+// Task studio-surface-map-tent-cab-20261119-025201-01 (lane TENT; user: "No free gas mask in the tent. Its free starter survival supply should
+// be some finite filters ONLY"): the supply table carries the ONE spare filter it always had — no mask (tests/surface-tent-stock.test.ts: the
+// in-tent crate, the saved districts, no refill).
+describe('Surface checkpoint filter supply (the district air is toxic: the tent gives finite filters only, never a mask)', () => {
+  it('one spare filter lies on the tent supply table, no mask anywhere in the tent: finite, seeded, never floating', () => {
     for (const [seed, host] of [[2, 'subway'], [9, 'office'], [16, 'mall'], [23, 'subway'], [30, 'office'], [37, 'mall']] as const) {
       const L = gen(seed, host), s = L.surface!, g = L.grid;
       const dbg = surfaceGenDebug(L)!;
       const ta = s.checkpoint.tent.area;
       const inTent = L.pickups.filter(p => g.area[g.idx(Math.floor(p.x / CELL), Math.floor(p.z / CELL))] === ta);
-      // exactly the two supply items in the tent, first in layout.pickups (their indices never move with the interiors)
-      expect(inTent.map(p => p.itemId).sort(), `seed ${seed}`).toEqual([GAS_FILTER_ID, GAS_MASK_ID].sort());
-      expect(L.pickups.slice(0, 2)).toEqual(inTent);
-      const mask = inTent.find(p => p.itemId === GAS_MASK_ID)!, filter = inTent.find(p => p.itemId === GAS_FILTER_ID)!;
-      expect(mask.count).toBe(1); expect(filter.count).toBe(1);
+      // exactly the spare filter in the tent, first in layout.pickups (its index never moves with the interiors)
+      expect(inTent.map(p => p.itemId), `seed ${seed}`).toEqual([GAS_FILTER_ID]);
+      expect(L.pickups.filter(p => p.itemId === GAS_MASK_ID && inRect(s.checkpoint.tent.rect, p.x, p.z)), `seed ${seed}: no mask in the tent`).toEqual([]);
+      expect(L.pickups.slice(0, 1)).toEqual(inTent);
+      const filter = inTent[0];
+      expect(filter.count).toBe(1);
       expect(filter.filter).toBeUndefined();
-      // the mask's fitted charge: a found mask's partly used filter (gen/maskLoot.ts MASK_LOOT.foundFilter of FILTER_LIFE_S, 0.1 s steps)
-      expect(mask.filter!).toBeGreaterThanOrEqual(FILTER_LIFE_S * MASK_LOOT.foundFilter[0] - 0.05);
-      expect(mask.filter!).toBeLessThanOrEqual(FILTER_LIFE_S * MASK_LOOT.foundFilter[1] + 0.05);
-      expect(Math.abs(mask.filter! * 10 - Math.round(mask.filter! * 10))).toBeLessThan(1e-6);
-      filters.add(mask.filter!);
       // on the supply table's top (a static trestle table: it never moves, so nothing floats), not on the map table under LIFE's [E] box
       const sp = dbg.planned.find(p => p.role === 'checkpoint-supply')!;
       expect(sp.kind).toBe('srMapTable');
@@ -414,9 +411,8 @@ describe('Surface checkpoint gas-mask supply (the district air is toxic; a subwa
       const gap = Math.max(Math.abs(mt.x - host2.x) - mt.hx - host2.hx, Math.abs(mt.z - host2.z) - mt.hz - host2.hz);
       expect(gap).toBeGreaterThanOrEqual(0.95);
       // deterministic from the district seed
-      expect(gen(seed, host).pickups.slice(0, 2)).toEqual(inTent);
+      expect(gen(seed, host).pickups.slice(0, 1)).toEqual(inTent);
     }
-    expect(filters.size).toBeGreaterThan(1);
   });
 });
 

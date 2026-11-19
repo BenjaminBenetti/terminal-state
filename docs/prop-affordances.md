@@ -700,6 +700,11 @@ Skyways / Office wreck models, loaded lazily under the `surface` family. Nothing
 - The military crate rolls `MILITARY_SUPPLY_ROWS` (`items/lootTables.ts`, an additive named table): gas filters, the odd gas mask,
   dressings, rations, water, batteries and flares. Ammo comes only through the deliberate `genericAmmo` supply rule. Its contents are
   finite, seeded once and remembered like every holder. It is themed by the crate (`CONTAINER_THEMED`), whatever the room.
+- The command tent's free supply is finite gas filters only (task studio-surface-map-tent-cab-20261119-025201-01,
+  `world/surface/tentStock.ts`): the supply table holds one spare filter and no mask, and the crate inside the tent keeps only its
+  filter lots when it is first realized. That rule only removes lots; it never adds a filter. In a saved district, the old free mask
+  still lying at its spot and an untouched in-tent crate's other lots are removed. A crate the player already opened stays exactly
+  as it was. The compound's outdoor crates are unchanged.
 - Nothing loose is baked into these kinds. The radio, the map table's map (lane LIFE) and any supplies are separate props or loot.
 - Tests: `tests/surface-kinds.test.ts` (names / boxes, both audits, physics class, the crate's lid / cavity / loot theme, geometry
   inside its box and grounded, wreck dims / catalogue / level family, renderer names / RenderIndex / sign-name atlas).

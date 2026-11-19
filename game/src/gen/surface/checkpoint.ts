@@ -26,8 +26,7 @@ import {KERB, addBuildingPlan, type BlockPlans, type BuildingPlan} from './cityB
 import type {GroundMap} from './cityCarve';
 import {FACE_ROT, OutdoorProps, halfExtents, kindDims, type PlannedProp} from './outdoorKinds';
 import {SR_MAP_TABLE} from './kinds';
-import {GAS_FILTER_ID, GAS_MASK_ID, MASK_LOOT} from '../maskLoot';
-import {FILTER_LIFE_S} from '../../items/gear';
+import {GAS_FILTER_ID} from '../maskLoot';
 import type {Rng} from '../../core/rng';
 
 /** Headhouse / tent tunables (cells unless noted). */
@@ -211,7 +210,11 @@ export interface CheckpointDress {
   truck: SPose;
   lights: LightPlacement[];
   safe: SRect;
-  /** The tent's guaranteed gas mask (a fitted filter charge) and one spare filter, on the supply table (finite seeded pickups). */
+  /**
+   * The tent's free supply: ONE spare gas filter on the supply table (a finite seeded pickup). Task studio-surface-map-tent-cab-20261119-
+   * 025201-01 (lane TENT; user: "No free gas mask in the tent ... some finite filters ONLY"): the guaranteed mask that lay beside it is
+   * gone (world/surface/tentStock.ts: the saved districts' unclaimed one, the in-tent crate's filter-only stock).
+   */
   pickups: PickupPlacement[];
 }
 
@@ -227,7 +230,11 @@ export const TENT_PLAN = {
    * of the map table's front edge (the open flap's leaf tip stops ~0.3 m short of the reader).
    */
   supplyU: 0.65, mapU: 2.85, reader: 0.6,
-  /** Radio: along the map table's long axis (host-local x; LIFE's map sheet covers |x| <= 0.54); gear on the supply table (host-local x, z). */
+  /**
+   * Radio: along the map table's long axis (host-local x; LIFE's map sheet covers |x| <= 0.54); gear on the supply table (host-local x, z):
+   * the spare filter's spot, and `mask` = where the tent's free mask lay until task studio-surface-map-tent-cab-20261119-025201-01 (now
+   * read only to recognise that mask in a saved district: world/surface/tentStock.ts).
+   */
   radioX: 0.76,
   gear: {mask: [-0.45, 0.15], filter: [0.45, 0.15]} as Readonly<Record<'mask' | 'filter', readonly [number, number]>>,
   /** Crate: from the flap-end wall and the far side wall (m, to its footprint). */
@@ -259,6 +266,16 @@ function hostLocal(h: {x: number; z: number; rot: number}, lx: number, lz: numbe
 }
 
 /**
+ * A TENT_PLAN.gear spot on the placed supply table `sp` (world m, rounded as the pickups are): the spare filter's, or the spot where the
+ * tent's free mask lay until task studio-surface-map-tent-cab-20261119-025201-01 (world/surface/tentStock.ts reads it to recognise that
+ * mask, still unclaimed, in a saved district).
+ */
+export function tentGearSpot(sp: {x: number; y: number; z: number; rot: number}, which: 'mask' | 'filter'): {x: number; y: number; z: number} {
+  const [lx, lz] = TENT_PLAN.gear[which], w = hostLocal(sp, lx, lz);
+  return {x: r3(w.x), y: r3(sp.y + SR_MAP_TABLE.top.y), z: r3(w.z)};
+}
+
+/**
  * On-top decor on a placed lane KIT trestle table (srMapTable): `host` = the table's layout.props index, y = its top (SR_MAP_TABLE.top),
  * the footprint inside the top's x span; the top gives up that span (PropPlacement.cut). Not grid-blocking (it stands on the table).
  */
@@ -275,8 +292,8 @@ function onTable(op: OutdoorProps, table: PlannedProp | null, kind: string, lx: 
   return p;
 }
 
-/** The compound's props, the truck pose, the work lights, the safe box, the tent's gas-mask supply. */
-export function dressCheckpoint(op: OutdoorProps, kit: Kit, pc: PortalCarve, host: SurfaceHost, compoundArea: number, rng: Rng): CheckpointDress {
+/** The compound's props, the truck pose, the work lights, the safe box, the tent's spare-filter supply. */
+export function dressCheckpoint(op: OutdoorProps, kit: Kit, pc: PortalCarve, host: SurfaceHost, compoundArea: number): CheckpointDress {
   const p = pc.plaza, U = p.U, V = p.V;
   const su = sideU(p), sv = sideV(p);
   const at = (u: number, v: number) => pw(p, u, v);
@@ -308,7 +325,7 @@ export function dressCheckpoint(op: OutdoorProps, kit: Kit, pc: PortalCarve, hos
   for (const du of [-PORTAL.gate / 2 - 0.6, PORTAL.gate / 2 + 0.6]) put('srTrafficCone', gu + du, V - 2.2, 0, 'checkpoint-cone');
 
   // --- inside the tent (TENT_PLAN): the planning-map table with the field radio on its end strip, the supply table against the back
-  // wall with the guaranteed gas mask and a spare filter, a crate against the far side wall ------------------------------------------
+  // wall with a spare filter, a crate against the far side wall ----------------------------------------------------------------------
   const T = pc.tent.dims, tv0 = host === 'subway' ? 16 : 8;
   const tu0 = 3 * CELL, tu1 = (2 + T.len - 1) * CELL, tvA = (tv0 + 1) * CELL, tvB = (tv0 + T.wid - 1) * CELL;
   const TP = TENT_PLAN, sv2: Side = sv === 'N' ? 'S' : sv === 'S' ? 'N' : sv === 'W' ? 'E' : 'W';
@@ -332,17 +349,14 @@ export function dressCheckpoint(op: OutdoorProps, kit: Kit, pc: PortalCarve, hos
   const readW = at(readU, readV);
   const tw = at(tableU, tableV);
   const read: SPose = {x: readW.x, z: readW.z, yaw: yawTo(readW.x, readW.z, tw.x, tw.z), level: 0, y: KERB};
-  // the guaranteed mask (its fitted filter charge seeded like any found mask: gen/maskLoot.ts MASK_LOOT.foundFilter) and one spare filter
+  // the free supply: one spare filter (a finite pickup, exactly the record it always had). Task studio-surface-map-tent-cab-20261119-025201-01
+  // (lane TENT): no mask any more — it was layout.pickups[0], so the filter is index 0 now and every interior pickup one index lower in a
+  // new district (a saved one restores its own records); its fitted charge was the only draw of this function's 'checkpoint-supply' fork
+  // (gen/surface/index.ts: a fork never moves its parent's stream), so nothing else of the layout changes (tests/surface-v1-compat.test.ts
+  // and surface-connector-pins.test.ts put the old mask back — world/surface/tentStock.ts legacyTentMask — and match main's digests)
   const pickups: PickupPlacement[] = [];
   const sp = supply ? op.props[supply.index] : undefined;
-  if (sp) {
-    const [f0, f1] = MASK_LOOT.foundFilter;
-    const filter = Math.round(FILTER_LIFE_S * (f0 + (f1 - f0) * rng.next()) * 10) / 10;
-    for (const [itemId, [lx, lz]] of [[GAS_MASK_ID, TP.gear.mask], [GAS_FILTER_ID, TP.gear.filter]] as const) {
-      const w = hostLocal(sp, lx, lz);
-      pickups.push({itemId, count: 1, x: r3(w.x), y: r3(sp.y + SR_MAP_TABLE.top.y), z: r3(w.z), area: sp.area, yaw: sp.rot, ...(itemId === GAS_MASK_ID ? {filter} : {})});
-    }
-  }
+  if (sp) pickups.push({itemId: GAS_FILTER_ID, count: 1, ...tentGearSpot(sp, 'filter'), area: sp.area, yaw: sp.rot});
 
   // --- crates along the inner u edge (else the inner v edge), cots beside the tent, the generator and work lights -----------------
   // (each tries its spots in order: a neighbour's side door onto the compound keeps its front clear)
