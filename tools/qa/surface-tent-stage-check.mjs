@@ -64,6 +64,7 @@ await withBrowserLock(async () => {
     const face = (x, z, tx, tz, level = 0) => ev((a) => window.__LL.teleport(a.x, a.z, Math.atan2(-(a.tx - a.x), -(a.tz - a.z)), a.level), {x, z, tx, tz, level});
     const waitFor = async (fn, capS, arg) => { const r0 = Date.now(); while (Date.now() - r0 < capS * 1000 && !report.guard) { if (await ev(fn, arg).catch(() => false)) return true; await sleep(250); } return false; };
     const stage = () => ev(() => window.__LL.surfaceTentStage()).catch(e => String(e));
+    const units = () => ev(() => { const j = window.__game.journeyCompileStats; return j ? {at: Math.round(performance.now()), repsCompiled: j.viewRepsCompiled, reps: j.viewReps, drawn: j.viewDone, scene: j.sceneDone, steps: j.steps, fv: j.firstView} : null; }).catch(() => null);
     const hud = () => ev(() => ({prompt: document.querySelector('#prompt')?.textContent ?? null, toasts: [...document.querySelectorAll('#toasts > *, .toast')].map(n => n.textContent).slice(-4)})).catch(e => String(e));
 
     if (!headroom('new campaign')) return;
@@ -124,7 +125,7 @@ await withBrowserLock(async () => {
       const d = tent.door, r = tent.rect, n = d.side === 'N' ? [0, -1] : d.side === 'S' ? [0, 1] : d.side === 'W' ? [-1, 0] : [1, 0];
       const fx = d.side === 'N' || d.side === 'S' ? tent.flap?.a ?? d.x : d.x, fz = d.side === 'N' || d.side === 'S' ? d.z : tent.flap?.a ?? d.z;
       await face(fx - n[0] * 1.6, fz - n[1] * 1.6, fx, fz, 0); await frames(12);
-      step('at the flap', {hud: await hud(), stage: await stage(), inTent: (await ev(() => window.__LL.surface.tent()).catch(() => null))?.player});
+      step('at the flap', {units: await units(), hud: await hud(), stage: await stage(), inTent: (await ev(() => window.__LL.surface.tent()).catch(() => null))?.player});
       await shot('flap-held', 'facing the held tent flap: its prompt says the street is being prepared');
       await page.keyboard.press('KeyE'); await frames(8);
       step('[E] on the held flap', {hud: await hud(), flap: (await ev(() => window.__LL.surface.tent()).catch(() => null))?.flap, stage: await stage()});
@@ -133,9 +134,8 @@ await withBrowserLock(async () => {
       // ---- 3. the planning map at its table, opened with [E] while the street is prepared --------------------------------------------
       const rd = S.read;
       await ev(a => { window.__LL.teleport(a.x, a.z, a.yaw, a.level); window.__game.player.pitch = -0.5; }, rd); await frames(12);
-      step('at the map table', {hud: await hud()});
+      step('at the map table', {units: await units(), hud: await hud()});
       await shot('map-table', 'at the planning map\'s table in the tent (its prompt)');
-      const units = () => ev(() => { const j = window.__game.journeyCompileStats; return j ? {repsCompiled: j.viewRepsCompiled, drawn: j.viewDone, scene: j.sceneDone, steps: j.steps, fv: j.firstView} : null; }).catch(() => null);
       const u0 = await units();
       await page.keyboard.press('KeyE');
       const mapOpen = await waitState('map', 20);
@@ -155,7 +155,7 @@ await withBrowserLock(async () => {
       await page.keyboard.down('KeyW'); await sleep(1200); await page.keyboard.up('KeyW');
       await page.mouse.move(SIZE[0] / 2, SIZE[1] / 2); await page.mouse.move(SIZE[0] / 2 + 120, SIZE[1] / 2, {steps: 6});
       await frames(10);
-      step('walked in the tent', {player: (await ev(() => window.__LL.surface.tent()).catch(() => null))?.player, stage: await stage(), trace: await trace()});
+      step('walked in the tent', {units: await units(), player: (await ev(() => window.__LL.surface.tent()).catch(() => null))?.player, stage: await stage(), trace: await trace()});
       await shot('tent-walk', 'walking and looking in the tent while the street is prepared');
 
       // ---- 5. the flap released on the street's first view; [E] opens it; the street beyond ------------------------------------------
@@ -169,6 +169,30 @@ await withBrowserLock(async () => {
       await frames(20);
       step('flap opened', {flap: (await ev(() => window.__LL.surface.tent()).catch(() => null))?.flap, trace: await trace()});
       await shot('street-through-flap', 'the flap opened with [E]: the street beyond, drawn');
+    }
+
+    // ---- 6. (--cab=1) the truck's map on the passenger-side dash: in at the driver's door with a real [E], the view on the sheet, a real
+    // [E] opens the planning map, Escape returns to the seat (still driving), then out
+    if (CAB && headroom('cab')) {
+      const door = await ev(() => { const c = window.__game.skywaysCar, b = c.body, S = c.spec, lx = -(S.width / 2 + 0.7), lz = S.exits.left.z;
+        const cs = Math.cos(b.yaw), sn = Math.sin(b.yaw); return {x: b.x + lx * cs + lz * sn, z: b.z - lx * sn + lz * cs, bx: b.x, bz: b.z, y: b.y}; }).catch(e => String(e));
+      await ev(d => { window.__LL.teleport(d.x, d.z, Math.atan2(-(d.bx - d.x), -(d.bz - d.z)), 0); window.__LL.lookAt(d.bx, d.y + 1.6, d.bz); }, door);
+      await frames(10);
+      await page.keyboard.press('KeyE'); await frames(30);
+      step('in the cab', {truck: await ev(() => window.__LL.truck()?.state).catch(e => String(e))});
+      step('dash map look', {look: await ev(() => window.__LL.truckDashMapLook()).catch(e => String(e))});
+      await frames(10);
+      step('dash map', {map: await ev(() => window.__LL.truckDashMap()).catch(e => String(e)), hud: await hud()});
+      await shot('cab-dash-map', 'seated: the planning map on the passenger-side dash, its [E] prompt');
+      await page.keyboard.press('KeyE');
+      step('dash map open', {map: await waitState('map', 10)});
+      await sleep(1500);
+      await shot('cab-dash-map-open', 'the planning map opened from the dash');
+      await page.keyboard.press('Escape');
+      const seat = await waitState('playing', 20);
+      await frames(20);
+      step('dash map closed', {seat, truck: await ev(() => window.__LL.truck()?.state).catch(e => String(e)), map: await ev(() => window.__LL.truckDashMap()).catch(e => String(e)), hud: await hud()});
+      await shot('cab-dash-map-closed', 'closed: back in the driver\'s seat, the dash map in view');
     }
     step('done', {trace: await trace(), stage: await stage()});
   } finally {
