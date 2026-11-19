@@ -10,6 +10,7 @@
 // district culler's WINDOW TILES (the Skyways' glass rule) and name their outer storey, the street: a span seen from its own storey makes
 // the street storey air-visible, a span seen from the street its own storey; slab + storey occlusion still decide each mesh. Pinned:
 //  - the spans (storey, sill .. head, the street storey outside), and the pre-fix culler options hiding visible facades in the user's room;
+//  - the street's portal tests keep their 55 m cap (no more tiles tested than before: the Skyways' fog-reach test was ~40x the update);
 //  - the user's room at its north and east windows: nothing the oracle sees is culled, the street storey is air-visible;
 //  - a walk window -> turned away -> stairs -> ground floor -> street -> looking up at the windows: every step's decision equals a fresh
 //    one (no visibility state sticks or leaks from the previous pose), nothing visible is culled, and turned away from the glass the
@@ -126,6 +127,17 @@ describe('Surface Run upstairs windows: the street storey seen through the glass
         bad.push(...[...vis].filter(([m]) => culled(m)).map(([m, px]) => `${w.id} ${dy}/${pitch}: ${m.name} ${px}px`));
         b.culler.reset();
         poses++;
+      }
+      // the portal tests keep their 55 m cap (slabs.keepPortalRule): from the street no more portal tiles are tested than before (the
+      // Skyways' fog-reach test tested ~8,800 of the district's stair tiles per cold street update, ~290 ms against ~7 in Node)
+      for (const [x, z, tx, tz, pitch] of [[208, 296, 260, 288, 0.05], [208, 296, 200, 296, 0.35], [208, 296, 208, 250, 0], [205, 280, 150, 280, 0]] as const) {
+        pose(x, L.levels![0].grid.floorAt(x, z) + 1.65, z, yawTo(x, z, tx, tz), pitch);
+        before.update(cam, true);
+        const was = before.stats.tilesTested;
+        before.reset();
+        b.culler.update(cam, true);
+        expect(b.culler.stats.tilesTested, `street towards ${tx}, ${tz}`).toBeLessThanOrEqual(was);
+        b.culler.reset();
       }
     } finally {
       before.reset();

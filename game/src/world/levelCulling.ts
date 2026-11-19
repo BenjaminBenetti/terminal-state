@@ -104,9 +104,12 @@
 // drawn on the street storey and its upper storey (the enterable buildings' upstairs) joined it only through stair runs, so from an
 // upstairs room the street storey rendered only within PORTAL_MARGIN of a stair tile in sight. A span may now name its OUTER storey
 // (WindowSpan.out: the district's street storey): seen from its own storey, the glass makes that storey air-visible. Everything above
-// marked "Skyways only" that keys on window tiles now runs for a district as well (see volumes in the sight rays, the depth-reach portal
-// tests, the over-roofs rule, the torch's frustum / clip zone) — each only ever shows more — except the small-stack registration
-// (slabs.uncullableMultiBand: a district's multi-band meshes stay never culled). Skyways spans carry no `out`: unchanged there.
+// marked "Skyways only" that keys on window tiles now runs for a district as well (see volumes in the sight rays, the over-roofs rule,
+// the torch's frustum / clip zone) — each only ever shows more — except what slabs.keepPortalRule keeps as before: the portal tiles'
+// 55 m horizontal cap (the Skyways' fog-reach test sight-tested ~8,800 of a district's stair tiles per cold street update, ~290 ms in
+// Node against ~7) and the small-stack registration (a district's multi-band meshes stay never culled). An air-visible storey is shown
+// whole (slab, storey occlusion and fog still decide each mesh), so the street seen through the glass needs neither. Skyways spans
+// carry no `out` and no keepPortalRule: unchanged there.
 
 import * as THREE from 'three';
 import {CELL, FLOOR, VOID, type Grid} from '../gen/grid';
@@ -460,11 +463,12 @@ export class LevelCuller {
   /** The window rule on / off (window tiles only; tests / QA A-B: off = the portal / level rule alone, as before). */
   windowRule = true;
   /**
-   * Task studio-surface-upper-storey-culling-20261119-025201-01: with window tiles, a mesh spanning several bands of a small stack still
-   * registers as never culled (slabs.uncullableMultiBand: the Surface Run district's window tiles show more, they never start hiding
-   * what the district drew before) instead of the Skyways' unlevelled entry (register).
+   * Task studio-surface-upper-storey-culling-20261119-025201-01 (slabs.keepPortalRule: the Surface Run district): with window tiles,
+   * the portal / level rule stays as without them — portal tiles keep PORTAL_MAX_DIST's horizontal cap instead of the fog-reach test,
+   * and a mesh spanning several bands of a small stack still registers as never culled instead of the Skyways' unlevelled entry
+   * (register). The window tiles then only add the storeys seen through the glass (and the rules above that only show more).
    */
-  private readonly uncullableMultiBand: boolean;
+  private readonly keepPortalRule: boolean;
   /**
    * Task studio-skywalk-variety (lane PERF, follow-up; Skyways only: window tiles): per lit light viewpoint of the last prepare (the order
    * of the occlusion's viewpoints 1..n), its position (x y z), shadow frustum and whether its near-plane clip zone reaches solid.
@@ -479,11 +483,11 @@ export class LevelCuller {
 
   constructor(private readonly levels: readonly Level[], private readonly cols: LevelColumns, private readonly levelAt: LevelResolver,
     opts?: {atrium?: Uint8Array; slabs?: {see?: readonly SeeRect[]; glass?: readonly {x0: number; z0: number; x1: number; z1: number}[]; everyStorey?: boolean;
-      windows?: readonly WindowSpan[]; sky?: readonly SkyVolume[]; uncullableMultiBand?: boolean}}, deferBuild = false) {
+      windows?: readonly WindowSpan[]; sky?: readonly SkyVolume[]; keepPortalRule?: boolean}}, deferBuild = false) {
     this.levelIds = levels.map(l => l.id);
     this.allLevelIds = new Set(this.levelIds);
     this.everyStorey = levels.length > 1 && !!opts?.slabs?.everyStorey;
-    this.uncullableMultiBand = !!opts?.slabs?.uncullableMultiBand;
+    this.keepPortalRule = !!opts?.slabs?.keepPortalRule;
     // (task studio-reactor-submit, lane CPU: `glass` when given — the Reactor's see-through vessel column is no lift shaft — else `see`)
     this.glassShafts = opts?.atrium ? [...(opts.slabs?.glass ?? opts.slabs?.see ?? [])] : [];
     this.skyVols = levels.length > 1 ? (opts?.slabs?.sky ?? []).filter(v => this.levelIds.includes(v.level)) : [];
@@ -1308,7 +1312,7 @@ export class LevelCuller {
           const span = this.levels.length > LEGACY_STACK ? this.levels.filter(l => l.baseY <= b.max.y + 0.3 && l.baseY + 4.5 >= b.min.y).map(l => l.id) : [];
           // Task studio-skywalk-variety (lane PERF): a small stack WITH occlusion data and window tiles (the Skyways) keeps it as an
           // unlevelled entry — fog, slab planes and per-storey slices decide it (never level-culled, as before)
-          if (!span.length && this.occl.length && this.winTiles.length && !this.uncullableMultiBand) { entry.occ = this.occlusionLevel(entry); this.entries.push(entry); return; }
+          if (!span.length && this.occl.length && this.winTiles.length && !this.keepPortalRule) { entry.occ = this.occlusionLevel(entry); this.entries.push(entry); return; }
           if (!span.length || span.length === this.levels.length) { this.stats.uncullable++; return; }
           entry.levels = span; this.stats.multi++; if (this.occl.length) entry.occ = this.occlusionLevel(entry); this.entries.push(entry); return;
         }
@@ -1359,9 +1363,10 @@ export class LevelCuller {
       this.fr.setFromProjectionMatrix(this.pm);
       // (task studio-skywalk-variety, lane PERF, follow-up: with window tiles — the Skyways — a portal tile is tested out to the fog's
       // own reach, by view depth like every entry: the 55 m cap culled a stair well's storey-1 fixture 55-58 m away that the fog still
-      // draws, lane PERF's depth oracle on version 4; elsewhere the 55 m horizontal cap stands)
+      // draws, lane PERF's depth oracle on version 4; elsewhere — and with slabs.keepPortalRule, a Surface Run district — the 55 m
+      // horizontal cap stands)
       const me1 = camera.matrixWorld.elements, f1 = Math.hypot(me1[8], me1[9], me1[10]) || 1, wx = -me1[8] / f1, wy = -me1[9] / f1, wz = -me1[10] / f1;
-      const byDepth = this.winTiles.length > 0;
+      const byDepth = this.winTiles.length > 0 && !this.keepPortalRule;
       const seen = (t: Tile, k: number): boolean => {
         const dx = Math.max(t.x0 - e.x, 0, e.x - t.x1), dz = Math.max(t.z0 - e.z, 0, e.z - t.z1);
         if (byDepth) {

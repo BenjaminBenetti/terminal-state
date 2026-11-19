@@ -970,7 +970,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     : reactor ? {atrium: reactor.pitMask, slabs: {see: reactor.occlusionSee(), glass: []}}
     : layout.skyways ? {slabs: {see: skywaysOcclusionSee(layout), windows: skywaysWindowSpans(layout)}}
     // (task studio-surface-upper-storey-culling-20261119-025201-01: + AIR's live spans as window tiles — the street storey seen from an upstairs room)
-    : layout.surface ? {slabs: {see: surfaceOcclusionSee(layout), windows: surfaceWindowSpans(layout), uncullableMultiBand: true, ...surfaceSky(layout)}} // (lane LOOK follow-up 2: a Surface Run district — interiors behind its facades; world/surface/lookOcclusion.ts)
+    : layout.surface ? {slabs: {see: surfaceOcclusionSee(layout), windows: surfaceWindowSpans(layout), keepPortalRule: true, ...surfaceSky(layout)}} // (lane LOOK follow-up 2: a Surface Run district — interiors behind its facades; world/surface/lookOcclusion.ts)
     : mkt ? {atrium: mkt.atrium} : undefined); // (task studio-survivor-market-20261108-005807-01: the open shed as atrium tiles, no slabs)
   culler.register(group);
   return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: treatFaces, rails, levelAt, culler,
