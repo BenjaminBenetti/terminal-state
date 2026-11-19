@@ -61,15 +61,18 @@ describe('crossing readiness on the real Game: the lift ride\'s first view (atmo
       // three's node builds, render pipelines created and pipelines used by a draw for the first time — per ride phase
       let phase = 'boot';
       const counts: Record<string, Count> = {};
-      const c = () => (counts[phase] ??= {builds: 0, pipelines: 0, firstUsed: 0});
+      // (a gameplay event's dynamic effect — the damage system's debris pools, never warmed on main either: its first draw creates its
+      // pipeline whenever the first glass breaks — counts under '<phase>:fx', reported, not as the crossing's preparation)
+      const fxOf = (o: unknown) => { const x = o as {name?: string; object?: {name?: string}} | null; return /^debris-/.test(x?.object?.name ?? x?.name ?? ''); };
+      const c = (o?: unknown) => (counts[fxOf(o) ? `${phase}:fx` : phase] ??= {builds: 0, pipelines: 0, firstUsed: 0});
       const r3 = (game as unknown as {renderer: {backend: Record<string, (...a: unknown[]) => unknown>; _pipelines: {_getRenderPipeline(...a: unknown[]): object}}}).renderer;
       const be = r3.backend, used = new Set<unknown>(), firstAtOpen: string[] = [];
-      const cnb = be.createNodeBuilder.bind(be); be.createNodeBuilder = (...a: unknown[]) => { c().builds++; return cnb(...a); };
-      const grp = r3._pipelines._getRenderPipeline.bind(r3._pipelines); r3._pipelines._getRenderPipeline = (...a: unknown[]) => { c().pipelines++; return grp(...a); };
+      const cnb = be.createNodeBuilder.bind(be); be.createNodeBuilder = (...a: unknown[]) => { c(a[0]).builds++; return cnb(...a); };
+      const grp = r3._pipelines._getRenderPipeline.bind(r3._pipelines); r3._pipelines._getRenderPipeline = (...a: unknown[]) => { c(a[0]).pipelines++; return grp(...a); };
       const draw = be.draw.bind(be);
       be.draw = (...a: unknown[]) => {
         const ro = a[0] as {pipeline?: unknown; object?: {name?: string}; material?: {name?: string}};
-        if (ro.pipeline && !used.has(ro.pipeline)) { used.add(ro.pipeline); c().firstUsed++; if (phase === 'open' || phase === 'opening') firstAtOpen.push(`${phase}: ${ro.object?.name} / ${ro.material?.name}`); }
+        if (ro.pipeline && !used.has(ro.pipeline)) { used.add(ro.pipeline); c(ro).firstUsed++; if (phase === 'open' || phase === 'opening' || phase === 'tent' || phase === 'release') firstAtOpen.push(`${phase}: ${ro.object?.name} / ${ro.material?.name} / ${(ro.object as {type?: string})?.type} / ${(ro as {context?: {renderTarget?: unknown}}).context?.renderTarget ? 'target' : 'canvas'}`); }
         return draw(...a);
       };
       await game.load(() => {});
@@ -127,11 +130,12 @@ describe('crossing readiness on the real Game: the lift ride\'s first view (atmo
       expect(cv.prep.steps, 'planned in frame steps').toBeGreaterThanOrEqual(FIRST_STEPS);
       const shut = frames.findIndex(f => f.ride === 'travel');
       expect(shut, 'the doors shut and the car moved').toBeGreaterThan(0);
-      for (const f of frames.slice(shut)) if (f.door > 0) expect(f.fv, 'the doors open only with the first view ready').toBe('ready');
+      // (while the doors open: the tent's job; once open, the street's job from the tent replaces it — (e))
+      for (const f of frames.slice(shut)) if (f.door > 0 && f.ride !== 'idle') expect(f.fv, 'the doors open only with the first view ready').toBe('ready');
       expect(opened, 'the door-open frame seen').toBeGreaterThan(0);
       // (b) the door-open frame and the frames while the doors open: nothing built, created or first used
       for (const p of ['open', 'opening'] as const) expect(counts[p] ?? {builds: 0, pipelines: 0, firstUsed: 0}, `${p}: ${firstAtOpen.join(', ')}`).toEqual({builds: 0, pipelines: 0, firstUsed: 0});
-      expect(firstAtOpen).toEqual([]);
+      expect(firstAtOpen.filter(x => x.startsWith('open')), 'first used at the door-open').toEqual([]);
       // (e) the street from the tent: its first view from the flap drawn off-screen (with the culler sweep) while the frames draw the
       // tent only — and none of those frames builds, creates or first uses anything; then the flap is released and the release frames
       // (the street drawn, its hidden frame already from this camera) build, create and first use nothing either
@@ -145,7 +149,7 @@ describe('crossing readiness on the real Game: the lift ride\'s first view (atmo
       expect(sj.viewFrame, 'the street\'s hidden real-view frame (from the player\'s camera in the tent)').toBe(true);
       expect(sv.plan.swept, 'the culler sweep from the flap').toBeGreaterThan(0);
       expect(sv.plan.items, 'the street: more than the tent').toBeGreaterThan(cv.plan.items);
-      for (const p of ['tent', 'release'] as const) expect(counts[p] ?? {builds: 0, pipelines: 0, firstUsed: 0}, `${p}: nothing built, created or first used`).toEqual({builds: 0, pipelines: 0, firstUsed: 0});
+      for (const p of ['tent', 'release'] as const) expect(counts[p] ?? {builds: 0, pipelines: 0, firstUsed: 0}, `${p}: nothing built, created or first used — ${firstAtOpen.join(', ')}`).toEqual({builds: 0, pipelines: 0, firstUsed: 0});
       expect(frames.filter((_, i) => i < released && i > opened).length, 'frames drawn in the tent before the release').toBeGreaterThan(10);
       // (d) the rest: reported at the release, and going on after it (the same job, play pacing)
       expect(sv.rest, 'what was left when the flap was released').not.toBeNull();

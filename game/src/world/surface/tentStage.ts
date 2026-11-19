@@ -186,9 +186,10 @@ export interface TentStageRecord {
   /** Frames drawn sealed to the tent; the most renderables sealed in one; renderables let in by the centre rule after the scan. */
   sealedFrames: number;
   sealedMax: number;
-  /** Map frames whose stage steps ran (the map open), and their ms. */
+  /** Frames of the open planning map (the stage's steps run in them): their count, the steps' ms and the steps run. */
   mapFrames: number;
   mapMs: number;
+  mapSteps: number;
   /** The flap was held (the district has one) and was open before the hold. */
   flapHeld: boolean;
 }
@@ -243,7 +244,7 @@ export class SurfaceTentStage {
     this.phase = 'tent';
     this.t0 = performance.now();
     this.counts.stages++;
-    this.record = {phase: 'tent', why: '', scan: null, tent: null, street: null, tentOpenMs: -1, releasedMs: -1, sealedFrames: 0, sealedMax: 0, mapFrames: 0, mapMs: 0, flapHeld: true};
+    this.record = {phase: 'tent', why: '', scan: null, tent: null, street: null, tentOpenMs: -1, releasedMs: -1, sealedFrames: 0, sealedMax: 0, mapFrames: 0, mapMs: 0, mapSteps: 0, flapHeld: true};
     return true;
   }
 
@@ -294,9 +295,9 @@ export class SurfaceTentStage {
     if (this.record) { this.record.phase = 'street'; this.record.tentOpenMs = performance.now() - this.t0; }
   }
 
-  /** (Game.frame) a frame of the open planning map ran the stage's steps for `ms`. */
-  mapFrame(ms: number): void {
-    if (this.record) { this.record.mapFrames++; this.record.mapMs += ms; }
+  /** (Game.frame) a frame of the open planning map ran `steps` of the stage's steps for `ms`. */
+  mapFrame(ms: number, steps: number): void {
+    if (this.record) { this.record.mapFrames++; this.record.mapMs += ms; this.record.mapSteps += steps; }
   }
 
   /** The street's first view ended: the flap is let go (`release`: air.ts releaseTentFlap) and the frames draw the whole district. */

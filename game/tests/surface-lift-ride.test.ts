@@ -341,16 +341,21 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       Object.assign(P, {x: rd.x, z: rd.z, yaw: rd.yaw, pitch: -0.5});
       await h.waitFrames(4);
       expect(MR.prompt ?? '', 'the table\'s prompt in the tent').toMatch(/planning map/);
-      const job0 = game.journeyCompileStats, units = () => { const j = game.journeyCompileStats; return j ? j.viewRepsCompiled + j.viewDone + j.sceneDone + j.steps : 0; };
-      const u0 = units(), mf0 = rec.mapFrames;
+      // (the street's job planned — in frame steps of its own — before the map opens: its own scheduled steps then go on with it open)
+      expect(await until(() => !!game.journeyCompileStats && game.journeyCompileStats.firstView !== 'ready', 600), 'the street\'s job exists').toBe(true);
+      const job0 = game.journeyCompileStats!, steps0 = job0.steps, ms0 = rec.mapSteps, mf0 = rec.mapFrames;
       await press();
       expect(game.state, 'the map is open').toBe('map');
-      await until(() => units() > u0 + 3 || TS.phase !== 'street', 600);
+      await until(() => job0.steps > steps0 + 3 || TS.phase !== 'street', 600);
       expect(game.state).toBe('map');
-      expect(units(), `the street's preparation ran with the map open ${JSON.stringify(game.journeyCompileStats)}`).toBeGreaterThan(u0);
-      expect(rec.mapFrames - mf0, 'map frames ran the stage\'s steps').toBeGreaterThan(0);
-      expect(game.journeyCompileStats === job0 || job0 === null, 'the same street job').toBe(true);
+      expect(game.journeyCompileStats, 'the same street job').toBe(job0);
+      expect(job0.steps, `the street's preparation stepped with the map open ${JSON.stringify(job0)}`).toBeGreaterThan(steps0 + 3);
+      expect(rec.mapFrames - mf0, 'frames of the open map').toBeGreaterThan(0);
+      expect(rec.mapSteps - ms0, 'the stage\'s steps ran in the map\'s frames').toBeGreaterThan(3);
       MR.view!.handleKey({code: 'Escape', key: 'Escape', repeat: false, ctrlKey: false, altKey: false, metaKey: false, target: null, preventDefault() {}, stopImmediatePropagation() {}});
+      expect(MR.view!.isOpen, 'the map closed').toBe(false);
+      await until(() => game.state !== 'map', 600);
+      if (game.state === 'paused') game.setState('playing'); // (Resume; enterPlay's pointer-lock request never settles headless)
       expect(game.state, 'closed: back in play').toBe('playing');
       marks.push(`tent stage: ${JSON.stringify({...rec, scan: rec.scan})}; sealed to the tent ${JSON.stringify(tentSeal)}`);
       const t = S.checkpoint.tent, side = t.door.side, n = side === 'N' ? [0, -1] : side === 'S' ? [0, 1] : side === 'W' ? [-1, 0] : [1, 0];
@@ -479,6 +484,8 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
           const tl6 = game.layout.surface!.portal.lift!;
           expect(P.x > tl6.cab.x0 && P.x < tl6.cab.x1 && P.z > tl6.cab.z0 && P.z < tl6.cab.z1, 'released in the tent\'s car').toBe(true);
           expect(R.holding).toBe(false);
+          // (the doors opened into the tent: the street's job from it — planned in frame steps first — is the new job in play)
+          await until(() => jobs.length >= 3, 600);
           expect(jobs.length, 'the rest: a new job in play').toBeGreaterThanOrEqual(3);
           expect(game.journeyCompileStats, 'the play-paced job').toBe(jobs[2].stats);
           expect(['scene', 'shadow', 'done']).toContain(jobs[2].stats.phase);

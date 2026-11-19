@@ -4015,7 +4015,7 @@ export class Game {
         cpu.rendered = this.render();
         cpu.renderMs = performance.now() - r0;
       }
-      if (stageMap) { cpu.deferredMs = fb.run(tentStageKey); this.surfaceTentStage!.mapFrame(cpu.deferredMs); }
+      if (stageMap) { cpu.deferredMs = fb.run(tentStageKey); this.surfaceTentStage!.mapFrame(cpu.deferredMs, fb.lastFrame.chunks); }
     }
     this.input.endFrame();
     this.prof.frameEnd(); // lane MEASURE: stores the frame when the world updated in it
