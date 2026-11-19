@@ -13,14 +13,16 @@
 //  - unexplored ground: a lighter wash and a sparser, finer, fainter hatch than before (6 m, 1.1 m lines at 0.45 over a 0.26 tint), the
 //    legend swatch the same pattern with the same edge, the edge exactly between explored and unexplored cells; the table-top canvas
 //    draws the same fog and its labels (YOU, TRUCK, destination names) without overlaps;
+//  - two labels side by side keep more than a word space apart (LABEL_RINGS.apartX / apartZ: on one baseline they would read as one
+//    sentence); the notes of one place (one building, or glyphs within MAP_NOTE_GROUP) print as ONE block, each note led by its glyph;
 //  - the text estimate matches the user's sheet (their bold Arial names) and long notes / names wrap at a space.
 import {describe, expect, it} from 'vitest';
 import {LEVELS} from '../src/levels/registry';
 import type {SurfaceInfo} from '../src/gen/surface/surfaceTypes';
 import {EXPLORE, exploreGridFor, isSet, markDisc} from '../src/world/surface/mapExplore';
 import {buildPlanningMap, type MapState, type PlanningMap} from '../src/world/surface/mapModel';
-import {MAP_FOG, MAP_FONT, MAP_WRAP, drawPlanningCanvas, fogEdges, layoutPlanningLabels, renderPlanningSvg, type MapCtx} from '../src/world/surface/mapDraw';
-import {LABEL_RINGS, LINE, overlaps, placeLabels, segmentHitsBox, textWidth, wrapText, type LBox, type LabelReq} from '../src/world/surface/mapLabels';
+import {MAP_FOG, MAP_FONT, MAP_NOTE_GROUP, MAP_WRAP, drawPlanningCanvas, fogEdges, layoutPlanningLabels, renderPlanningSvg, type MapCtx} from '../src/world/surface/mapDraw';
+import {LABEL_RINGS, LINE, crowds, overlaps, placeLabels, segmentHitsBox, textWidth, wrapText, type LBox, type LabelReq} from '../src/world/surface/mapLabels';
 
 type Host = 'subway' | 'office' | 'mall';
 /** The user's district (network seed 2, st-02 Marlwick Tower) and other real v2 districts per host. */
@@ -64,7 +66,6 @@ function state(s: SurfaceInfo, explored: 'early' | 'partly'): MapState {
   };
 }
 
-const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const unesc = (t: string) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
 const n1 = (v: number) => (Math.round(v * 10) / 10).toString();
 
@@ -87,14 +88,19 @@ function eachCase(f: (host: Host, seed: number, tag: 'early' | 'partly', s: Surf
 
 describe('Surface Run planning map: legible labels on real districts', () => {
   it('no label overlaps another label or any symbol; all on the sheet; no leader through other text; nothing forced', () => {
-    eachCase((host, seed, tag, s, m) => {
+    eachCase((host, seed, tag, _s, m) => {
       const key = `${host} ${seed} ${tag}`, L = layoutPlanningLabels(m), E = m.extent;
       expect(L.stats.overlap, key).toBe(0);
       expect(L.labels.length, key).toBe(L.stats.labels);
       for (let i = 0; i < L.labels.length; i++) {
         const a = L.labels[i].placed.box;
         expect(a.x0 >= E.x0 && a.x1 <= E.x1 && a.z0 >= E.z0 && a.z1 <= E.z1, `${key} ${L.labels[i].id} on the sheet`).toBe(true);
-        for (let j = i + 1; j < L.labels.length; j++) expect(overlaps(a, L.labels[j].placed.box), `${key} ${L.labels[i].id} x ${L.labels[j].id}`).toBe(false);
+        for (let j = i + 1; j < L.labels.length; j++) {
+          expect(overlaps(a, L.labels[j].placed.box), `${key} ${L.labels[i].id} x ${L.labels[j].id}`).toBe(false);
+          // two labels side by side keep more than a word space apart (else "Movement inside 6th Rail Depot" + "6th Rail Depot: train
+          // parts inside" read as one sentence); a street name keeps the plain pad
+          if (L.labels[i].kind !== 'street' && L.labels[j].kind !== 'street') expect(crowds(a, L.labels[j].placed.box, LABEL_RINGS.apartX - 1e-6, LABEL_RINGS.apartZ - 1e-6), `${key} ${L.labels[i].id} crowds ${L.labels[j].id}`).toBe(false);
+        }
         for (const ic of L.icons) expect(overlaps(a, ic.box), `${key} ${L.labels[i].id} over symbol ${ic.id}`).toBe(false);
         for (const f of L.fixed) expect(overlaps(a, f), `${key} ${L.labels[i].id} over AO CORE / title`).toBe(false);
         const l = L.labels[i].placed.leader;
@@ -112,7 +118,7 @@ describe('Surface Run planning map: legible labels on real districts', () => {
   }, 120_000);
 
   it('every marker is drawn: its symbol at the model point, its text visible; drawing leaves the model untouched', () => {
-    eachCase((host, seed, tag, s, m) => {
+    eachCase((host, seed, tag, _s, m) => {
       const key = `${host} ${seed} ${tag}`, before = JSON.stringify(m);
       const svg = renderPlanningSvg(m), L = layoutPlanningLabels(m);
       expect(JSON.stringify(m), key).toBe(before);
@@ -122,7 +128,7 @@ describe('Surface Run planning map: legible labels on real districts', () => {
       for (const mk of m.markers) {
         const callout = L.callout.includes(mk.id);
         // its symbol, at the model's own point
-        if (!callout || mk.kind === 'checkpoint') expect(at.get(mk.id), `${key} ${mk.id} ${mk.kind} symbol`).toBe(`${n1(mk.x)},${n1(mk.z)}`);
+        if ((!callout || mk.kind === 'checkpoint') && mk.kind !== 'report') expect(at.get(mk.id), `${key} ${mk.id} ${mk.kind} symbol`).toBe(`${n1(mk.x)},${n1(mk.z)}`); // (a report is words only)
         if (mk.kind === 'note' && !callout) { const g = L.glyphs.get(mk.id)!; expect(Math.hypot(g.x - mk.x, g.z - mk.z), `${key} ${mk.id} glyph beside its point`).toBeLessThanOrEqual(36); }
         if (mk.kind === 'blocked') continue; // (a symbol only: its note carries the words)
         // its text, visible in exactly one label
@@ -143,6 +149,32 @@ describe('Surface Run planning map: legible labels on real districts', () => {
       }
     });
   }, 120_000);
+
+  it('the notes of one place print as one block, each note led by its own tone glyph; the glyphs stay at their points', () => {
+    let grouped = 0;
+    eachCase((host, seed, tag, _s, m) => {
+      const key = `${host} ${seed} ${tag}`, L = layoutPlanningLabels(m);
+      const notes = m.markers.filter(k => k.kind === 'note' && !L.callout.includes(k.id));
+      const labelOf = (id: string) => L.labels.find(l => l.kind === 'note' && l.markers.includes(id))!;
+      for (const a of notes) for (const b of notes) {
+        if (a === b) continue;
+        const ga = L.glyphs.get(a.id)!, gb = L.glyphs.get(b.id)!;
+        if ((a.ref.type === 'building' && b.ref.type === 'building' && a.ref.id === b.ref.id) || Math.hypot(ga.x - gb.x, ga.z - gb.z) <= MAP_NOTE_GROUP) expect(labelOf(a.id), `${key} ${a.id} with ${b.id}`).toBe(labelOf(b.id));
+      }
+      for (const l of L.labels.filter(q => q.kind === 'note' && q.markers.length > 1)) {
+        grouped++;
+        const pre = l.lines.filter(x => x.prefix);
+        expect(pre.map(x => x.prefix), `${key} ${l.id}`).toEqual(l.markers.map(id => m.markers.find(k => k.id === id)!.symbol));
+        expect(l.align, `${key} ${l.id}: the glyphs lead a left-aligned block`).toBe('start');
+      }
+    });
+    expect(grouped).toBeGreaterThan(0);
+    // the user's 6th Rail Depot: the hostiles and the train parts in one block (they were two blocks butting on one baseline)
+    const s = district('office', 61488949), m = buildPlanningMap(s, state(s, 'early')), L = layoutPlanningLabels(m);
+    const depot = L.labels.find(l => l.lines.some(x => x.text.startsWith('Movement inside')) && l.lines.some(x => x.text.startsWith('6th Rail Depot:')));
+    expect(depot, 'one block for the depot notes').toBeTruthy();
+    expect(renderPlanningSvg(m)).toContain(`data-label="${depot!.id}"`);
+  });
 
   it("the tent pile-up: YOU, TRUCK, CHECKPOINT + its note, the way back and the destinations beside it are all readable", () => {
     const s = district('office', 61488949);
@@ -267,7 +299,7 @@ describe('Surface Run planning map: the label placer', () => {
     const res = placeLabels(reqs, [{box: {x0: 97, z0: 97, x1: 103, z1: 103}, tag: 'icon'}], {x0: 0, z0: 0, x1: 260, z1: 260});
     expect(res.placed.map(p => p.id)).toEqual(reqs.map(q => q.id)); // (priority order kept, nothing dropped)
     expect(res.stats.overlap).toBe(0);
-    for (let i = 0; i < res.placed.length; i++) for (let j = i + 1; j < res.placed.length; j++) expect(overlaps(res.placed[i].box, res.placed[j].box)).toBe(false);
+    for (let i = 0; i < res.placed.length; i++) for (let j = i + 1; j < res.placed.length; j++) expect(crowds(res.placed[i].box, res.placed[j].box, LABEL_RINGS.apartX - 1e-6, LABEL_RINGS.apartZ - 1e-6)).toBe(false);
     expect(res.stats.fallback).toBeGreaterThan(0);
     expect(res.stats.fallback).toBe(res.placed.filter(p => p.fallback).length);
     for (const p of res.placed.filter(q => q.ring > 0 || q.fallback)) expect(p.leader).not.toBeNull();

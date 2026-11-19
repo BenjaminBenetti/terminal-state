@@ -22,6 +22,10 @@
 //  - the checkpoint is its compound outline and tent at the real place plus a compact CALLOUT beside it (the friendly frame, CHECKPOINT
 //    and the checkpoint's own notes) with a leader — the YOU / TRUCK arrows and the way back keep their real poses inside it;
 //  - co-located note glyphs (two notes at the depot door, a blocked-street note on its blocked span) sit side by side at the spot;
+//  - the notes of one place (the same building, or glyphs within MAP_NOTE_GROUP of each other: "Rail yard: truck can reach the loading
+//    door", "Movement inside 6th Rail Depot", "6th Rail Depot: train parts inside") print as ONE stacked grease-pencil block, each note
+//    led by its own tone glyph, beside their glyphs — instead of three blocks jostling round one depot; text keeps a word-space-plus
+//    clear of other text side by side (two labels on one baseline would read as one sentence);
 //  - the label statistics ride on the <svg> as data-label-* attributes (QA: displaced / leaders / fallback / crossed / overlap /
 //    street-skipped).
 
@@ -53,6 +57,8 @@ export const MAP_FONT = {
 
 /** Wrap limits (characters): a note / a destination name longer than this takes two lines. */
 export const MAP_WRAP = {note: 26, name: 20} as const;
+/** Notes whose glyphs stand within this many metres of each other (or on one building) print as one stacked block. */
+export const MAP_NOTE_GROUP = 18;
 
 const CURSIVE_FAMILY = `'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive`;
 
@@ -243,12 +249,24 @@ export function layoutPlanningLabels(m: PlanningMap): MapLabelLayout {
     for (const r of reps) { const c = MAP_TONE_COLOUR[r.tone ?? 'info'] ?? PENCIL; lines.push(lineOf(r.label, MAP_FONT.report, c === INK ? PENCIL : c)); }
     add(mk.id, 'dest', [mk.id, ...reps.map(r => r.id)], lines, ic.box, mk.x, mk.z, AROUND_S, INK);
   }
-  // notes (beside their glyph)
-  for (const mk of m.markers) {
-    const at = glyphs.get(mk.id);
-    if (mk.kind !== 'note' || !at) continue;
-    const c = MAP_TONE_COLOUR[mk.tone ?? 'info'] ?? RED;
-    add(mk.id, 'note', [mk.id], wrapText(mk.label, MAP_WRAP.note).map(t => lineOf(t, MAP_FONT.note, c)), boxAt(at.x, at.z, 7.6, 7.6), at.x, at.z, ['E', 'W', 'SE', 'NE', 'S', 'N', 'SW', 'NW'], c);
+  // notes (beside their glyph); the notes of one place print as one block, each led by its tone glyph
+  const notes = m.markers.filter(mk => mk.kind === 'note' && glyphs.has(mk.id));
+  const group = notes.map((_, i) => i), root = (i: number): number => (group[i] === i ? i : (group[i] = root(group[i])));
+  for (let i = 0; i < notes.length; i++) for (let j = i + 1; j < notes.length; j++) {
+    const a = notes[i], b = notes[j], ga = glyphs.get(a.id)!, gb = glyphs.get(b.id)!;
+    const sameBuilding = a.ref.type === 'building' && b.ref.type === 'building' && a.ref.id === b.ref.id;
+    if (sameBuilding || Math.hypot(ga.x - gb.x, ga.z - gb.z) <= MAP_NOTE_GROUP) group[root(j)] = root(i);
+  }
+  const NOTE_DIRS: LabelDir[] = ['E', 'W', 'SE', 'NE', 'S', 'N', 'SW', 'NW'];
+  for (let i = 0; i < notes.length; i++) {
+    if (root(i) !== i) continue;
+    const members = notes.filter((_, j) => root(j) === i);
+    const boxes = members.map(mk => { const g = glyphs.get(mk.id)!; return boxAt(g.x, g.z, 7.6, 7.6); });
+    const A: LBox = {x0: Math.min(...boxes.map(b => b.x0)), z0: Math.min(...boxes.map(b => b.z0)), x1: Math.max(...boxes.map(b => b.x1)), z1: Math.max(...boxes.map(b => b.z1))};
+    const tone = (mk: MapMarker) => MAP_TONE_COLOUR[mk.tone ?? 'info'] ?? RED;
+    const lines = members.length === 1 ? wrapText(members[0].label, MAP_WRAP.note).map(t => lineOf(t, MAP_FONT.note, tone(members[0])))
+      : members.flatMap(mk => wrapText(mk.label, MAP_WRAP.note).map((t, k) => lineOf(t, MAP_FONT.note, tone(mk), k === 0 ? mk.symbol : undefined)));
+    add(members[0].id, 'note', members.map(mk => mk.id), lines, A, (A.x0 + A.x1) / 2, (A.z0 + A.z1) / 2, NOTE_DIRS, tone(members[0]));
   }
   // the other reports: one block per point
   const repAt = new Map<string, MapMarker[]>();
@@ -290,7 +308,7 @@ export function layoutPlanningLabels(m: PlanningMap): MapLabelLayout {
     const p = placedById.get(label.id);
     if (!p) continue;
     const dir = p.dir;
-    const align = label.kind === 'callout' ? 'start' : dir === 'E' || dir === 'NE' || dir === 'SE' ? 'start' : dir === 'W' || dir === 'NW' || dir === 'SW' ? 'end' : 'middle';
+    const align = label.kind === 'callout' || label.lines.some(l => l.prefix) ? 'start' : dir === 'E' || dir === 'NE' || dir === 'SE' ? 'start' : dir === 'W' || dir === 'NW' || dir === 'SW' ? 'end' : 'middle';
     labels.push({...label, align: label.kind === 'street' ? 'middle' : align, placed: p});
   }
   return {icons, fixed, labels, skipped: res.skipped, stats: res.stats, glyphs, callout};
@@ -437,7 +455,7 @@ export function renderPlanningSvg(m: PlanningMap): string {
   out.push('</g>');
   // the placed text (callout prefixes first)
   out.push(`<g class="spm-labels" ${HALO}>`);
-  for (const L of Lay.labels) if (L.kind !== 'street') { if (L.kind === 'callout') out.push(`<g class="spm-callout-icons" stroke="none">${prefixSvg(L)}</g>`); out.push(labelSvg(L)); }
+  for (const L of Lay.labels) if (L.kind !== 'street') { if (L.lines.some(l => l.prefix)) out.push(`<g class="spm-callout-icons" stroke="none">${prefixSvg(L)}</g>`); out.push(labelSvg(L)); }
   out.push('</g>');
   // title band, legend, scale, north
   // (the subline ends at the sheet's right edge, over the key, clear of a long district name; both pinned to their estimated width)
