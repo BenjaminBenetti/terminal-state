@@ -6,7 +6,8 @@
 // driver's seat. Root CLAUDE.md browser policy: the workspace lock / watchdog / owned-browser cleanup of browser-env.mjs; a 10 GiB
 // anon + shmem guard closes the owned browser, plus an earlier self-stop at STOP_GIB. Firefox + Mesa on this worker: functional evidence,
 // after-views and software-rasterizer waits only — never hardware performance.
-//   npm run build && node tools/qa/surface-tent-stage-check.mjs [outDir] [--size=640x360] [--quality=low] [--lighting=off] [--network=2] [--host=subway]
+//   npm run build && node tools/qa/surface-tent-stage-check.mjs [outDir] [--size=640x360] [--quality=low] [--lighting=off] [--network=1] [--host=subway]
+//     [--cab=1] [--mapSize=1600x900 (the planning map's sheet read at a larger window, fitted and at about the user's zoom; 0x0: not)]
 import fs from 'node:fs';
 import path from 'node:path';
 import {launchBrowser, withBrowserLock} from './browser-env.mjs';
@@ -16,7 +17,7 @@ const ARGS = process.argv.slice(2), POS = ARGS.filter(a => !a.startsWith('--'));
 const opt = (k, d) => (ARGS.find(a => a.startsWith(`--${k}=`)) ?? `--${k}=${d}`).slice(k.length + 3);
 const out = path.resolve(POS[0] ?? 'qa-artifacts/surface-tent-stage-browser');
 const SIZE = opt('size', '640x360').split('x').map(Number), QUALITY = opt('quality', 'low'), LIGHTING = opt('lighting', 'off');
-const NETWORK_SEED = Number(opt('network', '2')), HOST = opt('host', 'subway'), CAB = opt('cab', '0') === '1';
+const NETWORK_SEED = Number(opt('network', '1')), HOST = opt('host', 'subway'), CAB = opt('cab', '0') === '1', MAP_SIZE = opt('mapSize', '1600x900').split('x').map(Number);
 const GUARD_GIB = 10, STOP_GIB = Number(opt('stop', '9.8'));
 fs.mkdirSync(out, {recursive: true});
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -146,6 +147,21 @@ await withBrowserLock(async () => {
       const u1 = await units();
       step('map open 15 s later', {units: u1, stage: await stage(), state: await ev(() => window.__game.state)});
       await shot('map-open-later', 'the planning map still open; the street\'s preparation went on meanwhile (counts in the report)');
+      // the sheet read at a larger window (MAP_SIZE) as the user's screenshot: fitted, then wheel-zoomed at YOU to ~6.25 px per metre (the
+      // view's scale x the sheet's 2 px per metre), with the real wheel; the window goes back to SIZE before the map closes
+      if (MAP_SIZE[0] > SIZE[0]) {
+        await page.setViewport({width: MAP_SIZE[0], height: MAP_SIZE[1]});
+        await sleep(800);
+        await page.keyboard.press('KeyF'); await sleep(800);
+        await shot('map-fit-large', `the planning map fitted at ${MAP_SIZE.join('x')}`);
+        const you = () => ev(() => { const t = [...document.querySelectorAll('#surface-planning-map svg text')].find(n => n.textContent.trim() === 'YOU'); if (!t) return null; const r = t.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; }).catch(() => null);
+        const scale = async () => ((await ev(() => window.__LL.surfaceMap()).catch(() => null))?.view?.s ?? 0) * 2;
+        for (let i = 0; i < 12 && (await scale()) < 6.0; i++) { const p = await you(); if (!p) break; await page.mouse.move(p.x, p.y); await page.mouse.wheel({deltaY: (await scale()) * 1.35 < 6.25 ? -170 : -40}); await sleep(400); }
+        step('map zoomed at YOU', {pxPerMetre: +(await scale()).toFixed(2), you: await you(), map: await ev(() => { const q = window.__LL.surfaceMap(); return {view: q.view, labels: q.labels, markers: q.markers}; }).catch(e => String(e))});
+        await shot('map-zoom-you-large', 'the planning map at about the user\'s zoom, centred on YOU / TRUCK / CHECKPOINT');
+        await page.setViewport({width: SIZE[0], height: SIZE[1]});
+        await sleep(800);
+      }
       await page.keyboard.press('Escape');
       const back = await waitState('playing', 20);
       step('map closed', {back, state: await ev(() => window.__game.state)});
