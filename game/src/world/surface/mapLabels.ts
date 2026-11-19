@@ -12,8 +12,10 @@
 //    obstacles carry a tag a request may be allowed to cover (YOU / TRUCK / the way back inside the checkpoint compound);
 //  - a STREET name slides along its own carriageway, then along the other segments of the same street nearby; one that still finds no
 //    room is skipped only when the same name is printed near it (stats.streetSkipped);
-//  - nothing is dropped silently: a label out of candidates goes to the nearest free spot further out, with a leader (stats.fallback);
-//    one with no free spot at all (none on the real districts: the tests pin stats.overlap = 0) is still printed, at its first candidate.
+//  - nothing is dropped silently: a label out of candidates goes to the nearest free spot further out, with a leader (stats.fallback) —
+//    where no leader can reach it clear of other text / symbols, the leader may pass under other text, then under symbols too
+//    (stats.crossed: the text itself never overlaps); one with no free spot at all (none on the real districts: the tests pin stats.overlap = 0) is still printed, at its first
+//    candidate.
 
 export interface LBox { x0: number; z0: number; x1: number; z1: number }
 
@@ -122,17 +124,25 @@ export interface PlacedLabel {
   leader: [number, number, number, number] | null;
   /** Out of candidates: at the nearest free spot further out (with a leader). */
   fallback: boolean;
+  /** Its fallback leader passes under other text or symbols (no clear line reached a free spot). */
+  crossed: boolean;
   /** No free spot at all: printed at its first candidate over something else (never on the real districts). */
   overlap: boolean;
 }
 
-export interface LabelStats { labels: number; displaced: number; leaders: number; fallback: number; overlap: number; streetSkipped: number }
+export interface LabelStats { labels: number; displaced: number; leaders: number; fallback: number; crossed: number; overlap: number; streetSkipped: number }
 
-/** Candidate rings (sheet units): the first gap, the step, the count; the fallback search reaches out to `far` in `farStep` steps. */
-export const LABEL_RINGS = {gap0: 0.8, step: 3.2, count: 7, far: 160, farStep: 3, leaderMin: 2.2, pad: 0.35, slide: 3, sameName: 180} as const;
+/**
+ * Candidate rings (metres): the first gap, the step, the count; the fallback search reaches out to `far` in `farStep` steps; a leader is
+ * drawn from `leaderMin`; boxes keep `pad` apart. Street names slide in `slide` steps, keep `nameGap` clear of the same name, and one
+ * without room is skipped when the same name is printed within `sameName`.
+ */
+export const LABEL_RINGS = {gap0: 0.8, step: 3.2, count: 10, far: 160, farStep: 3, leaderMin: 2.2, pad: 0.35, slide: 3, nameGap: 24, sameName: 180} as const;
 type Rings = {-readonly [K in keyof typeof LABEL_RINGS]: number};
 const ringsAt = (unit: number): Rings => ({...LABEL_RINGS, gap0: LABEL_RINGS.gap0 * unit, step: LABEL_RINGS.step * unit, far: LABEL_RINGS.far * unit, farStep: LABEL_RINGS.farStep * unit,
-  leaderMin: LABEL_RINGS.leaderMin * unit, pad: LABEL_RINGS.pad * unit, slide: LABEL_RINGS.slide * unit, sameName: LABEL_RINGS.sameName * unit});
+  leaderMin: LABEL_RINGS.leaderMin * unit, pad: LABEL_RINGS.pad * unit, slide: LABEL_RINGS.slide * unit, nameGap: LABEL_RINGS.nameGap * unit, sameName: LABEL_RINGS.sameName * unit});
+/** The gap between two boxes (0 when they touch or overlap). */
+export const boxGap = (a: LBox, b: LBox): number => Math.hypot(Math.max(0, a.x0 - b.x1, b.x0 - a.x1), Math.max(0, a.z0 - b.z1, b.z0 - a.z1));
 
 const DIR_OFFSET: Record<LabelDir, [number, number]> = {S: [0, 1], N: [0, -1], E: [1, 0], W: [-1, 0], SE: [1, 1], NE: [1, -1], SW: [-1, 1], NW: [-1, -1]};
 
@@ -160,17 +170,18 @@ export function placeLabels(reqs: readonly LabelReq[], obstacles: readonly Obsta
   const taken: LBox[] = [];
   const leaders: [number, number, number, number][] = [];
   const placed: PlacedLabel[] = [], skipped: string[] = [];
-  const stats: LabelStats = {labels: 0, displaced: 0, leaders: 0, fallback: 0, overlap: 0, streetSkipped: 0};
-  const streetsDone: {name: string; x: number; z: number}[] = [];
+  const stats: LabelStats = {labels: 0, displaced: 0, leaders: 0, fallback: 0, crossed: 0, overlap: 0, streetSkipped: 0};
+  const streetsDone: {name: string; x: number; z: number; box: LBox}[] = [];
 
-  const free = (q: LabelReq, b: LBox, leader: [number, number, number, number] | null): boolean => {
+  /** Is box b free for q (with its leader)? `relax` 1: the leader may pass under other text; 2: under symbols too. */
+  const free = (q: LabelReq, b: LBox, leader: [number, number, number, number] | null, relax = 0): boolean => {
     if (!inside(b, bounds)) return false;
     for (const o of obstacles) if (overlaps(b, o.box, pad) && !(q.ignore?.includes(o.tag))) return false;
     for (const t of taken) if (overlaps(b, t, pad)) return false;
     for (const l of leaders) if (segmentHitsBox(l[0], l[1], l[2], l[3], b)) return false;
-    if (leader) {
+    if (leader && relax < 2) {
       // a leader crosses no other text and no other symbol (its own symbol is where it ends)
-      for (const t of taken) if (segmentHitsBox(leader[0], leader[1], leader[2], leader[3], t)) return false;
+      if (relax < 1) for (const t of taken) if (segmentHitsBox(leader[0], leader[1], leader[2], leader[3], t)) return false;
       for (const o of obstacles) if (o.box !== q.anchor && !overlaps(o.box, q.anchor) && !(q.ignore?.includes(o.tag)) && segmentHitsBox(leader[0], leader[1], leader[2], leader[3], o.box)) return false;
     }
     return true;
@@ -187,26 +198,29 @@ export function placeLabels(reqs: readonly LabelReq[], obstacles: readonly Obsta
     stats.labels++;
     if (p.ring > 0 || p.fallback) stats.displaced++;
     if (p.fallback) stats.fallback++;
+    if (p.crossed) stats.crossed++;
     if (p.overlap) stats.overlap++;
-    if (q.street) streetsDone.push({name: q.street.name, x: q.ax, z: q.az});
+    if (q.street) streetsDone.push({name: q.street.name, x: q.ax, z: q.az, box: p.box});
   };
 
   for (const q of reqs) {
     if (q.street) {
-      // slide along the carriageway(s): the centre steps out from each run's own point, nearest first
+      // slide along the carriageway(s): the centre steps out from each run's own point, nearest first, never up against the same name
       let got: LBox | null = null;
-      for (const run of q.street.runs) {
-        const at = run.vertical ? run.z : run.x, lo = Math.min(run.lo, at), hi = Math.max(run.hi, at);
-        const box = (c: number) => (run.vertical ? boxAt(run.x, c, q.h, q.w) : boxAt(c, run.z, q.w, q.h));
+      const name = q.street.name, apart = (b: LBox) => !streetsDone.some(s => s.name === name && boxGap(s.box, b) < R.nameGap);
+      // (on the carriageway's centre line first, then just off it along the kerb, either side: still reading along its own street)
+      runs: for (const run of q.street.runs) for (const side of [0, 1, -1]) {
+        const at = run.vertical ? run.z : run.x, lo = Math.min(run.lo, at), hi = Math.max(run.hi, at), off = side * q.h * 0.9;
+        const box = (c: number) => (run.vertical ? boxAt(run.x + off, c, q.h, q.w) : boxAt(c, run.z + off, q.w, q.h));
         for (let k = 0; k <= 40 && !got; k++) {
           const d = Math.ceil(k / 2) * R.slide * (k % 2 ? 1 : -1), c = at + d;
           if (c < lo - 1e-6 || c > hi + 1e-6) { if (Math.ceil(k / 2) * R.slide > hi - lo) break; continue; }
           const b = box(c);
-          if (free(q, b, null)) got = b;
+          if (apart(b) && free(q, b, null)) got = b;
         }
-        if (got) break;
+        if (got) break runs;
       }
-      if (got) { commit(q, {id: q.id, box: got, dir: 'along', ring: 0, leader: null, fallback: false, overlap: false}); continue; }
+      if (got) { commit(q, {id: q.id, box: got, dir: 'along', ring: 0, leader: null, fallback: false, crossed: false, overlap: false}); continue; }
       if (streetsDone.some(s => s.name === q.street!.name && Math.hypot(s.x - q.ax, s.z - q.az) < R.sameName)) { skipped.push(q.id); stats.streetSkipped++; continue; }
     } else {
       let best: {b: LBox; cost: number; dir: LabelDir; ring: number; leader: [number, number, number, number] | null} | null = null;
@@ -224,7 +238,7 @@ export function placeLabels(reqs: readonly LabelReq[], obstacles: readonly Obsta
           }
         }
       }
-      if (best) { commit(q, {id: q.id, box: best.b, dir: best.dir, ring: best.ring, leader: best.leader, fallback: false, overlap: false}); continue; }
+      if (best) { commit(q, {id: q.id, box: best.b, dir: best.dir, ring: best.ring, leader: best.leader, fallback: false, crossed: false, overlap: false}); continue; }
     }
     // fallback: the nearest free spot further out (square rings of centres around the anchor), with a leader — a street name's leader
     // ends on an uncovered point of its own carriageway
@@ -238,16 +252,17 @@ export function placeLabels(reqs: readonly LabelReq[], obstacles: readonly Obsta
         if (!taken.some(t => overlaps(pt, t)) && !obstacles.some(o => overlaps(pt, o.box))) { fq = {...q, ax: (pt.x0 + pt.x1) / 2, az: (pt.z0 + pt.z1) / 2, anchor: pt}; break; }
       }
     }
-    const f = fallbackSpot(fq, R, free, leaderFor);
-    if (f) { commit(q, {id: q.id, box: f.b, dir: 'free', ring: R.count, leader: f.leader ?? leaderFor(fq, f.b), fallback: true, overlap: false}); continue; }
+    const f = fallbackSpot(fq, R, free, leaderFor, 0) ?? fallbackSpot(fq, R, free, leaderFor, 1) ?? fallbackSpot(fq, R, free, leaderFor, 2);
+    if (f) { commit(q, {id: q.id, box: f.b, dir: 'free', ring: R.count, leader: f.leader ?? leaderFor(fq, f.b), fallback: true, crossed: f.relax > 0, overlap: false}); continue; }
     const b0 = q.street ? (q.street.runs[0].vertical ? boxAt(q.ax, q.az, q.h, q.w) : boxAt(q.ax, q.az, q.w, q.h)) : candidate(q.anchor, q.ax, q.az, q.w, q.h, q.dirs[0] ?? 'S', R.gap0, 0);
-    commit(q, {id: q.id, box: b0, dir: q.street ? 'along' : q.dirs[0] ?? 'S', ring: 0, leader: null, fallback: true, overlap: true});
+    commit(q, {id: q.id, box: b0, dir: q.street ? 'along' : q.dirs[0] ?? 'S', ring: 0, leader: null, fallback: true, crossed: false, overlap: true});
   }
   return {placed, skipped, stats};
 }
 
-function fallbackSpot(q: LabelReq, R: Rings, free: (q: LabelReq, b: LBox, l: [number, number, number, number] | null) => boolean,
-  leaderFor: (q: LabelReq, b: LBox) => [number, number, number, number] | null): {b: LBox; leader: [number, number, number, number] | null} | null {
+/** The nearest free spot beyond the rings (square rings of centres round the anchor); `relax`: how far its leader may pass under things. */
+function fallbackSpot(q: LabelReq, R: Rings, free: (q: LabelReq, b: LBox, l: [number, number, number, number] | null, relax: number) => boolean,
+  leaderFor: (q: LabelReq, b: LBox) => [number, number, number, number] | null, relax: number): {b: LBox; leader: [number, number, number, number] | null; relax: number} | null {
   const cx = (q.anchor.x0 + q.anchor.x1) / 2, cz = (q.anchor.z0 + q.anchor.z1) / 2;
   const w = q.street?.runs[0].vertical ? q.h : q.w, h = q.street?.runs[0].vertical ? q.w : q.h;
   const r0 = R.gap0 + R.count * R.step;
@@ -262,9 +277,9 @@ function fallbackSpot(q: LabelReq, R: Rings, free: (q: LabelReq, b: LBox, l: [nu
       const [lx, lz, ax, az] = closestPoints(b, q.anchor), d = Math.hypot(lx - ax, lz - az);
       if (best && d >= best.d) continue;
       const leader = leaderFor(q, b);
-      if (free(q, b, leader)) best = {b, d, leader};
+      if (free(q, b, leader, relax)) best = {b, d, leader};
     }
-    if (best) return best;
+    if (best) return {...best, relax};
   }
   return null;
 }

@@ -98,14 +98,16 @@ describe('Surface Run planning map: legible labels on real districts', () => {
         for (const ic of L.icons) expect(overlaps(a, ic.box), `${key} ${L.labels[i].id} over symbol ${ic.id}`).toBe(false);
         for (const f of L.fixed) expect(overlaps(a, f), `${key} ${L.labels[i].id} over AO CORE / title`).toBe(false);
         const l = L.labels[i].placed.leader;
-        if (l) for (let j = 0; j < L.labels.length; j++) if (j !== i) expect(segmentHitsBox(l[0], l[1], l[2], l[3], L.labels[j].placed.box), `${key} leader of ${L.labels[i].id} through ${L.labels[j].id}`).toBe(false);
+        // (only a fallback flagged `crossed` — no clear line reached any free spot — may pass under other text)
+        if (l && !L.labels[i].placed.crossed) for (let j = 0; j < L.labels.length; j++) if (j !== i) expect(segmentHitsBox(l[0], l[1], l[2], l[3], L.labels[j].placed.box), `${key} leader of ${L.labels[i].id} through ${L.labels[j].id}`).toBe(false);
         if (L.labels[i].placed.fallback) expect(l, `${key} ${L.labels[i].id}: a fallback keeps a leader`).not.toBeNull();
       }
       // the sheet reports its label statistics (QA)
       const svg = renderPlanningSvg(m);
-      for (const [k, v] of [['fallback', L.stats.fallback], ['overlap', 0], ['leaders', L.stats.leaders], ['displaced', L.stats.displaced]] as const) expect(svg, key).toContain(`data-label-${k}="${v}"`);
+      for (const [k, v] of [['fallback', L.stats.fallback], ['crossed', L.stats.crossed], ['overlap', 0], ['leaders', L.stats.leaders], ['displaced', L.stats.displaced]] as const) expect(svg, key).toContain(`data-label-${k}="${v}"`);
       expect(svg).toContain(`data-street-skipped="${L.stats.streetSkipped}"`);
       expect(L.stats.fallback, `${key}: fallbacks stay rare`).toBeLessThanOrEqual(8);
+      expect(L.stats.crossed, `${key}: crossed leaders rarer still`).toBeLessThanOrEqual(2);
     });
   }, 120_000);
 

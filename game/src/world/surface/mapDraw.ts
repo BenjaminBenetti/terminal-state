@@ -22,7 +22,8 @@
 //  - the checkpoint is its compound outline and tent at the real place plus a compact CALLOUT beside it (the friendly frame, CHECKPOINT
 //    and the checkpoint's own notes) with a leader — the YOU / TRUCK arrows and the way back keep their real poses inside it;
 //  - co-located note glyphs (two notes at the depot door, a blocked-street note on its blocked span) sit side by side at the spot;
-//  - the label statistics ride on the <svg> as data-label-* attributes (QA: displaced / leaders / fallback / overlap / street-skipped).
+//  - the label statistics ride on the <svg> as data-label-* attributes (QA: displaced / leaders / fallback / crossed / overlap /
+//    street-skipped).
 
 import type {MapMarker, PlanningMap} from './mapModel';
 import type {SRect} from '../../gen/surface/surfaceTypes';
@@ -47,7 +48,7 @@ export const MAP_FOG = {
 export const MAP_FONT = {
   name: {size: 7, bold: true}, grid: {size: 5.2}, report: {size: 5.4}, note: {size: 6.6, cursive: true}, street: {size: 6, track: 0.4},
   you: {size: 6.6, bold: true}, truck: {size: 6.2, bold: true}, cp: {size: 6.8, bold: true}, portal: {size: 5.6}, core: {size: 7, bold: true},
-  title: {size: 15, bold: true, track: 1.5},
+  title: {size: 15, bold: true, track: 1.5}, sub: {size: 8},
 } as const satisfies Record<string, FontSpec>;
 
 /** Wrap limits (characters): a note / a destination name longer than this takes two lines. */
@@ -195,7 +196,9 @@ export function layoutPlanningLabels(m: PlanningMap): MapLabelLayout {
     fixedIcons.push(icon(mk, boxAt(at.x, at.z, 7.6, 7.6), at.x, at.z));
   }
   // fixed text + the checkpoint compound (only YOU / TRUCK / the way back may print over it)
-  const fixed = [textBox('AO CORE', MAP_FONT.core, m.core.x0 + 3, m.core.z0 - 3, 'start'), textBox(TITLE(m), MAP_FONT.title, E.x0, E.z0 - SHEET.margin - 10, 'start')];
+  // (AO CORE keeps a word space clear on its right: a street name butted against it would read as one phrase)
+  const ao = textBox('AO CORE', MAP_FONT.core, m.core.x0 + 3, m.core.z0 - 3, 'start');
+  const fixed = [{...ao, x1: ao.x1 + 4}, textBox(TITLE(m), MAP_FONT.title, E.x0, E.z0 - SHEET.margin - 10, 'start')];
   const obstacles: Obstacle[] = [...icons.map(ic => ({box: ic.box, tag: 'icon'})), ...fixed.map(box => ({box, tag: 'text'})), {box: m.checkpoint.rect, tag: 'checkpoint'}];
 
   const reqs: {req: LabelReq; label: Omit<MapLabel, 'placed'>}[] = [];
@@ -264,8 +267,8 @@ export function layoutPlanningLabels(m: PlanningMap): MapLabelLayout {
   const soft: LBox[] = [];
   const runOf = (s: PlanningMap['streets'][number], w: number): StreetRun => {
     const vertical = Math.abs(s.bz - s.az) > Math.abs(s.bx - s.ax), a = vertical ? Math.min(s.az, s.bz) : Math.min(s.ax, s.bx), b = vertical ? Math.max(s.az, s.bz) : Math.max(s.ax, s.bx);
-    // a name that fits stays clear of the cross streets at the segment's ends; a longer one keeps its centre on the segment
-    const keep = w + 14 <= b - a ? w / 2 + 7 : 2, mid = (a + b) / 2;
+    // a name that fits stays clear of the cross streets at the segment's ends; a longer one keeps most of itself on the segment
+    const keep = w + 14 <= b - a ? w / 2 + 7 : 2 - w / 4, mid = (a + b) / 2;
     return {x: vertical ? (s.ax + s.bx) / 2 : mid, z: vertical ? mid : (s.az + s.bz) / 2, vertical, lo: a + keep, hi: b - keep};
   };
   for (const s of m.streets) {
@@ -327,7 +330,7 @@ function fogPattern(): string {
 }
 
 /** The paper-white halo under placed text (knocks the hatch, grid and block lines out from behind the letters; ~invisible in multiply). */
-const HALO = `stroke="#fbf8ef" stroke-width="1.2" stroke-opacity="0.9" stroke-linejoin="round" paint-order="stroke"`;
+const HALO = `stroke="#fbf8ef" stroke-width="1" stroke-opacity="0.9" stroke-linejoin="round" paint-order="stroke"`;
 
 /** One label's text (a <g> of <text> lines; prefixes and leaders are drawn by the caller). */
 function labelSvg(L: MapLabel): string {
@@ -370,7 +373,7 @@ export function renderPlanningSvg(m: PlanningMap): string {
   // (no xmlns: the sheet is parsed as inline HTML, where <svg> is in the SVG namespace already — and the release packager rejects URL
   // literals in the bundle)
   out.push(`<svg class="spm-svg" viewBox="${n(B.x)} ${n(B.y)} ${n(B.w)} ${n(B.h)}" width="${n(B.w)}" height="${n(B.h)}" font-family="'Arial Narrow', 'Roboto Condensed', Arial, sans-serif"`
-    + ` data-labels="${S.labels}" data-label-displaced="${S.displaced}" data-label-leaders="${S.leaders}" data-label-fallback="${S.fallback}" data-label-overlap="${S.overlap}" data-street-skipped="${S.streetSkipped}">`);
+    + ` data-labels="${S.labels}" data-label-displaced="${S.displaced}" data-label-leaders="${S.leaders}" data-label-fallback="${S.fallback}" data-label-crossed="${S.crossed}" data-label-overlap="${S.overlap}" data-street-skipped="${S.streetSkipped}">`);
   out.push(`<defs>${fogPattern()}`
     + `<pattern id="spm-block" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><path d="M0 0 V5" stroke="${RED}" stroke-width="1.2"/></pattern>`
     + `<pattern id="spm-gutted" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0 V4" stroke="${PENCIL}" stroke-width="0.6" stroke-opacity="0.7"/></pattern></defs>`);
@@ -437,8 +440,10 @@ export function renderPlanningSvg(m: PlanningMap): string {
   for (const L of Lay.labels) if (L.kind !== 'street') { if (L.kind === 'callout') out.push(`<g class="spm-callout-icons" stroke="none">${prefixSvg(L)}</g>`); out.push(labelSvg(L)); }
   out.push('</g>');
   // title band, legend, scale, north
-  out.push(`<text x="${n(E.x0)}" y="${n(E.z0 - SHEET.margin - 10)}" font-size="15" font-weight="700" fill="${INK}" letter-spacing="1.5">${esc(TITLE(m))}</text>`);
-  out.push(`<text x="${n(E.x1)}" y="${n(E.z0 - SHEET.margin - 10)}" font-size="8" fill="${PENCIL}" text-anchor="end">CHECKPOINT COPY · GRID SQUARES = 1 BLOCK · EXPLORED ${Math.round(m.explored * 100)} %</text>`);
+  // (the subline ends at the sheet's right edge, over the key, clear of a long district name; both pinned to their estimated width)
+  const sub = `CHECKPOINT COPY · GRID SQUARES = 1 BLOCK · EXPLORED ${Math.round(m.explored * 100)} %`;
+  out.push(`<text x="${n(E.x0)}" y="${n(E.z0 - SHEET.margin - 10)}" font-size="${MAP_FONT.title.size}" font-weight="700" fill="${INK}" letter-spacing="${MAP_FONT.title.track}" textLength="${n(textWidth(TITLE(m), MAP_FONT.title))}" lengthAdjust="spacingAndGlyphs">${esc(TITLE(m))}</text>`);
+  out.push(`<text x="${n(B.x + B.w - SHEET.margin / 2)}" y="${n(E.z0 - SHEET.margin - 10)}" font-size="${MAP_FONT.sub.size}" fill="${PENCIL}" text-anchor="end" textLength="${n(textWidth(sub, MAP_FONT.sub))}" lengthAdjust="spacingAndGlyphs">${sub}</text>`);
   out.push(legendSvg(E.x1 + SHEET.margin + 6, E.z0, m));
   out.push('</svg>');
   return out.join('');

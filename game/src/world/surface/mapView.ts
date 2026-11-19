@@ -241,6 +241,8 @@ export class PlanningMapView {
 
   qa(): Record<string, unknown> {
     const m = this.model;
-    return {open: this.openFlag, counts: {...this.counts}, view: {...this.view}, markers: m?.markers.length ?? 0, kinds: m ? m.markers.reduce<Record<string, number>>((c, k) => ({...c, [k.kind]: (c[k.kind] ?? 0) + 1}), {}) : {}, explored: m?.explored ?? 0, svgChars: this.svg.length};
+    // (lane MAP, task studio-surface-map-tent-cab-20261119-025201-01: the label placer's figures as printed on the sheet)
+    const labels = Object.fromEntries([...this.svg.slice(0, 1200).matchAll(/data-(labels|label-[a-z]+|street-skipped)="(\d+)"/g)].map(g => [g[1], Number(g[2])]));
+    return {open: this.openFlag, counts: {...this.counts}, view: {...this.view}, markers: m?.markers.length ?? 0, kinds: m ? m.markers.reduce<Record<string, number>>((c, k) => ({...c, [k.kind]: (c[k.kind] ?? 0) + 1}), {}) : {}, explored: m?.explored ?? 0, svgChars: this.svg.length, labels};
   }
 }

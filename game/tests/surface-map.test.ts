@@ -289,10 +289,12 @@ describe('Surface Run planning map: drawing, keys and no campaign intel', () => 
     expect(svg).toContain('YOU');
     expect(svg).toContain('TRUCK');
     expect(svg).toContain('CHECKPOINT');
-    for (const b of s.buildings.filter(x => x.destination && x.name)) expect(svg).toContain(esc(b.name));
+    // (task studio-surface-map-tent-cab-20261119-025201-01, lane MAP: a long name / note wraps to two lines — read a label's lines as one)
+    const shown = svg.replace(/<\/text><text[^>]*>/g, ' ');
+    for (const b of s.buildings.filter(x => x.destination && x.name)) expect(shown).toContain(esc(b.name));
     const notes = s.notes.filter(n => n.text && placeAt(s, n.x, n.z));
     expect(notes.length).toBeGreaterThan(0);
-    for (const n of notes) expect(svg).toContain(esc(n.text)); // GEN's annotations, as generated
+    for (const n of notes) expect(shown).toContain(esc(n.text)); // GEN's annotations, as generated
     expect(svg).not.toContain('Off the sheet');
     for (const st of m.streets.filter(q => q.label)) expect(svg).toContain(esc(st.name.toUpperCase()));
     expect((svg.match(/<rect [^>]*height="8"\/>/g) ?? []).length).toBeGreaterThanOrEqual(m.fog.runs.length); // (each fog run one rect)
