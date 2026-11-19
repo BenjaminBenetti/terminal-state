@@ -1,4 +1,4 @@
-// Task studio-surface-run-field-followup-20261116-211729-01 (lane TRUCK): a Node host for the truck's CONDITION / REPAIR / BOARD / FOG
+// Task studio-surface-run-field-followup-20261116-211729-01 (lane TRUCK): a Node host for the truck's CONDITION / REPAIR / DASH MAP / FOG
 // PRESSURE tests — the truck's own host (tests/helpers/surfaceTruckHost.ts: the vehicle controller, the REAL Player, the truck's
 // definition and its compartments over a real Inventory) with the field systems installed exactly like Game (installTruckCondition after
 // the compartments), recording fakes for what other systems own (the volumetric smoke field, the fire sprites, the sound cues, the map

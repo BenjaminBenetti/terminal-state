@@ -9,7 +9,8 @@
 //  - the eight road wheels are their own nodes (origin at the hub): they ROLL by the distance travelled and the first two axles STEER
 //    (axle 2 at its share of the angle's tangent: TRUCK_WHEELS.steer);
 //  - the cab: world/surface/truckCab.ts (handmade: floor, dash + gauges, a steering wheel on its pivot, seats, door cards, back panel,
-//    roof liner; the bed's floor);
+//    roof liner; the bed's floor); (task studio-surface-map-tent-cab-20261119-025201-01, lane CAB) the planning map in its holder on the
+//    passenger-side dash (world/surface/truckDashMap.ts) and the FOG PRESSURE readout (world/surface/truckPressureDash.ts), in the cockpit;
 //  - (follow-up) the storage compartments' DOORS: a hinged panel on each measured compartment face that swings out while its storage view
 //    is open (TruckLockerDoor, stepLockerDoors: world/surface/truckStorage.ts drives them);
 //  - the LAMPS: the body's own headlamp triangles drawn again as glowing lenses (world/skywaysCarLights.ts lampTriangles over the
@@ -30,7 +31,7 @@ import {lampTriangles, lensMaterialFrom, type CarBeam} from '../skywaysCarLights
 import {buildTruckCab, truckCabMaterials} from './truckCab';
 import {TRUCK_LAMPS, TRUCK_WHEELS, TRUCK_WHEEL_RATIO} from './truckSpec';
 import {TRUCK_ANCHORS} from './truckAnchors.generated';
-import {buildTruckBoard, releaseTruckBoard, type TruckBoardView} from './truckBoard';
+import {buildTruckDashMap, releaseTruckDashMap, type TruckDashMapView} from './truckDashMap';
 import {buildTruckDash, releaseTruckDash, type TruckDashView} from './truckPressureDash';
 
 /** The steering wheel follows the steering through a light ease (time constant, s), like the car's. */
@@ -45,9 +46,9 @@ export interface TruckView extends CarView {
   steer: number;
   /** (follow-up) The storage compartments' doors (index = TRUCK_ANCHORS.storage). */
   lockers: TruckLockerDoor[];
-  /** (field follow-up) The planning-map board on the bed's right side (world/surface/truckBoard.ts) and the dash's FOG PRESSURE lamp
-   *  (world/surface/truckPressureDash.ts, in the cockpit); both stay through a model refresh. */
-  board: TruckBoardView | null;
+  /** (lane CAB) The planning map on the passenger-side dashboard (world/surface/truckDashMap.ts) and (field follow-up) the dash's FOG
+   *  PRESSURE lamp (world/surface/truckPressureDash.ts); both in the cockpit, both stay through a model refresh. */
+  dashMap: TruckDashMapView | null;
   dash: TruckDashView | null;
 }
 
@@ -145,8 +146,8 @@ export function loadTruckModel(spec: CarSpec): Promise<GLTF | null> {
 export function releaseTruckModel(): boolean {
   const g = loaded;
   cache = null;
-  // (field follow-up) the board's / dash lamp's shared resources go with the truck too (the GLB alone decides the result, as before)
-  releaseTruckBoard();
+  // (field follow-up; lane CAB) the dash map's / dash lamp's shared resources go with the truck too (the GLB alone decides the result, as before)
+  releaseTruckDashMap();
   releaseTruckDash();
   if (!g) return false;
   g.scene.traverse(o => {
@@ -379,10 +380,9 @@ export function buildTruckView(spec: CarSpec): TruckView {
   group.add(cab.group);
   for (const w of wheels) w.rotation.order = 'YXZ';
   const lockers = lockerDoors(group);
-  const board = buildTruckBoard(), dash = buildTruckDash();
-  group.add(board.group);
-  cab.group.add(dash.group);
-  return {group, body, cockpit: cab.group, wheel: cab.wheel, wheelAngle: 0, lens, gen: truckModelsGen, standIn: !loaded, roadWheels: wheels, roll: 0, steer: 0, lockers, board, dash};
+  const dashMap = buildTruckDashMap(), dash = buildTruckDash(); // (lane CAB: the map on the passenger-side dash, in the cockpit)
+  cab.group.add(dash.group, dashMap.group);
+  return {group, body, cockpit: cab.group, wheel: cab.wheel, wheelAngle: 0, lens, gen: truckModelsGen, standIn: !loaded, roadWheels: wheels, roll: 0, steer: 0, lockers, dashMap, dash};
 }
 
 /** Rebuild the body from the current model (it arrived after the view was built); the cab stays. */
