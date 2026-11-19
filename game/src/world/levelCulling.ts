@@ -97,6 +97,16 @@
 // `everyStorey` (QA / tests): every storey a candidate, no portal / level rule at all (the upper bound the window rule is checked
 // against). And on such a stack of <= LEGACY_STACK storeys (the Skyways' three) a mesh spanning several bands registers as an
 // unlevelled entry (fog, slab planes, per-storey slices) instead of never being culled. Without `slabs.windows` nothing here runs.
+//
+// Task studio-surface-upper-storey-culling-20261119-025201-01 (user, Surface Run: "Moreau Pharmacy · Manager's office" — from an upstairs
+// window the street stayed but the facades round it vanished, leaving skeletal floors, columns and window blocks): a SURFACE RUN district
+// takes the window rule too (world/builder.ts; its spans from world/surface/lookOcclusion.ts surfaceWindowSpans). Its whole exterior is
+// drawn on the street storey and its upper storey (the enterable buildings' upstairs) joined it only through stair runs, so from an
+// upstairs room the street storey rendered only within PORTAL_MARGIN of a stair tile in sight. A span may now name its OUTER storey
+// (WindowSpan.out: the district's street storey): seen from its own storey, the glass makes that storey air-visible. Everything above
+// marked "Skyways only" that keys on window tiles now runs for a district as well (see volumes in the sight rays, the depth-reach portal
+// tests, the over-roofs rule, the torch's frustum / clip zone) — each only ever shows more — except the small-stack registration
+// (slabs.uncullableMultiBand: a district's multi-band meshes stay never culled). Skyways spans carry no `out`: unchanged there.
 
 import * as THREE from 'three';
 import {CELL, FLOOR, VOID, type Grid} from '../gen/grid';
@@ -180,8 +190,12 @@ export interface ExitAperture { nx: number; nz: number; plane: number; s0: numbe
  * [y0, y1] (default -Infinity .. Infinity: open on every storey and across every slab plane, as before).
  */
 export interface SeeRect { x0: number; z0: number; x1: number; z1: number; y0?: number; y1?: number }
-/** Task studio-skywalk-variety (lane PERF): a glazed span (world m: its wall cells' box) of storey `level` (a level id), open y0 .. y1. */
-export interface WindowSpan { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; level: number }
+/**
+ * Task studio-skywalk-variety (lane PERF): a glazed span (world m: its wall cells' box) of storey `level` (a level id), open y0 .. y1.
+ * Task studio-surface-upper-storey-culling-20261119-025201-01: `out` (optional, a level id) is the storey on the span's OUTER side — a
+ * Surface Run district's outdoors (world/surface/lookOcclusion.ts surfaceWindowSpans): seen from its own storey the span shows that storey.
+ */
+export interface WindowSpan { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; level: number; out?: number }
 /**
  * Task studio-surface-run-field-followup-20261116-211729-01 (lane INTERIOR): open air over a walkable roof (Surface Run v2: world/builder.ts
  * passes `slabs.sky` from the district's roof access records) — an eye inside it (x / z in the rect, at or above y0) is current on
@@ -430,7 +444,7 @@ export class LevelCuller {
    * rule (QA / tests: the upper bound of the window rule; set from `slabs.everyStorey`, off by default).
    */
   everyStorey: boolean;
-  /** Task studio-skywalk-variety (lane PERF): the window tiles (Skyways: slabs.windows) and the storeys air-visible at the last update. */
+  /** Task studio-skywalk-variety (lane PERF): the window tiles (slabs.windows: the Skyways, a Surface Run district) and the storeys air-visible at the last update. */
   private readonly winTiles: WindowTile[] = [];
   private readonly airLevels = new Set<number>();
   /** Per window tile: its sight result (1 / 0) for the eye position of stamp winSeeK (LevelCuller.posStamp). */
@@ -441,10 +455,16 @@ export class LevelCuller {
   /** See-through volumes of the sight rays (slabs.windows only): per column (CSR) the [y0, y1] of every see rect over it. */
   private seeStart: Int32Array | null = null;
   private seeY = new Float64Array(0);
-  /** Window tiles tested / seen and the air-visible storeys of the last update (Skyways; zeros elsewhere). */
+  /** Window tiles tested / seen and the air-visible storeys of the last update (window tiles only; zeros elsewhere). */
   airStats = {tested: 0, seen: 0, levels: [] as number[]};
-  /** The window rule on / off (Skyways only; tests / QA A-B: off = the portal / level rule alone, as before). */
+  /** The window rule on / off (window tiles only; tests / QA A-B: off = the portal / level rule alone, as before). */
   windowRule = true;
+  /**
+   * Task studio-surface-upper-storey-culling-20261119-025201-01: with window tiles, a mesh spanning several bands of a small stack still
+   * registers as never culled (slabs.uncullableMultiBand: the Surface Run district's window tiles show more, they never start hiding
+   * what the district drew before) instead of the Skyways' unlevelled entry (register).
+   */
+  private readonly uncullableMultiBand: boolean;
   /**
    * Task studio-skywalk-variety (lane PERF, follow-up; Skyways only: window tiles): per lit light viewpoint of the last prepare (the order
    * of the occlusion's viewpoints 1..n), its position (x y z), shadow frustum and whether its near-plane clip zone reaches solid.
@@ -459,10 +479,11 @@ export class LevelCuller {
 
   constructor(private readonly levels: readonly Level[], private readonly cols: LevelColumns, private readonly levelAt: LevelResolver,
     opts?: {atrium?: Uint8Array; slabs?: {see?: readonly SeeRect[]; glass?: readonly {x0: number; z0: number; x1: number; z1: number}[]; everyStorey?: boolean;
-      windows?: readonly WindowSpan[]; sky?: readonly SkyVolume[]}}, deferBuild = false) {
+      windows?: readonly WindowSpan[]; sky?: readonly SkyVolume[]; uncullableMultiBand?: boolean}}, deferBuild = false) {
     this.levelIds = levels.map(l => l.id);
     this.allLevelIds = new Set(this.levelIds);
     this.everyStorey = levels.length > 1 && !!opts?.slabs?.everyStorey;
+    this.uncullableMultiBand = !!opts?.slabs?.uncullableMultiBand;
     // (task studio-reactor-submit, lane CPU: `glass` when given — the Reactor's see-through vessel column is no lift shaft — else `see`)
     this.glassShafts = opts?.atrium ? [...(opts.slabs?.glass ?? opts.slabs?.see ?? [])] : [];
     this.skyVols = levels.length > 1 ? (opts?.slabs?.sky ?? []).filter(v => this.levelIds.includes(v.level)) : [];
@@ -511,7 +532,9 @@ export class LevelCuller {
       if (!this.levelIds.includes(w.level) || !(w.y1 > w.y0)) continue;
       const pts: number[] = [];
       cellsOf(w, i => { const cx = i % W, cy = (i - cx) / W; pts.push((cx + 0.5) * CELL, (cy + 0.5) * CELL); });
-      if (pts.length) this.winTiles.push({...w, pts: Float64Array.from(pts)});
+      // (task studio-surface-upper-storey-culling: an outer storey that is the span's own, or no storey of this culler, adds nothing)
+      const {out, ...span} = w, outer = out !== undefined && out !== w.level && this.levelIds.includes(out);
+      if (pts.length) this.winTiles.push({...span, ...(outer ? {out} : {}), pts: Float64Array.from(pts)});
     }
   }
 
@@ -519,6 +542,10 @@ export class LevelCuller {
    * Task studio-skywalk-variety (lane PERF): the storeys seen through glass this update (window tiles of storeys the eye is not on: in
    * the frustum, nearest point along the view axis inside the fog, a sight ray through the free bands + see volumes to a cell of the
    * span at its heights). Marks airLevels and adds them to `shown` (the portal hops start from them too).
+   * Task studio-surface-upper-storey-culling-20261119-025201-01 (user: from an upstairs window the facades round the street vanished):
+   * a span with an outer storey (WindowSpan.out: a Surface Run district's outdoors) seen the same way marks that storey too — from its
+   * own storey (an upstairs room) the glass shows the street and every facade round it, which the portal rule (stairs only) culled
+   * beyond PORTAL_MARGIN of a stair; slab + storey occlusion still decide each mesh.
    */
   private updateAir(e: THREE.Vector3, shown: Set<number>, here: ReadonlySet<number>, fx: number, fy: number, fz: number): void {
     const T = this.winTiles, air = this.airLevels;
@@ -527,7 +554,8 @@ export class LevelCuller {
     let tested = 0, seen = 0;
     for (let k = 0; k < T.length && this.windowRule; k++) {
       const t = T[k];
-      if (here.has(t.level) || air.has(t.level)) continue;
+      const own = !here.has(t.level) && !air.has(t.level), out = t.out !== undefined && !here.has(t.out) && !air.has(t.out);
+      if (!own && !out) continue;
       const depth = Math.min(fx * (t.x0 - e.x), fx * (t.x1 - e.x)) + Math.min(fy * (t.y0 - e.y), fy * (t.y1 - e.y)) + Math.min(fz * (t.z0 - e.z), fz * (t.z1 - e.z));
       if (depth > this.maxDistance) continue;
       this.box.min.set(t.x0, t.y0, t.z0); this.box.max.set(t.x1, t.y1, t.z1);
@@ -536,8 +564,8 @@ export class LevelCuller {
       if (this.winSeeK[k] !== this.posStamp) { this.winSeeV[k] = this.windowSeen(t, e) ? 1 : 0; this.winSeeK[k] = this.posStamp; }
       if (!this.winSeeV[k]) continue;
       seen++;
-      air.add(t.level);
-      shown.add(t.level);
+      if (own) { air.add(t.level); shown.add(t.level); }
+      if (out) { air.add(t.out!); shown.add(t.out!); }
     }
     this.airStats.tested = tested;
     this.airStats.seen = seen;
@@ -1280,7 +1308,7 @@ export class LevelCuller {
           const span = this.levels.length > LEGACY_STACK ? this.levels.filter(l => l.baseY <= b.max.y + 0.3 && l.baseY + 4.5 >= b.min.y).map(l => l.id) : [];
           // Task studio-skywalk-variety (lane PERF): a small stack WITH occlusion data and window tiles (the Skyways) keeps it as an
           // unlevelled entry — fog, slab planes and per-storey slices decide it (never level-culled, as before)
-          if (!span.length && this.occl.length && this.winTiles.length) { entry.occ = this.occlusionLevel(entry); this.entries.push(entry); return; }
+          if (!span.length && this.occl.length && this.winTiles.length && !this.uncullableMultiBand) { entry.occ = this.occlusionLevel(entry); this.entries.push(entry); return; }
           if (!span.length || span.length === this.levels.length) { this.stats.uncullable++; return; }
           entry.levels = span; this.stats.multi++; if (this.occl.length) entry.occ = this.occlusionLevel(entry); this.entries.push(entry); return;
         }

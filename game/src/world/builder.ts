@@ -74,7 +74,7 @@ import {SurfaceArch} from './surface/arch'; // task studio-surface-run-opus-rebu
 import {SubwayArch, subwayPlate} from './subwayArch'; // task studio-subway-station-variety-20261117-043926-01: a version-2 Subway station's identity finishes
 import {buildSubwayKit, coveLengths, styledTubeMatrix} from './subwayKit'; // task studio-subway-architecture-materials-rework-20261117-072826-01: the station's architectural relief
 import {surfaceLookPlanSteps} from './surface/archPlan';
-import {surfaceOcclusionSee} from './surface/lookOcclusion'; // (lane LOOK, follow-up 2: the district culler's see-through structure)
+import {surfaceOcclusionSee, surfaceWindowSpans} from './surface/lookOcclusion'; // (lane LOOK, follow-up 2: the district culler's see-through structure; its window tiles)
 import {surfaceSkyVolumes} from './surface/roofAccessView'; // (task studio-surface-run-field-followup-20261116-211729-01, lane INTERIOR: v2 roofs' open air)
 /** The culler's sky volumes of a district (v2 roofs), only when there are any (a v1 district's options stay exactly as they were). */
 const surfaceSky = (layout: StationLayout): {sky?: ReturnType<typeof surfaceSkyVolumes>} => { const sky = surfaceSkyVolumes(layout); return sky.length ? {sky} : {}; };
@@ -969,7 +969,8 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   const culler = yield* LevelCuller.steps(levels, cols, levelAt, mall ? {atrium: mall.atrium, slabs: {see: (layout.mall?.elevators ?? []).map(e => e.shaft)}}
     : reactor ? {atrium: reactor.pitMask, slabs: {see: reactor.occlusionSee(), glass: []}}
     : layout.skyways ? {slabs: {see: skywaysOcclusionSee(layout), windows: skywaysWindowSpans(layout)}}
-    : layout.surface ? {slabs: {see: surfaceOcclusionSee(layout), ...surfaceSky(layout)}} // (lane LOOK follow-up 2: a Surface Run district — interiors behind its facades; world/surface/lookOcclusion.ts)
+    // (task studio-surface-upper-storey-culling-20261119-025201-01: + AIR's live spans as window tiles — the street storey seen from an upstairs room)
+    : layout.surface ? {slabs: {see: surfaceOcclusionSee(layout), windows: surfaceWindowSpans(layout), uncullableMultiBand: true, ...surfaceSky(layout)}} // (lane LOOK follow-up 2: a Surface Run district — interiors behind its facades; world/surface/lookOcclusion.ts)
     : mkt ? {atrium: mkt.atrium} : undefined); // (task studio-survivor-market-20261108-005807-01: the open shed as atrium tiles, no slabs)
   culler.register(group);
   return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: treatFaces, rails, levelAt, culler,
