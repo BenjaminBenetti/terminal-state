@@ -46,7 +46,11 @@ export const TENT_STAGE = {
   scanSliceMs: 8,
 } as const;
 
-/** The street stage's compile pacing: the ride's (LIFT_RIDE_COMPILE), its steps overdue after 100 ms instead of at once — the player plays. */
+/**
+ * The street stage's compile pacing: the ride's (LIFT_RIDE_COMPILE), its steps overdue after 100 ms instead of at once — the player plays.
+ * (Measured, tests/crossing-first-view-game in Node: the tent's worst frame is one first-view draw of an expensive item, ~0.3-0.5 s on the
+ * CPU; 8-item compile calls and 16-item draws made it no better — 515 ms, 43 frames over 50 ms vs 355 ms, 20 — and the street 14 s later.)
+ */
 export const TENT_STAGE_COMPILE = {...LIFT_RIDE_COMPILE, maxStaleMs: 100} as const;
 
 /** The scheduler keys the stage's work runs under (Game.frame: what runs while the planning map is open). */

@@ -53,7 +53,18 @@ describe('crossing readiness on the real Game: the lift ride\'s first view (atmo
       installQaHooks(game);
       const qa = (globalThis as unknown as {__LL: {surface: {go(): boolean}}}).__LL;
       const frameErrors: string[] = [];
-      const loop = (t: number) => { try { game.frame(t); } catch (err) { frameErrors.push(String((err as Error)?.stack ?? err).slice(0, 400)); } requestAnimationFrame(loop); };
+      // (each whole frame's CPU time — its render AND the steps after it — by the ride phase its render set: reported, the hitch the
+      // player would feel on the CPU side; the validating device has no GPU cost)
+      const cpu: Record<string, {n: number; max: number; over50: number; ms: number[]}> = {};
+      let framePhase = 'boot';
+      const loop = (t: number) => {
+        const t0 = performance.now();
+        try { game.frame(t); } catch (err) { frameErrors.push(String((err as Error)?.stack ?? err).slice(0, 400)); }
+        const ms = performance.now() - t0, k = (cpu[framePhase] ??= {n: 0, max: 0, over50: 0, ms: []});
+        k.n++; if (ms > k.max) k.max = ms; if (ms > 50) k.over50++; k.ms.push(ms);
+        requestAnimationFrame(loop);
+      };
+      const cpuOf = () => Object.fromEntries(Object.entries(cpu).map(([p, k]) => { const v = [...k.ms].sort((a, b) => a - b); return [p, {frames: k.n, maxMs: Math.round(k.max), p95Ms: Math.round(v[Math.floor(v.length * 0.95)] ?? 0), over50: k.over50}]; }));
       game.applySettings();
       game.setState('title');
       requestAnimationFrame(loop);
@@ -99,6 +110,7 @@ describe('crossing readiness on the real Game: the lift ride\'s first view (atmo
         else if (street && released < 0 && TS.phase === 'idle') released = frames.length;
         phase = R.sealed || G.transitGap ? 'ride' : R.phase === 'opening' ? (opened < 0 && frames.some(f => f.gap) ? 'open' : 'opening')
           : released >= 0 ? (frames.length - released < 30 ? 'release' : 'after') : opened >= 0 ? (TS.phase === 'street' ? 'tent' : 'after') : 'ride';
+        framePhase = phase;
         const t0 = performance.now();
         try { return render0(); } finally {
           if (phase === 'open') opened = frames.length;
@@ -141,7 +153,7 @@ describe('crossing readiness on the real Game: the lift ride\'s first view (atmo
       // (the street drawn, its hidden frame already from this camera) build, create and first use nothing either
       expect(await until(() => released >= 0 && frames.length - released >= 30, 30000), `the street prepared from the tent ${JSON.stringify(TS.record)}`).toBe(true);
       const sv = (game as unknown as {surfaceTentStreetCompile: typeof cv}).surfaceTentStreetCompile!, sj = sv.job;
-      marks.push(`street (from the tent) ${JSON.stringify({...sv, job: undefined})}; counts ${JSON.stringify(counts)}`);
+      marks.push(`street (from the tent) ${JSON.stringify({...sv, job: undefined})}; counts ${JSON.stringify(counts)}; job steps ${JSON.stringify({steps: sj.steps, stepMaxMs: Math.round(sj.stepMaxMs), sliceMaxMs: Math.round(sj.sliceMaxMs), sceneChunks: sj.sceneChunks, viewDraws: sj.viewDraws, viewMaxPerDraw: sj.viewMaxPerDraw, viewDrawMaxMs: Math.round(sj.viewDrawMaxMs), viewFrameMs: Math.round(sj.viewFrameMs)})}; frame cpu ${JSON.stringify(cpuOf())}`);
       expect(sv).toMatchObject({end: 'ready', why: '', tries: 1});
       expect(TS.record).toMatchObject({phase: 'done', street: {end: 'ready'}});
       expect(sj.viewDrawn).toBe(true);
