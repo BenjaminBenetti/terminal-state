@@ -67,6 +67,11 @@ export interface FirstViewPlanOptions {
   camera: THREE.PerspectiveCamera;
   /** The near radius (default FIRST_VIEW.radius). */
   radius?: number;
+  /**
+   * (task studio-surface-map-tent-cab-20261119-025201-01) Only renderables this accepts are candidates (default: all) — a first view of
+   * a closed space whose frames draw nothing else (world/surface/tentStage.ts: the command tent while the street is prepared).
+   */
+  only?: ((o: THREE.Object3D) => boolean) | null;
   /** The level culler (null: none — the near radius and what is on the camera's layers now). */
   sweep?: FirstViewSweep | null;
   /** Plan the first view's flashlight-shadow casters too (the torch casts a shadow at this quality). */
@@ -137,7 +142,7 @@ export function planFirstView(scene: THREE.Object3D, o: FirstViewPlanOptions): F
 export function* planFirstViewSteps(scene: THREE.Object3D, o: FirstViewPlanOptions): Generator<void, FirstViewPlan, void> {
   const now = o.now ?? (() => performance.now());
   let t0 = now(), own = 0;
-  const radius = o.radius ?? FIRST_VIEW.radius, far = o.camera.far, mask = o.cameraMask;
+  const radius = o.radius ?? FIRST_VIEW.radius, far = o.camera.far, mask = o.cameraMask, only = o.only ?? null;
   const exit = new THREE.Vector3(o.exit.x, o.exit.y, o.exit.z);
   scene.updateMatrixWorld(true);
   // eligible: shown (no hidden ancestor — pools wait for their first use, the scene lane compiles them), with geometry, on the camera's
@@ -149,7 +154,7 @@ export function* planFirstViewSteps(scene: THREE.Object3D, o: FirstViewPlanOptio
     if (isRenderable(x)) {
       const geo = x.geometry as THREE.BufferGeometry | undefined;
       const hasGeo = !!geo && (!!geo.attributes.position || (x as THREE.Sprite).isSprite);
-      if (hasGeo && ((x.layers.mask & mask) !== 0 || x.layers.mask === CULLED_MASK)) {
+      if (hasGeo && ((x.layers.mask & mask) !== 0 || x.layers.mask === CULLED_MASK) && (!only || only(x))) {
         candidates++;
         const d = exitDistance(x, exit);
         // (drawn by every frame wherever it is — no frustum test — once on the camera's layers: the scene-wide singletons, the pools of

@@ -184,9 +184,10 @@ describe('the journey builds the next station paced (lane BUILD)', async () => {
     // studio-surface-host-ground-connectors-20261118-053602-01: the wait is for the exit's FIRST VIEW, Game.prepareCrossingView —
     // tests/crossing-first-view.test.ts — and the walk's far flap waits for the same)
     expect(ride).toContain('await this.buildSectionPaced(to, layout, {kind: \'surface\'}, false, {sliceMs: LIFT_RIDE_WAIT.buildSliceMs});');
-    expect(ride.slice(ride.indexOf('this.buildSectionPaced('))).toMatch(/await this\.prepareCrossingView\(exit, since\)[\s\S]*await R\.markReady\(\)/);
+    // (task studio-surface-map-tent-cab-20261119-025201-01: up into a district, that first view is the command tent's — its options)
+    expect(ride.slice(ride.indexOf('this.buildSectionPaced('))).toMatch(/await this\.prepareCrossingView\(exit, since[,)][\s\S]*await R\.markReady\(\)/);
     const walk = src.slice(src.indexOf('  private async walkSurfaceConnector('), src.indexOf('  private connectorStatusText('));
-    expect(walk.slice(walk.indexOf('this.buildSectionPaced('))).toMatch(/await this\.prepareCrossingView\(exit, since\)[\s\S]*C\.markReady\(\)/);
+    expect(walk.slice(walk.indexOf('this.buildSectionPaced('))).toMatch(/await this\.prepareCrossingView\(exit, since[,)][\s\S]*C\.markReady\(\)/);
     expect(sliced).toBe(6); // (tests/loading-build-sliced.test.ts: what that drain does; + the Surface Run crossing and its recovery, lane ACCESS)
     expect(sync).toBe(0); // (the game itself no longer builds a station in one block; tests and tools do, through the wrapper below)
     const journey = src.slice(src.indexOf('async travelToStation('), src.indexOf('private fuelCartsLike('));

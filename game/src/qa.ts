@@ -433,6 +433,12 @@ export function installQaHooks(game: Game): void {
     // (Surface Run, lane LIFE) surfaceMap() — the planning map's state; surfaceMapOpen() — open it like [E] at the table; surfaceReplenish() — the outdoor population / counters
     surfaceMap: (): object => surfaceMapOf(game)?.qa() ?? {installed: false},
     surfaceMapOpen: (): boolean => surfaceMapOf(game)?.open() ?? false,
+    // (task studio-surface-map-tent-cab-20261119-025201-01) the command tent as an up-crossing's preparation space: the stage's phase, the
+    // held flap's line, the last staged crossing's record (scan, the tent's / the street's first views, times, sealed / map frames)
+    surfaceTentStage: (): object => {
+      const T = game.surfaceTentStage;
+      return T ? {phase: T.phase, flapLine: T.phase === 'street' ? T.flapLine() : null, record: T.record, counts: {...T.counts}, street: game.surfaceTentStreetCompile ? {...game.surfaceTentStreetCompile, job: undefined} : null} : {installed: false};
+    },
     surfaceReplenish: (): object => surfaceReplenishOf(game)?.qa() ?? {installed: false},
     ...trainQaApi(game), // Task player-train-shell-20261101-202805 (lane TRAIN): train(), trainDoor(i, open), trainFaceDoor(i?), trainLights(); train-shell-followup: trainGo('cab' | 'rear' | 'spawn'); train-lockbox: trainGo('lockbox')
     ...chipperQaApi(game), // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER): chipper() — state / progress / credit / pools; chipperGo() — stand at the hopper

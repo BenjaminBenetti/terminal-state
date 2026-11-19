@@ -138,6 +138,11 @@ export interface JourneyFirstView {
   casters: number;
   /** End with one hidden frame of the real view (default true; only with a scene pass target). */
   frame?: boolean;
+  /**
+   * (task studio-surface-map-tent-cab-20261119-025201-01) The hidden frame's draw wrapped as the next frames draw (world/surface/
+   * tentStage.ts drawSealed: the command tent's view only while the street behind its flap is prepared). Default: drawn as is.
+   */
+  frameWrap?: ((draw: () => void) => void) | null;
   /** The adaptive draw's target (synchronous ms of a draw), the most items per draw, and the gap between two draws (ms) that counts as a long frame. */
   targetMs?: number;
   maxPerDraw?: number;
@@ -218,7 +223,7 @@ export class JourneyCompile {
   private resolveDone!: () => void;
   private resolveView!: () => void;
   /** (lane READY) The first view (null: none); its representatives' compile state by object; the compiled leading run; the next to draw. */
-  private readonly fv: (Required<Omit<JourneyFirstView, 'items'>> & {items: readonly WarmItem[]}) | null;
+  private readonly fv: (Required<Omit<JourneyFirstView, 'items' | 'frameWrap'>> & {items: readonly WarmItem[]; frameWrap: ((draw: () => void) => void) | null}) | null;
   private readonly repIndex = new Map<THREE.Object3D, number>();
   private readonly repCompiled: boolean[] = [];
   private repPrefix = 0;
@@ -272,7 +277,7 @@ export class JourneyCompile {
     this.twoPass = new Set(o.target ? o.items.filter(i => drawsTwoPass(i.object)) : []);
     const fv = firstView ?? null;
     this.fv = fv ? {items: fv.items, reps: Math.max(0, Math.min(fv.reps, fv.items.length)), casters: this.o.receiver ? Math.max(0, Math.min(fv.casters, o.casters.length)) : 0,
-      frame: fv.frame ?? true, targetMs: fv.targetMs ?? FIRST_VIEW_DRAW.targetMs, maxPerDraw: Math.max(1, fv.maxPerDraw ?? FIRST_VIEW_DRAW.maxPerDraw), longGapMs: fv.longGapMs ?? FIRST_VIEW_DRAW.longGapMs} : null;
+      frame: fv.frame ?? true, frameWrap: fv.frameWrap ?? null, targetMs: fv.targetMs ?? FIRST_VIEW_DRAW.targetMs, maxPerDraw: Math.max(1, fv.maxPerDraw ?? FIRST_VIEW_DRAW.maxPerDraw), longGapMs: fv.longGapMs ?? FIRST_VIEW_DRAW.longGapMs} : null;
     if (this.fv) {
       // a representative waits for its scene-lane compile only when it is one of the job's scene items
       const scene = new Set<THREE.Object3D>(o.items.map(i => i.object));
@@ -435,7 +440,8 @@ export class JourneyCompile {
       scene.matrixWorldAutoUpdate = false;
       r.setRenderTarget(this.o.target);
       r.setMRT(null);
-      renderAtDepthOffset(r, this.o.depth, () => r.render(scene, v));
+      const wrap = this.fv?.frameWrap ?? null;
+      renderAtDepthOffset(r, this.o.depth, () => (wrap ? wrap(() => r.render(scene, v)) : r.render(scene, v)));
     } catch (err) {
       console.warn('journey compile: the first view\'s hidden frame failed', err);
       this.end('cancelled', 'error');

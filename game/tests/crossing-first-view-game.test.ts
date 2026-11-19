@@ -10,7 +10,11 @@
 //  (b) the DOOR-OPEN frame — the first frame that draws the destination — and the frames after it while the doors open build no node, create
 //      no render pipeline and use none for the first time (everything it draws was drawn before, off-screen);
 //  (d) the rest of the destination's preparation goes on after the doors opened (the same job, the journey's play pacing), reported with
-//      its real counts. ((c), a stalled / failed job ending bounded and truthful: tests/crossing-first-view.test.ts and
+//      its real counts.
+// (task studio-surface-map-tent-cab-20261119-025201-01) The ride up is STAGED in the command tent (world/surface/tentStage.ts): (a) / (b)
+// are the TENT's first view and the doors opening into it; (e) the street's first view is drawn off-screen from the flap while the frames
+// draw the tent only (nothing built / created / first used in them), then the flap is released (nothing in the release frames either);
+// (d) the rest after the release. ((c), a stalled / failed job ending bounded and truthful: tests/crossing-first-view.test.ts and
 //      tests/surface-lift-ride.test.ts section 6.)
 import {afterAll, describe, expect, it, vi} from 'vitest';
 import {installHeadless} from './helpers/headlessGame';
@@ -83,8 +87,15 @@ describe('crossing readiness on the real Game: the lift ride\'s first view (atmo
       let opened = -1;
       const render0 = G.render.bind(game);
       // (the frame's own render only: the job's steps after it — the rest, in play — and compile continuations count as 'job')
+      // (task studio-surface-map-tent-cab-20261119-025201-01) after the doors opened into the command tent: 'tent' — frames sealed to the
+      // tent while the street is prepared behind its held flap; 'release' — the first frames after the flap was released (the street drawn)
+      const TS = (game as unknown as {surfaceTentStage: {phase: string; record: Record<string, unknown> | null}}).surfaceTentStage;
+      let street = false, released = -1;
       G.render = () => {
-        phase = R.sealed || G.transitGap ? 'ride' : R.phase === 'opening' ? (opened < 0 && frames.some(f => f.gap) ? 'open' : 'opening') : opened >= 0 ? 'after' : 'ride';
+        if (TS.phase === 'street') street = true;
+        else if (street && released < 0 && TS.phase === 'idle') released = frames.length;
+        phase = R.sealed || G.transitGap ? 'ride' : R.phase === 'opening' ? (opened < 0 && frames.some(f => f.gap) ? 'open' : 'opening')
+          : released >= 0 ? (frames.length - released < 30 ? 'release' : 'after') : opened >= 0 ? (TS.phase === 'street' ? 'tent' : 'after') : 'ride';
         const t0 = performance.now();
         try { return render0(); } finally {
           if (phase === 'open') opened = frames.length;
@@ -97,22 +108,23 @@ describe('crossing readiness on the real Game: the lift ride\'s first view (atmo
       const done0 = game.surfaceCrossCounts.done;
       G.interact();
       expect(await until(() => game.surfaceCrossCounts.done === done0 + 1 && R.phase === 'idle', 20000), JSON.stringify(game.surfaceCrossCounts)).toBe(true);
-      const job = game.journeyCompileStats!;
-      const after0 = job.sceneDone + job.shadowDone;
       await h.waitFrames(60);
-      const cv = game.surfaceLiftCompile!;
-      marks.push(`ride ${((performance.now() - T0) / 1000).toFixed(0)} s; crossing ${JSON.stringify({...cv, job: undefined})}; counts ${JSON.stringify(counts)}`);
-      // (a) the first view: drawn off-screen (the scene pass's target), spread over the sealed frames, then the doors open
+      const cv = game.surfaceLiftCompile!, job = cv.job;
+      marks.push(`ride ${((performance.now() - T0) / 1000).toFixed(0)} s; crossing (the tent) ${JSON.stringify({...cv, job: undefined})}; stage ${JSON.stringify(TS.record)}; counts ${JSON.stringify(counts)}`);
+      // (a) the TENT's first view (the car opens into the command tent): drawn off-screen (the scene pass's target), spread over the sealed
+      // frames, its hidden real-view frame drawn sealed to the tent (as the door-open frame), then the doors open
+      expect(TS.record, 'staged in the tent').toMatchObject({flapHeld: true, tent: {end: 'ready'}});
       expect(cv).toMatchObject({end: 'ready', why: '', tries: 1});
       expect(job.viewDrawn, 'drawn, not only compiled (the scene pass\'s target)').toBe(true);
       expect(job.viewDone).toBe(job.viewItems);
       expect(job.viewRepsCompiled).toBe(job.viewReps);
-      expect(job.viewFrame, 'the hidden frame of the real view').toBe(true);
-      expect(cv.plan.reps, 'program groups in the first view').toBeGreaterThan(50);
+      expect(job.viewFrame, 'the hidden frame of the real (sealed) view').toBe(true);
+      expect(cv.plan.reps, 'program groups in the tent\'s first view').toBeGreaterThan(20);
+      expect(cv.plan.swept, 'no culler sweep for the closed tent').toBe(0);
       const drawing = frames.filter(f => f.gap && f.built && (f.fv === 'drawing' || f.fv === 'frame'));
-      expect(drawing.length, 'the first view\'s draws spread over many drawn (sealed) frames').toBeGreaterThan(50);
-      expect(job.viewDraws).toBeGreaterThan(20);
-      expect(cv.prep.steps, 'planned in frame steps').toBeGreaterThan(FIRST_STEPS);
+      expect(drawing.length, 'the first view\'s draws spread over drawn (sealed) frames').toBeGreaterThan(5);
+      expect(job.viewDraws).toBeGreaterThan(3);
+      expect(cv.prep.steps, 'planned in frame steps').toBeGreaterThanOrEqual(FIRST_STEPS);
       const shut = frames.findIndex(f => f.ride === 'travel');
       expect(shut, 'the doors shut and the car moved').toBeGreaterThan(0);
       for (const f of frames.slice(shut)) if (f.door > 0) expect(f.fv, 'the doors open only with the first view ready').toBe('ready');
@@ -120,11 +132,28 @@ describe('crossing readiness on the real Game: the lift ride\'s first view (atmo
       // (b) the door-open frame and the frames while the doors open: nothing built, created or first used
       for (const p of ['open', 'opening'] as const) expect(counts[p] ?? {builds: 0, pipelines: 0, firstUsed: 0}, `${p}: ${firstAtOpen.join(', ')}`).toEqual({builds: 0, pipelines: 0, firstUsed: 0});
       expect(firstAtOpen).toEqual([]);
-      // (d) the rest: reported at the exit, and going on after it (the same job, play pacing)
-      expect(cv.rest, 'what was left when the doors opened').not.toBeNull();
-      expect(cv.rest!.left).toBeGreaterThan(0);
-      expect(cv.rest!.total).toBe(job.sceneItems + job.casters + job.twoPass);
-      expect(job.sceneDone + job.shadowDone, 'the rest advances after the exit').toBeGreaterThan(after0);
+      // (e) the street from the tent: its first view from the flap drawn off-screen (with the culler sweep) while the frames draw the
+      // tent only — and none of those frames builds, creates or first uses anything; then the flap is released and the release frames
+      // (the street drawn, its hidden frame already from this camera) build, create and first use nothing either
+      expect(await until(() => released >= 0 && frames.length - released >= 30, 30000), `the street prepared from the tent ${JSON.stringify(TS.record)}`).toBe(true);
+      const sv = (game as unknown as {surfaceTentStreetCompile: typeof cv}).surfaceTentStreetCompile!, sj = sv.job;
+      marks.push(`street (from the tent) ${JSON.stringify({...sv, job: undefined})}; counts ${JSON.stringify(counts)}`);
+      expect(sv).toMatchObject({end: 'ready', why: '', tries: 1});
+      expect(TS.record).toMatchObject({phase: 'done', street: {end: 'ready'}});
+      expect(sj.viewDrawn).toBe(true);
+      expect(sj.viewDone).toBe(sj.viewItems);
+      expect(sj.viewFrame, 'the street\'s hidden real-view frame (from the player\'s camera in the tent)').toBe(true);
+      expect(sv.plan.swept, 'the culler sweep from the flap').toBeGreaterThan(0);
+      expect(sv.plan.items, 'the street: more than the tent').toBeGreaterThan(cv.plan.items);
+      for (const p of ['tent', 'release'] as const) expect(counts[p] ?? {builds: 0, pipelines: 0, firstUsed: 0}, `${p}: nothing built, created or first used`).toEqual({builds: 0, pipelines: 0, firstUsed: 0});
+      expect(frames.filter((_, i) => i < released && i > opened).length, 'frames drawn in the tent before the release').toBeGreaterThan(10);
+      // (d) the rest: reported at the release, and going on after it (the same job, play pacing)
+      expect(sv.rest, 'what was left when the flap was released').not.toBeNull();
+      expect(sv.rest!.left).toBeGreaterThan(0);
+      expect(sv.rest!.total).toBe(sj.sceneItems + sj.casters + sj.twoPass);
+      const after0 = sj.sceneDone + sj.shadowDone;
+      await h.waitFrames(60);
+      expect(sj.sceneDone + sj.shadowDone, 'the rest advances after the release').toBeGreaterThan(after0);
       expect(errors).toEqual([]);
       expect(frameErrors).toEqual([]);
     } finally {
