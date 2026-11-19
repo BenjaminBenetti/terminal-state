@@ -181,6 +181,7 @@ import {enemiesToSpawn, mergeKilled, pickupPlan} from './run/memory';
 import {resetParticipants, restoreCarry, restoreParticipants, takeSnapshot, type RunParticipant, type RunSnapshot} from './run/snapshot';
 import {starterInventory} from './run/starter';
 import {applyHolders, captureHolders, capturePickups, dropNaturalFood, dropUnrecordedSalvage, holderKeyOf, restorePickup} from './run/worldMemory';
+import {dropUnclaimedTentMask, trimTentCrateStock} from './world/surface/tentStock'; // task studio-surface-map-tent-cab-20261119-025201-01 (lane TENT): the tent's free stock = filters only
 import {keepLayoutPickup} from './items/naturalFood'; // task studio-food-drink-half-20261109-201124-01: half the natural food / drink spawn
 import {runBagStore} from './run/bagStore';
 import {playerTrainPlacement, type TrainPlacement} from './gen/playerTrain'; // task player-train-shell-20261101-202805 (lane PLACE)
@@ -1757,6 +1758,7 @@ export class Game {
     // (task studio-food-drink-half-20261109-201124-01, user: "cut food / drink spawn in half") holders realized now for the first time keep
     // half their natural food / drink lots (a stable per-lot hash, no RNG stream; after the fuel lots and the filler); remembered ones stay exact
     dropNaturalFood(cm, mem.holders, this.layout.seed, mem.id, lootProfile(key.level));
+    trimTentCrateStock(this.layout, cm.all, mem.holders); // (lane TENT: a Surface district's in-tent crate keeps only its filters unless the player opened / searched it)
     // Iteration 08 (Lane I): a shot trash can / wheelie bin still goes loose — its lid pops, its finite lots spill as pickups.
     this.physics.dynamicItems.holderLoose = p => { const carried = cm.goLoose(p); this.world.culler.release(carried); return carried; }; // Lane G: moving now
     // task office-interactions-layout-20261030 (lane PHYS): `wake` — in the office the player wakes light props by walking into them
@@ -1871,6 +1873,7 @@ export class Game {
     } else this.hordes = null;
     yield 'pickups';
     // Iteration 16 (RUN): first visit: the generated pickups; afterwards exactly the remembered loose items (dropped ones too)
+    dropUnclaimedTentMask(this.layout, mem); // (lane TENT: a saved district's old free tent mask, still unclaimed at its spot, is not restored)
     const plan = pickupPlan(this.layout.pickups.length, mem);
     // (task studio-weapon-variety-production-20261109-224355-01, lane LOOT-UI) a first spawn's weapon find identities, their loaded rounds and
     // the paired boxes' extra rounds (items/weaponVariety.ts: a stable hash of each find's origin, no RNG stream; remembered pickups never)
