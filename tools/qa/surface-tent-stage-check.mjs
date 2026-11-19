@@ -6,8 +6,12 @@
 // driver's seat. Root CLAUDE.md browser policy: the workspace lock / watchdog / owned-browser cleanup of browser-env.mjs; a 10 GiB
 // anon + shmem guard closes the owned browser, plus an earlier self-stop at STOP_GIB. Firefox + Mesa on this worker: functional evidence,
 // after-views and software-rasterizer waits only — never hardware performance.
+// (task studio-surface-tent-loading-finish-20261119-071019-01) The flap is released only on the street's REAL first view: the report keeps
+// the street's state behind the held flap and the crossing's paced build (main-thread work vs its wall time). --stall=1 makes the street's
+// FIRST job never run (the harness wraps JourneyCompile.start from the page, as the Node tests mock it — a test injection, reported as
+// such): the stall is said at the flap after its stall period, a real [E] there retries with a fresh, real job, then the steps as usual.
 //   npm run build && node tools/qa/surface-tent-stage-check.mjs [outDir] [--size=640x360] [--quality=low] [--lighting=off] [--network=1] [--host=subway]
-//     [--cab=1] [--mapSize=1600x900 (the planning map's sheet read at a larger window, fitted and at about the user's zoom; 0x0: not)]
+//     [--cab=1] [--mapSize=1600x900 (the planning map's sheet read at a larger window, fitted and at about the user's zoom; 0x0: not)] [--stall=1]
 import fs from 'node:fs';
 import path from 'node:path';
 import {launchBrowser, withBrowserLock} from './browser-env.mjs';
@@ -17,13 +21,13 @@ const ARGS = process.argv.slice(2), POS = ARGS.filter(a => !a.startsWith('--'));
 const opt = (k, d) => (ARGS.find(a => a.startsWith(`--${k}=`)) ?? `--${k}=${d}`).slice(k.length + 3);
 const out = path.resolve(POS[0] ?? 'qa-artifacts/surface-tent-stage-browser');
 const SIZE = opt('size', '640x360').split('x').map(Number), QUALITY = opt('quality', 'low'), LIGHTING = opt('lighting', 'off');
-const NETWORK_SEED = Number(opt('network', '1')), HOST = opt('host', 'subway'), CAB = opt('cab', '0') === '1', MAP_SIZE = opt('mapSize', '1600x900').split('x').map(Number);
+const NETWORK_SEED = Number(opt('network', '1')), HOST = opt('host', 'subway'), CAB = opt('cab', '0') === '1', MAP_SIZE = opt('mapSize', '1600x900').split('x').map(Number), STALL = opt('stall', '0') === '1';
 const GUARD_GIB = 10, STOP_GIB = Number(opt('stop', '9.8'));
 fs.mkdirSync(out, {recursive: true});
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const anon = () => { try { const s = fs.readFileSync('/sys/fs/cgroup/memory.stat', 'utf8'); const g = k => Number(new RegExp(`^${k} (\\d+)$`, 'm').exec(s)?.[1] ?? 0); return g('anon') + g('shmem'); } catch { return 0; } };
 const gib = () => +(anon() / 1024 ** 3).toFixed(2);
-const report = {started: new Date().toISOString(), size: SIZE, quality: QUALITY || 'default', lighting: LIGHTING || 'default', network: NETWORK_SEED, host: HOST, steps: [], shots: [], consoleErrors: [], consoleInfo: [], peakGiB: 0, guard: false, stoppedAt: null};
+const report = {started: new Date().toISOString(), size: SIZE, quality: QUALITY || 'default', lighting: LIGHTING || 'default', network: NETWORK_SEED, host: HOST, stall: STALL, steps: [], shots: [], consoleErrors: [], consoleInfo: [], peakGiB: 0, guard: false, stoppedAt: null};
 const step = (name, data = {}) => { report.steps.push({name, gib: gib(), t: new Date().toISOString(), ...data}); console.log(name, `${gib()} GiB`, JSON.stringify(data).slice(0, 1500)); };
 const headroom = name => { if (gib() >= STOP_GIB) { report.stoppedAt = name; step(`self-stop before ${name}`, {stopGib: STOP_GIB}); return false; } return true; };
 const save = () => fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
@@ -39,7 +43,7 @@ await withBrowserLock(async () => {
     page.on('console', m => {
       const t = m.text();
       if (m.type() === 'error' && report.consoleErrors.length < 40) report.consoleErrors.push(t.slice(0, 300));
-      else if (/crossing|first view|tent|lift opens|passage opens|Terminal State: (lift|crossing)/i.test(t) && report.consoleInfo.length < 60) report.consoleInfo.push(t.slice(0, 700));
+      else if (/crossing|first view|tent|lift opens|passage opens|street|Terminal State: (lift|crossing)/i.test(t) && report.consoleInfo.length < 60) report.consoleInfo.push(t.slice(0, 700));
     });
     page.on('pageerror', e => { if (report.consoleErrors.length < 40) report.consoleErrors.push(`pageerror: ${String(e).slice(0, 300)}`); });
     await page.setViewport({width: SIZE[0], height: SIZE[1]});
@@ -93,6 +97,23 @@ await withBrowserLock(async () => {
     });
     const trace = () => ev(() => { const r = window.__ts; return {frames: r.frames, ms: Math.round(performance.now() - r.t0), maxFrameGapMsByPhase: r.gaps, tentOpenMs: r.tentOpenMs, releasedMs: r.releasedMs, phases: r.phases.slice(0, 40)}; }).catch(e => String(e));
 
+    // (--stall=1) the street's first job never runs: JourneyCompile.start wrapped through the prototype of the first job that exists (the
+    // station's, else the ride's own tent view job — a page-side poll; only jobs started in the stage's street phase are counted)
+    if (STALL) {
+      await ev(() => {
+        window.__stallLeft = 1; window.__stallJobs = 0; window.__stallArmed = false;
+        const arm = () => {
+          const j = window.__game.journeyCompile, P = j && Object.getPrototypeOf(j);
+          if (!P?.start) return false;
+          const start0 = P.start;
+          P.start = function () { const T = window.__game.surfaceTentStage; if (T?.phase === 'street') { window.__stallJobs++; if (window.__stallLeft > 0) { window.__stallLeft--; return this; } } return start0.call(this); };
+          return (window.__stallArmed = true);
+        };
+        if (!arm()) { const t = setInterval(() => { if (arm()) clearInterval(t); }, 50); }
+      }).catch(e => String(e));
+      step('stall armed (test injection: the street\'s first job never runs)', {armedNow: await ev(() => window.__stallArmed).catch(() => null)});
+    }
+
     // ---- 1. up into the district: the crossing ends INTO THE TENT -------------------------------------------------------------------
     if (!headroom('up')) return;
     const tUp = Date.now();
@@ -100,7 +121,7 @@ await withBrowserLock(async () => {
       step('lift go', {ok: await ev(() => window.__LL.surface.liftGo())});
       await frames(10);
       const up = await ev(() => window.__LL.surface.cross('up')).catch(e => ({ok: false, error: String(e)}));
-      step('rode up: the car open in the tent', {up, seconds: (Date.now() - tUp) / 1000, stage: await stage(), trace: await trace()});
+      step('rode up: the car open in the tent', {up, seconds: (Date.now() - tUp) / 1000, stage: await stage(), trace: await trace(), build: await ev(() => { const b = window.__game.journeyBuildStats; return b && {workMs: Math.round(b.workMs), slices: b.slices, waits: b.waits, parkedMs: Math.round(b.parkedMs), maxSliceMs: Math.round(b.maxSliceMs), stages: Object.fromEntries(Object.entries(b.stages).filter(([, v]) => v > 150).map(([k, v]) => [k, Math.round(v)]))}; }).catch(e => String(e))});
     } else {
       step('connector go', {ok: await ev(() => window.__LL.surface.connectorGo(1.6))});
       await frames(10);
@@ -113,7 +134,7 @@ await withBrowserLock(async () => {
       await page.keyboard.down('KeyW');
       const released = await waitFor(() => !window.__LL.surface.connector()?.holding, 120);
       await page.keyboard.up('KeyW');
-      step('walked out into the tent', {released, seconds: (Date.now() - tUp) / 1000, stage: await stage(), trace: await trace()});
+      step('walked out into the tent', {released, seconds: (Date.now() - tUp) / 1000, stage: await stage(), trace: await trace(), build: await ev(() => { const b = window.__game.journeyBuildStats; return b && {workMs: Math.round(b.workMs), slices: b.slices, waits: b.waits, parkedMs: Math.round(b.parkedMs), maxSliceMs: Math.round(b.maxSliceMs), stages: Object.fromEntries(Object.entries(b.stages).filter(([, v]) => v > 150).map(([k, v]) => [k, Math.round(v)]))}; }).catch(e => String(e))});
     }
     await frames(10);
     await shot('tent-open', 'just arrived: the command tent while the street is prepared behind the shut flap');
@@ -125,6 +146,18 @@ await withBrowserLock(async () => {
     if (tent?.door && S) {
       const d = tent.door, r = tent.rect, n = d.side === 'N' ? [0, -1] : d.side === 'S' ? [0, 1] : d.side === 'W' ? [-1, 0] : [1, 0];
       const fx = d.side === 'N' || d.side === 'S' ? tent.flap?.a ?? d.x : d.x, fz = d.side === 'N' || d.side === 'S' ? d.z : tent.flap?.a ?? d.z;
+      // (--stall=1) the stall said at the held flap, then a real [E] there: the retry (a fresh, real job)
+      if (STALL) {
+        await face(fx - n[0] * 1.6, fz - n[1] * 1.6, fx, fz, 0); await frames(6);
+        const tS = Date.now();
+        const stalled = await waitFor(() => window.__game.surfaceTentStage?.street === 'stalled', 600);
+        await frames(6);
+        step('street stalled at the held flap', {stalled, armed: await ev(() => window.__stallArmed).catch(() => null), waitedS: (Date.now() - tS) / 1000, hud: await hud(), stage: await stage(), held: (await ev(() => window.__LL.surface.tent()).catch(() => null))?.flap});
+        await shot('flap-stalled', 'the street\'s first job never ran (test injection): the held flap says it is stuck and offers [E] Try again; it stays shut');
+        await page.keyboard.press('KeyE'); await frames(8);
+        step('[E] at the stalled flap: retry', {hud: await hud(), stage: await stage(), jobs: await ev(() => window.__stallJobs).catch(() => null)});
+        await shot('flap-retry', '[E] at the stalled flap: trying again with a fresh job (the flap still shut)');
+      }
       await face(fx - n[0] * 1.6, fz - n[1] * 1.6, fx, fz, 0); await frames(12);
       step('at the flap', {units: await units(), hud: await hud(), stage: await stage(), inTent: (await ev(() => window.__LL.surface.tent()).catch(() => null))?.player});
       await shot('flap-held', 'facing the held tent flap: its prompt says the street is being prepared');

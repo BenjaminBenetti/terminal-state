@@ -17,11 +17,27 @@
 //     hidden real-view frame unsealed from the player's camera: the release frame's view) — is prepared while every frame draws the
 //     tent's view only (drawSealed: everything else on CULL_LAYER for that draw, as the sealed car); with the planning map open its
 //     steps still run (Game.frame: FrameBudget.run(only); the map state draws a frozen frame);
-//  3. ready — or its bound ran out (reported, never silent) — the flap is released (one saved open opens again) and the frames draw the
-//     whole district; the rest of it is prepared in play, as after every crossing.
+//  3. ready, the flap is released (one saved open opens again) and the frames draw the whole district; the rest of it is prepared in
+//     play, as after every crossing.
 // Aimed at the held flap the prompt says what is happening ("The tent flap stays shut — preparing the street N / M"); [E] is refused.
 // A crossing back from the tent (the lift, the tube) or any teardown cancels the stage; the flap's saved state is the one from before
 // the hold. Down into a host and version-1 districts are unchanged.
+//
+// Task studio-surface-tent-loading-finish-20261119-071019-01 (Main, on the user's tent request): "A warning is not a substitute for the
+// requested gate until the actual first exit view is ready. Do not release an unprepared street on a timer/budget. On real failure/stall,
+// keep the tent/map safe and usable and provide truthful retry/return/cancel recovery without trapping the player. Only real first-view
+// readiness should allow normal exit." The street's wait (TENT_STREET_WAIT) has NO budget: the flap is released only on the street's real
+// first view (Game.prepareTentStreet). Its state behind the held flap (`street`):
+//  - 'preparing': its first view progressing;
+//  - 'stalled': no first-view progress for TENT_STREET_WAIT.stallMs of active time — said at the flap and once in a toast; its job goes
+//    on (progress again: 'preparing'), and [E] at the flap starts it again (a fresh job: what was compiled stays compiled);
+//  - 'failed': its job ended without the view, twice (as every crossing retries once), or its planning threw — said likewise; [E] at the
+//    flap tries again.
+// Meanwhile the tent stays sealed and usable (the planning map, the radio, the crate) and the way back stays open: the lift down / the
+// passage back is a normal crossing that ends the stage; so do the menu's Load / Quit (teardown) — never a trap. A first view that can
+// only be COMPILED (the direct path: the atmosphere off, no off-screen scene pass — render/firstView.ts) is the most this path can prepare:
+// the flap is released on it and the toast says the street could not be drawn ahead. The warm-up switched off (?warmup=off: nothing is
+// prepared at all) releases at once and says so. A lost device ends the stage with the flap held (the error screen; nothing can draw).
 
 import * as THREE from 'three';
 import type {Game} from '../../game';
@@ -31,7 +47,7 @@ import {firstViewProgress, type CrossingExit, type CrossingViewResult} from '../
 import type {JourneyCompileStats} from '../../render/journeyCompile';
 import {CULL_LAYER} from '../levelCulling';
 import {isTentBuilding} from './archPlan';
-import {LIFT_RIDE_COMPILE} from './liftRuntime';
+import {LIFT_RIDE_COMPILE, LIFT_RIDE_WAIT} from './liftRuntime';
 
 export const TENT_STAGE = {
   /** The tent's box: its footprint plus this margin (m: the canvas, poles, the flap), from `below` under its floor to `above` it. */
@@ -52,6 +68,13 @@ export const TENT_STAGE = {
  * CPU; 8-item compile calls and 16-item draws made it no better — 515 ms, 43 frames over 50 ms vs 355 ms, 20 — and the street 14 s later.)
  */
 export const TENT_STAGE_COMPILE = {...LIFT_RIDE_COMPILE, maxStaleMs: 100} as const;
+
+/**
+ * (task studio-surface-tent-loading-finish-20261119-071019-01) The street's first-view wait behind the held flap: NO budget — the flap
+ * opens only on the real first view — and the stall period (active ms without first-view progress; LIFT_RIDE_WAIT's) after which the
+ * player is told and offered a retry while the job goes on. (Read at each try: tests shorten the stall.)
+ */
+export const TENT_STREET_WAIT = {budgetMs: Infinity, stallMs: LIFT_RIDE_WAIT.stallMs, pollMs: LIFT_RIDE_WAIT.pollMs};
 
 /** The scheduler keys the stage's work runs under (Game.frame: what runs while the planning map is open). */
 export const tentStageKey = (key: string): boolean => key.startsWith('render.journey-compile') || key.startsWith('crossing.');
@@ -196,7 +219,20 @@ export interface TentStageRecord {
   mapSteps: number;
   /** The flap was held (the district has one) and was open before the hold. */
   flapHeld: boolean;
+  /**
+   * (task studio-surface-tent-loading-finish-20261119-071019-01) The street's tries (its first-view jobs: a job that ended early is tried
+   * once more, as every crossing; a retry is a new try), its stalls, failures (a try that ended without the view, twice) and the
+   * player's retries ([E] at the stalled / failed flap); the last stall / failure's why.
+   */
+  tries: number;
+  stalls: number;
+  failures: number;
+  retries: number;
+  lastWhy: string;
 }
+
+/** (task studio-surface-tent-loading-finish-20261119-071019-01) The street's preparation behind the held flap (see the file comment). */
+export type TentStreetState = 'preparing' | 'stalled' | 'failed';
 
 /**
  * The command tent as the crossing's preparation space (see the file comment). Game drives it: begin() after the build, scan steps,
@@ -210,7 +246,13 @@ export class SurfaceTentStage {
   flap: CrossingExit | null = null;
   /** The last staged crossing (QA / tests; null: none yet). */
   record: TentStageRecord | null = null;
-  readonly counts = {stages: 0, streets: 0, released: 0, cancelled: 0, refusedFlap: 0};
+  readonly counts = {stages: 0, streets: 0, released: 0, cancelled: 0, refusedFlap: 0, stalls: 0, failures: 0, retries: 0};
+  /** (task studio-surface-tent-loading-finish-20261119-071019-01) The street's preparation in the 'street' phase, and why it stalled / failed. */
+  street: TentStreetState = 'preparing';
+  streetWhy = '';
+  /** How the player goes back the way they came (the toasts: "ride the lift back down" / "walk back through the passage"). */
+  back = 'go back the way you came';
+  private retryAsked = false;
   private set: Set<THREE.Object3D> = new Set();
   private big = new WeakSet<THREE.Object3D>();
   private t0 = 0;
@@ -238,17 +280,18 @@ export class SurfaceTentStage {
    * the exit's floor; the exit must be in it), the flap's exit, the flap held (via `hold`: world/surface/air.ts holdTentFlap). False: not
    * staged (no tent, the exit not in it, no flap): the crossing waits for the street as before.
    */
-  begin(layout: Pick<StationLayout, 'surface'>, exit: CrossingExit, flapPlan: {x: number; z: number; n: readonly number[]; floor: number} | null, hold: (why: () => string) => boolean): boolean {
+  begin(layout: Pick<StationLayout, 'surface'>, exit: CrossingExit, flapPlan: {x: number; z: number; n: readonly number[]; floor: number} | null, hold: (why: () => string, o: TentFlapHoldOptions) => boolean): boolean {
     this.reset();
     const box = flapPlan ? tentStageBox(layout, exit.y - STAND_EYE) : null;
     if (!box || !flapPlan || !box.containsPoint(_p.set(exit.x, exit.y, exit.z))) return false;
-    if (!hold(() => this.flapLine())) return false;
+    if (!hold(() => this.flapLine(), {prompt: this.flapPrompt, press: this.pressFlap})) return false;
     this.box = box;
     this.flap = tentFlapExit(flapPlan);
     this.phase = 'tent';
     this.t0 = performance.now();
     this.counts.stages++;
-    this.record = {phase: 'tent', why: '', scan: null, tent: null, street: null, tentOpenMs: -1, releasedMs: -1, sealedFrames: 0, sealedMax: 0, mapFrames: 0, mapMs: 0, mapSteps: 0, flapHeld: true};
+    this.record = {phase: 'tent', why: '', scan: null, tent: null, street: null, tentOpenMs: -1, releasedMs: -1, sealedFrames: 0, sealedMax: 0, mapFrames: 0, mapMs: 0, mapSteps: 0, flapHeld: true,
+      tries: 0, stalls: 0, failures: 0, retries: 0, lastWhy: ''};
     return true;
   }
 
@@ -304,6 +347,47 @@ export class SurfaceTentStage {
     if (this.record) { this.record.mapFrames++; this.record.mapMs += ms; this.record.mapSteps += steps; }
   }
 
+  /** (Game.prepareTentStreet) A try of the street's first view begins (its job being planned / run). */
+  streetTry(): void {
+    if (this.phase !== 'street') return;
+    this.street = 'preparing';
+    this.streetWhy = '';
+    this.retryAsked = false;
+    if (this.record) this.record.tries++;
+  }
+
+  /** (Game.prepareTentStreet) The street's preparation stalled / is progressing again / failed (`why`: the wait's or the job's). */
+  streetState(s: TentStreetState, why = ''): void {
+    if (this.phase !== 'street' || (s === this.street && why === this.streetWhy)) return;
+    const r = this.record;
+    if (s === 'stalled') { this.counts.stalls++; if (r) r.stalls++; }
+    else if (s === 'failed') { this.counts.failures++; if (r) r.failures++; }
+    if (r && s !== 'preparing') r.lastWhy = why;
+    this.street = s;
+    this.streetWhy = why;
+  }
+
+  /**
+   * [E] at the held flap (air.ts holdTentFlap's press): with the street stalled or failed, a RETRY — the next try starts (Game.
+   * prepareTentStreet takes it) and the toast says so; while it is preparing, null (refused: the flap's line).
+   */
+  pressFlap = (): string | null => {
+    if (this.phase !== 'street' || this.street === 'preparing') return null;
+    this.retryAsked = true;
+    this.counts.retries++;
+    if (this.record) this.record.retries++;
+    this.street = 'preparing';
+    this.streetWhy = '';
+    return 'Trying again to prepare the street — the tent flap opens once it is ready.';
+  };
+
+  /** (Game.prepareTentStreet) The player asked for a retry since the last try began (taken: false until asked again). */
+  takeRetry(): boolean {
+    const r = this.retryAsked;
+    this.retryAsked = false;
+    return r;
+  }
+
   /** The street's first view ended: the flap is let go (`release`: air.ts releaseTentFlap) and the frames draw the whole district. */
   streetDone(view: StageView | null, release: () => void): void {
     if (this.phase === 'idle') return;
@@ -320,13 +404,34 @@ export class SurfaceTentStage {
     try { release?.(); } finally { this.reset(); }
   }
 
-  /** The held flap's prompt / refusal: the street's real progress. */
-  flapLine(): string {
+  /** The street's first view's progress now ('N / M'; null: no job of it yet). */
+  private progress(): string | null {
     // (the street's job: Game.prepareTentStreet replaced the tent's synchronously when the street stage began)
     const st: JourneyCompileStats | null = this.phase === 'street' ? this.game.journeyCompileStats : null;
-    if (!st || st.firstView === 'none') return 'The tent flap stays shut — preparing the street…';
+    if (!st || st.firstView === 'none') return null;
     const p = firstViewProgress(st);
-    return `The tent flap stays shut — preparing the street ${Math.min(p.done, p.total)} / ${p.total}`;
+    return `${Math.min(p.done, p.total)} / ${p.total}`;
+  }
+
+  /** The held flap's refusal (a toast) and its plain prompt: the street's real progress — stalled / failed: the retry first (the HUD's
+   * prompt is one centred line: kept short enough to show its key in a small window), then what happened. */
+  flapLine(): string {
+    const at = this.progress();
+    if (this.phase === 'street' && this.street === 'stalled') return `[E] Try again — preparing the street is stuck${at ? ` at ${at}` : ''}`;
+    if (this.phase === 'street' && this.street === 'failed') return `[E] Try again — the street could not be prepared${this.streetWhy ? ` (${this.streetWhy})` : ''}`;
+    return at ? `The tent flap stays shut — preparing the street ${at}` : 'The tent flap stays shut — preparing the street…';
+  }
+
+  /** The held flap's HUD prompt (HTML): flapLine with its key in bold. */
+  flapPrompt = (): string => this.flapLine().replace('[E]', '<b>[E]</b>');
+
+  /** (Game.prepareTentStreet) The toast when the street stalls / fails: what happened, that the tent is safe, the retry and the way back. */
+  troubleLine(): string {
+    const at = this.progress();
+    if (this.street === 'stalled') {
+      return `Preparing the street has made no progress for ${Math.round(TENT_STREET_WAIT.stallMs / 1000)} s${at ? ` (${at})` : ''}. The tent flap stays shut; it keeps trying — [E] at the flap starts it again, or ${this.back}.`;
+    }
+    return `The street could not be prepared${this.streetWhy ? ` (${this.streetWhy})` : ''}. The tent flap stays shut — [E] at the flap tries again, or ${this.back}.`;
   }
 
   private reset(): void {
@@ -335,7 +440,18 @@ export class SurfaceTentStage {
     this.flap = null;
     this.set = new Set();
     this.big = new WeakSet();
+    this.street = 'preparing';
+    this.streetWhy = '';
+    this.retryAsked = false;
   }
+}
+
+/** (task studio-surface-tent-loading-finish-20261119-071019-01) The held flap's HUD prompt and its [E] (air.ts holdTentFlap). */
+export interface TentFlapHoldOptions {
+  /** The HUD prompt (HTML; default: the refusal line). */
+  prompt?: (() => string) | null;
+  /** [E] on the held flap: a toast line when it did something (a retry), null: refused (the line). */
+  press?: (() => string | null) | null;
 }
 
 /** A stage's first view as recorded (Game.crossingView's end, times and plan size). */

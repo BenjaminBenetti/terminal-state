@@ -7,7 +7,9 @@
 //  - the held flap (world/surface/air.ts holdTentFlap): shut at once (also one saved open), [E] / a push / QA refused with the street's
 //    real progress, the record saved meanwhile the one from before the hold, released: a flap that was open opens again (its gas age),
 //    a shut one stays shut and works as before;
-//  - FrameBudget.run(only): the planning map's frames run the stage's steps, nothing else.
+//  - FrameBudget.run(only): the planning map's frames run the stage's steps, nothing else;
+//  - (task studio-surface-tent-loading-finish-20261119-071019-01) the held flap's own prompt / press, and the street's states behind it:
+//    preparing refuses [E]; stalled / failed say so and take [E] as a retry; the way back named.
 import * as THREE from 'three';
 import {describe, expect, it, vi} from 'vitest';
 import {LEVELS} from '../src/levels/registry';
@@ -19,7 +21,7 @@ import {CULL_LAYER} from '../src/world/levelCulling';
 import {FrameBudget} from '../src/core/frameBudget';
 import {SURFACE_DOORS_LANE, doorBoxes, fitDoorBoxes, planSurfaceDoors, type SurfaceDoorState} from '../src/world/surface/airDoors';
 import {SurfaceAirRuntime} from '../src/world/surface/air';
-import {SurfaceTentStage, TENT_STAGE, scanTent, tentFlapExit, tentStageBox, tentStageKey} from '../src/world/surface/tentStage';
+import {SurfaceTentStage, TENT_STAGE, TENT_STREET_WAIT, scanTent, tentFlapExit, tentStageBox, tentStageKey, type TentFlapHoldOptions} from '../src/world/surface/tentStage';
 
 const SEAL = (1 << CULL_LAYER) >>> 0;
 const firstSeed = (host: 'subway' | 'office' | 'mall'): number => {
@@ -201,11 +203,82 @@ describe('the tent stage: the held tent flap (air.ts)', () => {
     expect((saved[SURFACE_DOORS_LANE] as {doors: Record<string, unknown>}).doors.tent).toEqual({open: 1, age: 42});
   });
 
+  // (task studio-surface-tent-loading-finish-20261119-071019-01) the held flap's own prompt and [E]: a press that did something (the stage's
+  // retry of a stalled / failed street) is toasted and is no refusal; a null press is refused as before; the flap stays shut either way
+  it('held with a prompt and a press: the prompt shown; a press that acted is toasted, not refused; a null press refused as before', () => {
+    const {rt, flap, toast} = make(false);
+    let acted = false;
+    const why = () => '[E] Try again — preparing the street is stuck at 3 / 9';
+    expect(rt.holdTentFlap(why, {prompt: () => why().replace('[E]', '<b>[E]</b>'), press: () => (acted ? null : (acted = true, 'Trying again to prepare the street'))})).toBe(true);
+    rt.target = flap;
+    expect(rt.prompt()).toBe('<b>[E]</b> Try again — preparing the street is stuck at 3 / 9');
+    expect(rt.interact()).toBe(true);
+    expect(toast).toHaveBeenLastCalledWith('Trying again to prepare the street');
+    expect(rt.counts.heldRefusals, 'a press that acted is no refusal').toBe(0);
+    expect(flap.target, 'still shut').toBe(0);
+    expect(rt.interact()).toBe(true);
+    expect(toast).toHaveBeenLastCalledWith(why());
+    expect(rt.counts.heldRefusals).toBe(1);
+    expect(flap.target).toBe(0);
+    expect(rt.open(flap, 'qa')).toBe(false);
+    rt.releaseTentFlap();
+    expect(rt.prompt()).toBe('<b>[E]</b> Open the tent flap');
+  });
+
   it('no tent flap: not held (the crossing is not staged)', () => {
     const {rt} = make(false);
     (rt.air as unknown as {doors: SurfaceDoorState[]}).doors = rt.air!.doors.filter(d => !d.plan.tent);
     expect(rt.holdTentFlap(() => '')).toBe(false);
     expect(rt.tentFlapHeld).toBe(false);
+  });
+});
+
+// (task studio-surface-tent-loading-finish-20261119-071019-01) the street behind the held flap: only its real first view releases the flap
+// (Game.prepareTentStreet; tests/surface-tent-street-gate.test.ts on the real Game) — a stalled / failed street is said, and only then
+// does [E] at the flap act: a retry; the lines carry the real progress and the way back
+describe('the tent stage: the street behind the held flap (preparing / stalled / failed, the retry)', () => {
+  it('preparing refuses [E]; stalled / failed say what happened and take [E] as a retry; the way back named; the counts', () => {
+    const L = district('subway', firstSeed('subway')), at = arrival(L), flap = doorsOf(L).find(d => d.plan.tent)!;
+    const game = {journeyCompileStats: null as null | Record<string, unknown>, sectionHooks: [] as unknown[]};
+    const T = new SurfaceTentStage(game as never).install();
+    let hold: {why: () => string; o: TentFlapHoldOptions} | null = null;
+    expect(T.begin(L, {...at, yaw: 0}, flap.plan, (why, o) => { hold = {why, o}; return true; })).toBe(true);
+    const H = hold as unknown as {why: () => string; o: Required<TentFlapHoldOptions>};
+    T.tentDone({end: 'ready', why: '', ms: 1, activeMs: 1, items: 9, reps: 8}, true);
+    expect(T.phase).toBe('street');
+    T.back = 'ride the lift back down';
+    T.streetTry();
+    expect(T.street).toBe('preparing');
+    expect(H.why(), 'no job yet').toBe('The tent flap stays shut — preparing the street…');
+    game.journeyCompileStats = {firstView: 'drawing', viewReps: 10, viewItems: 20, viewCasters: 0, viewRepsCompiled: 4, viewDone: 0, shadowDone: 0, viewFrame: false, viewDrawn: true};
+    expect(H.why()).toBe('The tent flap stays shut — preparing the street 4 / 31');
+    expect(H.o.prompt!(), 'no key while preparing').toBe(H.why());
+    expect(H.o.press!(), 'preparing: [E] refused').toBeNull();
+    expect(T.takeRetry()).toBe(false);
+    T.streetState('stalled', 'no progress');
+    expect(H.why()).toBe('[E] Try again — preparing the street is stuck at 4 / 31');
+    expect(H.o.prompt!()).toBe('<b>[E]</b> Try again — preparing the street is stuck at 4 / 31');
+    expect(T.troubleLine()).toBe(`Preparing the street has made no progress for ${Math.round(TENT_STREET_WAIT.stallMs / 1000)} s (4 / 31). The tent flap stays shut; it keeps trying — [E] at the flap starts it again, or ride the lift back down.`);
+    expect(H.o.press!(), 'stalled: [E] is a retry').toMatch(/^Trying again to prepare the street/);
+    expect(T.street, 'preparing again at once (no second press)').toBe('preparing');
+    expect(H.o.press!()).toBeNull();
+    expect(T.takeRetry(), 'the retry taken once').toBe(true);
+    expect(T.takeRetry()).toBe(false);
+    T.streetTry();
+    T.streetState('failed', 'error');
+    expect(H.why()).toBe('[E] Try again — the street could not be prepared (error)');
+    expect(T.troubleLine()).toBe('The street could not be prepared (error). The tent flap stays shut — [E] at the flap tries again, or ride the lift back down.');
+    expect(H.o.press!()).toMatch(/^Trying again/);
+    expect(T.takeRetry()).toBe(true);
+    expect(T.counts).toMatchObject({stalls: 1, failures: 1, retries: 2});
+    expect(T.record).toMatchObject({phase: 'street', tries: 2, stalls: 1, failures: 1, retries: 2, lastWhy: 'error'});
+    // a teardown (a crossing back, the menu) ends the stage: nothing pending; the flap's line no longer the stage's
+    (game.sectionHooks[0] as {teardown(): void}).teardown();
+    expect(T.phase).toBe('idle');
+    expect(T.record!.phase).toBe('cancelled');
+    expect(T.street).toBe('preparing');
+    expect(H.o.press!(), 'no stage: [E] refused').toBeNull();
+    expect(T.takeRetry()).toBe(false);
   });
 });
 

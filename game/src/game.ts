@@ -17,7 +17,7 @@ import {SURFACE_LANE, hostKeyOf, isSurfaceHost, isSurfaceKey, sectionAssetLevel,
 import {abortCrossers, arriveCrossers, departCrossers, surfaceCrossRefusal, surfaceCrossers, type SurfaceCrosser, type SurfaceCrossGate, type SurfaceCrossRefusal, type SurfaceCrossResult} from './world/surface/crossing'; // (lane ACCESS: Game.crossSurface)
 import {LIFT_RIDE_COMPILE, LIFT_RIDE_WAIT, liftOfLayout, type SurfaceLiftRuntime} from './world/surface/liftRuntime'; // (lane ACCESS follow-up: the v2 crossing is a cargo-lift ride)
 import {connectorOfLayout, type SurfaceConnectorRuntime} from './world/surface/connectorRuntime'; // (task studio-surface-host-ground-connectors-20261118-053602-01: the Office / Mall connector tube)
-import {TENT_STAGE_COMPILE, scanTent, stageView, tentStageKey, type SurfaceTentStage, type TentScan} from './world/surface/tentStage'; // (task studio-surface-map-tent-cab-20261119-025201-01: the command tent is the preparation space)
+import {TENT_STAGE_COMPILE, TENT_STREET_WAIT, scanTent, stageView, tentStageKey, type SurfaceTentStage, type TentScan} from './world/surface/tentStage'; // (task studio-surface-map-tent-cab-20261119-025201-01: the command tent is the preparation space)
 import {surfaceAirRuntime} from './world/surface/air';
 import {cloneLayoutDeep} from './gen/cloneLayout'; // (the Surface anticipation's pristine copies)
 import {installSurfaceRun} from './world/surface/install'; // task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN // Task track3-eaton-centre-20261031 (lane PACKAGE): level-scoped lazy assets
@@ -291,7 +291,7 @@ import {RtFlashlight} from './render/rt/rtFlashlightRuntime';
 import {RtScene} from './render/rt/rtScene';
 import {shareShaderText} from './render/shaderTextShare'; // task studio-graphics-gpu-materials-toggle-20261114-212239-01
 import {JourneyCompile, type JourneyCompileOptions, type JourneyPacing} from './render/journeyCompile'; // (lane RENDER-CPU: the journey's sliced preparation)
-import {FIRST_VIEW, exitDistance, firstViewCoverage, firstViewProgress, firstViewRest, firstViewStatus, inFrameStep, planFirstViewSteps, waitForFirstView, type CrossingExit, type CrossingViewResult, type FirstViewPlan} from './render/firstView'; // (lane READY: a crossing's exit opens on its drawn first view)
+import {FIRST_VIEW, exitDistance, firstViewCoverage, firstViewProgress, firstViewRest, firstViewStatus, inFrameStep, planFirstViewSteps, waitForFirstView, type CrossingExit, type CrossingViewResult, type FirstViewPlan, type FirstViewWait} from './render/firstView'; // (lane READY: a crossing's exit opens on its drawn first view)
 import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
 import {loadingPlaceName, type LastSaveStatus} from './ui/loadingScreen'; // task studio-beta-campaign-polish-20261103-063841-01 (lane MENU): loading name only; Load last save
 import type {LoadMeter} from './ui/loadingMap'; // task studio-initial-loading-subway-graphic-20261111-070741-01: the loading screen's map takes the load's progress
@@ -364,8 +364,11 @@ export function warmupMode(search: string, software: boolean): WarmupMode {
   return software ? 'view' : 'full';
 }
 
-/** (task studio-surface-map-tent-cab-20261119-025201-01) Game.prepareCrossingView's first view of a closed space and its job's pacing. */
-interface CrossingViewOptions { only?: ((o: THREE.Object3D) => boolean) | null; radius?: number; sweep?: boolean; frame?: boolean; frameWrap?: ((draw: () => void) => void) | null; pacing?: JourneyPacing }
+/**
+ * (task studio-surface-map-tent-cab-20261119-025201-01) Game.prepareCrossingView's first view of a closed space and its job's pacing;
+ * (task studio-surface-tent-loading-finish-20261119-071019-01) `wait`: its wait's bounds and stall / abort seams (default LIFT_RIDE_WAIT).
+ */
+interface CrossingViewOptions { only?: ((o: THREE.Object3D) => boolean) | null; radius?: number; sweep?: boolean; frame?: boolean; frameWrap?: ((draw: () => void) => void) | null; pacing?: JourneyPacing; wait?: FirstViewWait }
 
 /**
  * A timed item use. Task studio-beta-mouse-axis-invert-20261105-005156-01 (user follow-up, consumable return): `held` = the selection
@@ -2620,6 +2623,9 @@ export class Game {
    * `o` (task studio-surface-map-tent-cab-20261119-025201-01, world/surface/tentStage.ts): a first view of a closed space — `only` the
    * renderables it accepts, `sweep: false` (no culler sweep), `radius`, its hidden real-view frame drawn as the next frames draw it
    * (`frameWrap`: sealed; `frame: false`: none) — and the job's pacing while it is waited for (default LIFT_RIDE_COMPILE: the player held).
+   * `o.wait` (task studio-surface-tent-loading-finish-20261119-071019-01, the street behind the tent's held flap: TENT_STREET_WAIT): the
+   * wait's own bounds and seams (render/firstView.ts FirstViewWait: a stall reported and waited on, an abort's reason) — a wait of its own
+   * that ends without the view ends its job (the caller's next try is a fresh one).
    */
   async prepareCrossingView(exit: CrossingExit, since: number, o: CrossingViewOptions = {}): Promise<CrossingViewResult> {
     if (!this.world || !this.renderer.initialized || this.gpu?.deviceLost) return {end: 'cancelled', why: this.gpu?.deviceLost ? 'device lost' : 'no world to prepare'};
@@ -2628,6 +2634,7 @@ export class Game {
     this.journeyCompile?.cancel();
     this.journeyCompile = null; // (the status line says "preparing the view" until this crossing's job exists — never an old job's counts)
     const t0 = performance.now(), tries = (this.crossingView?.tries ?? 0) + 1, world = this.world;
+    let mine: JourneyCompile | null = null;
     // each planning phase in a frame of its own (measured on the Subway lift ride in Node: one 2.4 s frame when planned in one go)
     const prep = {steps: 0, ms: 0, maxMs: 0, by: {} as Record<string, number>};
     const step = <T>(what: string, fn: () => T): Promise<T> => inFrameStep(this.frameBudget, 'crossing.plan', () => {
@@ -2664,18 +2671,21 @@ export class Game {
         programs = {first: v.reps.length, more: fresh.length, covered: covered.length};
         return {items, casters: [...v.casters, ...others], receiver: plan.items.find(i => i.object.receiveShadow && !i.flips.length) ?? null};
       });
-      const job = await step('job', () => (this.journeyCompile = new JourneyCompile({renderer: this.renderer as unknown as JourneyCompileOptions['renderer'], scheduler: this.frameBudget,
+      const job = await step('job', () => (mine = this.journeyCompile = new JourneyCompile({renderer: this.renderer as unknown as JourneyCompileOptions['renderer'], scheduler: this.frameBudget,
         scene: this.scene, camera: this.camera, target, depth: this.sceneDepth(false), ...order, frameNo: () => this.frameBudget.frame, ...(o.pacing ?? LIFT_RIDE_COMPILE),
         firstView: {items: [...v.reps, ...v.others], reps: v.reps.length, casters: v.casters.length, frame: o.frame, frameWrap: o.frameWrap}}).start()));
-      this.crossingView = {end: 'pending', why: '', ms: 0, activeMs: 0, mode, plan: v.stats, prep, programs, tries, job: job.stats, rest: null};
-      const w = await waitForFirstView(job, () => this.frameBudget.activeMs, since, LIFT_RIDE_WAIT);
+      // (task studio-surface-tent-loading-finish-20261119-071019-01: this try's own record — a wait that ends after another crossing began, the
+      // tent stage's after a crossing back, never writes into that crossing's)
+      const cv = this.crossingView = {end: 'pending', why: '', ms: 0, activeMs: 0, mode, plan: v.stats, prep, programs, tries, job: job.stats, rest: null};
+      const w = await waitForFirstView(job, () => this.frameBudget.activeMs, since, o.wait ?? LIFT_RIDE_WAIT);
       const st = job.stats, p = firstViewProgress(st);
-      Object.assign(this.crossingView, {end: w.end, why: w.why, ms: performance.now() - t0, activeMs: this.frameBudget.activeMs - since});
+      Object.assign(cv, {end: w.end, why: w.why, ms: performance.now() - t0, activeMs: this.frameBudget.activeMs - since});
       console.info(`Terminal State: crossing first view ${w.end}${w.why ? ` (${w.why})` : ''} — ${p.done}/${p.total}: ${st.viewRepsCompiled}/${st.viewReps} representatives compiled, `
         + `${st.viewDone}/${st.viewItems} drawn in ${st.viewDraws} off-screen draws (max ${st.viewMaxPerDraw}, ${st.viewDrawMaxMs.toFixed(1)} ms), casters ${Math.min(st.shadowDone, st.viewCasters)}/${st.viewCasters}, `
         + `real-view frame ${st.viewFrame ? `${st.viewFrameMs.toFixed(1)} ms` : 'no'} · planned in ${prep.steps} frame steps, ${prep.ms.toFixed(1)} ms (max ${prep.maxMs.toFixed(1)}; `
         + `${Object.entries(prep.by).map(([k, ms]) => `${k} ${ms.toFixed(1)}`).join(', ')}; sweep ${v.stats.poses} poses ${v.stats.sweepMs.toFixed(1)} ms) · ${((performance.now() - t0) / 1000).toFixed(1)} s`);
       if (w.end === 'partial' && w.why === 'stalled') job.cancel(); // (no progress at all: continueCrossingPreparation starts a fresh play-paced job)
+      else if (o.wait && w.end !== 'ready') job.cancel(); // (a wait of its own that ended without the view — its abort: the caller's next try is a fresh job)
       else if (job.running) job.pace(null); // (from here on the journey's play pacing: the exit is about to open)
       // the left world's queued GPU releases, still unseen (the player is held): the first view holds its own programs now — a later
       // new program group of the destination may build one the left world had (its compile's business, in play pacing); a partial first
@@ -2683,7 +2693,7 @@ export class Game {
       if (w.end === 'ready') this.flushRetired();
       return w;
     } catch (err) {
-      (this.journeyCompile as JourneyCompile | null)?.cancel(); // (set in a step: TS cannot see it)
+      (mine as JourneyCompile | null)?.cancel(); // (this try's job, set in a step: TS cannot see it)
       if (this.world !== world) return {end: 'cancelled', why: 'the world changed'};
       console.warn('crossing: preparing the first view failed', err);
       return {end: 'cancelled', why: 'error'};
@@ -3129,7 +3139,7 @@ export class Game {
       if (staged) this.surfaceTentStage!.tentDone(stageView(c, this.crossingView), true);
       if (!(await R.markReady())) { this.surfaceTentStage?.cancel('ride interrupted', () => surfaceAirRuntime()?.releaseTentFlap()); return {ok: false, reason: 'cancelled', error: 'The ride was interrupted.'}; }
       if (staged) {
-        this.tentArrival(layout.surface?.name ?? 'The street', c);
+        this.tentArrival(layout.surface?.name ?? 'The street', c, 'ride the lift back down');
       } else {
         const rest = this.continueCrossingPreparation(); // (the rest in play pacing; the left section's queued releases after its scene pass)
         this.hud.toast(up ? `${layout.surface?.name ?? 'The street'} — street level` : `${station} — back underground`);
@@ -3234,7 +3244,7 @@ export class Game {
       if (staged) this.surfaceTentStage!.tentDone(stageView(c, this.crossingView), true);
       C.markReady();
       if (staged) {
-        this.tentArrival(layout.surface?.name ?? 'The street', c);
+        this.tentArrival(layout.surface?.name ?? 'The street', c, 'walk back through the passage');
       } else {
         const rest = this.continueCrossingPreparation(); // (the rest in play pacing; the left section's queued releases after its scene pass)
         this.hud.toast(up ? `${layout.surface?.name ?? 'The street'} — through the passage to the command tent` : `${station} — back inside`);
@@ -3277,7 +3287,7 @@ export class Game {
     const T = this.surfaceTentStage, air = surfaceAirRuntime();
     if (!T || !air?.air || air.air.layout !== layout || !layout.surface) return false;
     const flap = air.air.doors.find(d => d.plan.tent && d.plan.leaves.length > 0)?.plan ?? null;
-    if (!T.begin(layout, exit, flap, why => air.holdTentFlap(why))) return false;
+    if (!T.begin(layout, exit, flap, (why, o) => air.holdTentFlap(why, o))) return false;
     const world = this.world, g = scanTent(this.scene, T.box!);
     try {
       let r: IteratorResult<void, TentScan>;
@@ -3301,43 +3311,79 @@ export class Game {
     return {only: T.admits, sweep: false, radius: Infinity, frameWrap: draw => T.drawSealed(this.scene, [this.camera, this.fx.group], draw)};
   }
 
-  /** The car / tube opened into the tent: the player is told, and the street's preparation behind the held flap runs on (not awaited). */
-  private tentArrival(name: string, c: CrossingViewResult): void {
+  /**
+   * The car / tube opened into the tent: the player is told, and the street's preparation behind the held flap runs on (not awaited).
+   * `back`: how they go back the way they came (said if the street stalls / fails).
+   */
+  private tentArrival(name: string, c: CrossingViewResult, back: string): void {
     this.hud.toast(`${name} — the command tent. The street outside is being prepared; the planning map is on the table.`);
     if (c.end !== 'ready') this.hud.toast('Graphics are still being prepared — brief stutters are possible.', true);
+    if (this.surfaceTentStage) this.surfaceTentStage.back = back;
     void this.prepareTentStreet();
   }
 
   /**
    * The street's FIRST VIEW from just outside the tent flap (prepareCrossingView, TENT_STAGE_COMPILE pacing; its hidden real-view frame:
    * unsealed, from the player's camera in the tent — the release frame's own view), the player in the tent while the frames are sealed
-   * to it; once more for a job that ended early on a live device. Then
-   * the flap is let go and the rest of the district is prepared in play (continueCrossingPreparation), reported with its real counts. A
-   * teardown meanwhile (a crossing back, a retry, the menu) ended the stage: nothing of this world is touched.
+   * to it. (task studio-surface-tent-loading-finish-20261119-071019-01) Only its REAL first view releases the flap: the wait has no
+   * budget (TENT_STREET_WAIT); a stall — no first-view progress for its stall period — is said at the flap and in a toast while the job
+   * goes on, and [E] at the flap starts a fresh try; a try that ended without the view (once more on a live device, as every crossing)
+   * or failed is said likewise and waits for the player's [E]. Released, the rest of the district is prepared in play
+   * (continueCrossingPreparation), reported with its real counts. The direct path (compiled, not drawn) and ?warmup=off release with
+   * what they could not prepare said. A teardown meanwhile (a crossing back, a retry, the menu) ended the stage: nothing of this world is
+   * touched; a lost device ends it with the flap held (the error screen).
    */
   private async prepareTentStreet(): Promise<void> {
     const T = this.surfaceTentStage, world = this.world, air = surfaceAirRuntime();
     if (!T || T.phase !== 'street' || !T.flap || !world) return;
     const exit = T.flap, release = () => air?.releaseTentFlap();
     const alive = () => this.world === world && T.phase === 'street';
-    const opts: CrossingViewOptions = {pacing: TENT_STAGE_COMPILE};
-    try {
-      this.crossingView = null;
-      const since = this.frameBudget.activeMs;
-      let c = await this.prepareCrossingView(exit, since, opts);
-      if (c.end === 'cancelled' && alive() && !this.gpu?.deviceLost) c = await this.prepareCrossingView(exit, since, opts);
+    // (read at each try: TENT_STREET_WAIT; its stall said once per stall)
+    const opts = (): CrossingViewOptions => ({pacing: TENT_STAGE_COMPILE, wait: {...TENT_STREET_WAIT,
+      stalled: on => { if (!alive()) return; T.streetState(on ? 'stalled' : 'preparing', on ? 'no progress' : ''); if (on) this.hud.toast(T.troubleLine(), true); },
+      abort: () => (!alive() ? 'the stage ended' : T.takeRetry() ? 'retry' : null)}});
+    this.crossingView = null;
+    for (;;) {
+      let c: CrossingViewResult;
+      T.streetTry();
+      try {
+        const since = this.frameBudget.activeMs;
+        c = await this.prepareCrossingView(exit, since, opts());
+        if (c.end === 'cancelled' && c.why !== 'retry' && alive() && !this.gpu?.deviceLost) { T.streetTry(); c = await this.prepareCrossingView(exit, since, opts()); }
+      } catch (err) {
+        console.warn('crossing: preparing the street from the tent failed', err);
+        c = {end: 'cancelled', why: 'error'};
+      }
       if (!alive()) return;
-      const cv = this.crossingView;
-      this.tentCrossingView = cv;
-      T.streetDone(stageView(c, cv), release);
-      if (c.end !== 'ready') console.warn(`Terminal State: the tent flap is released with the street's first view incomplete (${c.end}${c.why ? `: ${c.why}` : ''}); the rest is prepared in play`);
-      const rest = this.continueCrossingPreparation();
-      if (c.end === 'ready') this.hud.toast(`The street is ready — the tent flap can be opened${rest ? ` (the rest of the area: ${rest.left} of ${rest.total} left)` : ''}.`);
-      else this.hud.toast(`The tent flap can be opened — graphics are still being prepared, brief stutters are possible${rest ? ` (${rest.left} of ${rest.total} left)` : ''}.`, true);
-    } catch (err) {
-      console.warn('crossing: preparing the street from the tent failed', err);
-      if (alive()) { T.cancel('error', release); this.continueCrossingPreparation(); }
+      if (this.gpu?.deviceLost) { T.cancel('device lost'); return; } // (the error screen: nothing can draw; the flap stays held, saved as before the hold)
+      const off = c.end === 'partial' && c.why.startsWith('graphics warm-up off');
+      if (c.end === 'ready' || off) {
+        const cv = this.crossingView;
+        this.tentCrossingView = cv;
+        T.streetDone(stageView(c, cv), release);
+        const rest = this.continueCrossingPreparation(), left = rest ? ` (the rest of the area: ${rest.left} of ${rest.total} left)` : '';
+        if (off) this.hud.toast(`The tent flap can be opened — the graphics warm-up is off (?warmup=off), so the street was not prepared ahead; expect stutters${left}.`, true);
+        else if (c.why) this.hud.toast(`The tent flap can be opened — the street's graphics are compiled; with the atmosphere off they cannot be drawn ahead, so the first look outside may still stutter${left}.`, true);
+        else this.hud.toast(`The street is ready — the tent flap can be opened${left}.`);
+        return;
+      }
+      if (c.why === 'retry') continue; // ([E] at the stalled flap: a fresh try)
+      // the try ended without the street's view: said, the flap held; the next try is the player's [E] (or they go back)
+      T.streetState('failed', c.why === 'error' ? 'an error' : c.why);
+      console.warn(`Terminal State: the street's first view from the tent could not be prepared (${c.end}${c.why ? `: ${c.why}` : ''}); the flap stays shut until a retry`);
+      this.hud.toast(T.troubleLine(), true);
+      if (!(await this.tentRetryAsked(T, alive))) return;
     }
+  }
+
+  /** Resolves true once the player asked for a retry at the held flap (SurfaceTentStage.pressFlap), false once the stage ended. */
+  private tentRetryAsked(T: SurfaceTentStage, alive: () => boolean): Promise<boolean> {
+    return new Promise(resolve => {
+      const timer = setInterval(() => {
+        if (!alive()) { clearInterval(timer); resolve(false); }
+        else if (T.takeRetry()) { clearInterval(timer); resolve(true); }
+      }, TENT_STREET_WAIT.pollMs);
+    });
   }
 
   /** (QA / tests) The last staged crossing's street first view (Game.crossingView of it; null: none yet). */

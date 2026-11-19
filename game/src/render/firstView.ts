@@ -255,16 +255,30 @@ export function firstViewRest(st: Pick<JourneyCompileStats, 'sceneItems' | 'scen
   return {left: Math.max(0, total - st.sceneDone - st.shadowDone - st.twoPassDone), total};
 }
 
+/** A first-view wait's bounds (LIFT_RIDE_WAIT) and (task studio-surface-tent-loading-finish-20261119-071019-01) its stall / abort seams. */
+export interface FirstViewWait {
+  budgetMs: number;
+  stallMs: number;
+  pollMs: number;
+  /**
+   * Given, a stall does not end the wait (world/surface/tentStage.ts: the street behind the command tent's held flap): `stalled(true)`
+   * once there was no first-view progress for `stallMs` of active time, `stalled(false)` when progress comes again; the job runs on.
+   */
+  stalled?: ((on: boolean) => void) | null;
+  /** Asked every poll: a reason ends the wait now, 'cancelled' with that why (the caller ends the job). */
+  abort?: (() => string | null) | null;
+}
+
 /**
  * The bounded wait for a job's first view: 'ready' (stats.firstView); 'partial' once `W.budgetMs` of ACTIVE time (core/frameBudget.ts
  * activeMs: playing frames only — a paused crossing waits) passed since `since` ('budget'), or the first view made no progress — a
- * representative compiled, a renderable drawn, a caster drawn — for `W.stallMs` of active time ('stalled'); 'cancelled' (the job ended
- * without it: its cancel reason). Checked every `W.pollMs` and when the job settles; never rejects. `why` of a ready first view that
- * could not be drawn (the direct path) says so.
+ * representative compiled, a renderable drawn, a caster drawn — for `W.stallMs` of active time ('stalled'; with `W.stalled` reported
+ * instead and waited on); 'cancelled' (the job ended without it: its cancel reason; or `W.abort`'s reason). Checked every `W.pollMs` and
+ * when the job settles; never rejects. `why` of a ready first view that could not be drawn (the direct path) says so.
  */
-export function waitForFirstView(job: FirstViewJob, activeMs: () => number, since: number, W: {budgetMs: number; stallMs: number; pollMs: number}): Promise<CrossingViewResult> {
+export function waitForFirstView(job: FirstViewJob, activeMs: () => number, since: number, W: FirstViewWait): Promise<CrossingViewResult> {
   const units = () => { const s = job.stats; return s.viewRepsCompiled + s.viewDone + Math.min(s.shadowDone, s.viewCasters) + (s.viewFrame ? 1 : 0); };
-  let seen = -1, seenAt = activeMs();
+  let seen = -1, seenAt = activeMs(), stalled = false;
   return new Promise(resolve => {
     let open = true;
     const finish = (r: CrossingViewResult) => { if (!open) return; open = false; clearInterval(timer); resolve(r); };
@@ -275,10 +289,15 @@ export function waitForFirstView(job: FirstViewJob, activeMs: () => number, sinc
     };
     const timer = setInterval(() => {
       if (ready()) return;
+      const stop = W.abort?.() ?? null;
+      if (stop) { finish({end: 'cancelled', why: stop}); return; }
       const n = units(), now = activeMs();
-      if (n !== seen) { seen = n; seenAt = now; }
+      if (n !== seen) { seen = n; seenAt = now; if (stalled) { stalled = false; W.stalled?.(false); } }
       if (now - since >= W.budgetMs) finish({end: 'partial', why: 'budget'});
-      else if (now - seenAt >= W.stallMs) finish({end: 'partial', why: 'stalled'});
+      else if (now - seenAt >= W.stallMs) {
+        if (!W.stalled) finish({end: 'partial', why: 'stalled'});
+        else if (!stalled) { stalled = true; W.stalled(true); }
+      }
     }, W.pollMs);
     void job.viewReady.then(() => { if (!ready() && job.stats.phase === 'cancelled') finish({end: 'cancelled', why: job.stats.cancelReason ?? 'cancelled'}); });
   });

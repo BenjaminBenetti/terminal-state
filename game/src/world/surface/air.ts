@@ -281,14 +281,18 @@ export class SurfaceAirRuntime {
   // not push it open and it never opens by itself. What is SAVED meanwhile is its state from before the hold (the same record as if
   // there had been no hold); on release a flap that was open opens again (its gas from its saved age), a shut one stays shut.
 
-  private flapHold: {d: SurfaceDoorState; why: () => string; was: {open: boolean; auto: boolean; openedAt: number}} | null = null;
+  private flapHold: {d: SurfaceDoorState; why: () => string; prompt: (() => string) | null; press: (() => string | null) | null; was: {open: boolean; auto: boolean; openedAt: number}} | null = null;
 
-  /** Holds the tent flap shut (false: this district has no tent flap; true also when already held — `why` replaced). */
-  holdTentFlap(why: () => string): boolean {
+  /**
+   * Holds the tent flap shut (false: this district has no tent flap; true also when already held — `why` / `o` replaced). (task
+   * studio-surface-tent-loading-finish-20261119-071019-01) `o.prompt`: its HUD prompt (default `why`); `o.press`: [E] on it — a line
+   * when it did something (the stage's retry of a stalled / failed street: toasted), null: refused as before.
+   */
+  holdTentFlap(why: () => string, o: {prompt?: (() => string) | null; press?: (() => string | null) | null} = {}): boolean {
     const a = this.air, d = a?.doors.find(q => q.plan.tent && q.plan.leaves.length > 0);
     if (!a || !d) return false;
-    if (this.flapHold?.d === d) { this.flapHold.why = why; return true; }
-    this.flapHold = {d, why, was: {open: d.target === 1 || d.t > 0.02, auto: d.auto, openedAt: d.openedAt}};
+    if (this.flapHold?.d === d) { Object.assign(this.flapHold, {why, prompt: o.prompt ?? null, press: o.press ?? null}); return true; }
+    this.flapHold = {d, why, prompt: o.prompt ?? null, press: o.press ?? null, was: {open: d.target === 1 || d.t > 0.02, auto: d.auto, openedAt: d.openedAt}};
     d.target = 0;
     d.t = 0;
     d.clear = d.push = 0;
@@ -503,7 +507,12 @@ export class SurfaceAirRuntime {
   interact(): boolean {
     const d = this.target;
     if (!d || !this.air) return false;
-    if (this.flapHold?.d === d) { this.open(d, 'player'); this.host.hud?.toast(this.flapHold.why()); return true; } // (refused: why)
+    if (this.flapHold?.d === d) { // (held: its press — a retry — or refused, why)
+      const said = this.flapHold.press?.() ?? null;
+      if (said === null) this.open(d, 'player');
+      this.host.hud?.toast(said ?? this.flapHold.why());
+      return true;
+    }
     if (d.target === 1) {
       if (!this.close(d)) this.host.hud?.toast('Something is in the doorway');
     } else this.open(d, 'player');
@@ -513,7 +522,7 @@ export class SurfaceAirRuntime {
   prompt(): string | null {
     const d = this.target;
     if (!d) return null;
-    if (this.flapHold?.d === d) return this.flapHold.why();
+    if (this.flapHold?.d === d) return (this.flapHold.prompt ?? this.flapHold.why)();
     const what = d.plan.tent ? 'the tent flap' : 'the door';
     return d.target === 1 ? `<b>[E]</b> Close ${what}` : `<b>[E]</b> Open ${what}`;
   }
