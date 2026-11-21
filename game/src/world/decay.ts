@@ -810,12 +810,15 @@ export function fitDecayField(f: DecayField, maxRows = MAX_DECAY_ROWS): DecayFie
 
 let fieldTex: THREE.DataTexture | null = null;
 let currentField: DecayField | null = null;
+/** The field last given to setDecayField (before fitDecayField). */
+let boundSource: DecayField | null = null;
 /** The decay field bound to the shared inputs (QA / tests). */
 export const activeDecayField = (): DecayField | null => currentField;
 /** Upload a station's decay field to the shared decay inputs (disposes the previous station's texture). */
 export function setDecayField(field: DecayField): THREE.DataTexture {
   const f = fitDecayField(field);
   currentField = f;
+  boundSource = field;
   const t = new THREE.DataTexture(f.data, f.w, f.h * f.levels, THREE.RGBAFormat, THREE.UnsignedByteType);
   t.magFilter = t.minFilter = THREE.LinearFilter;
   t.generateMipmaps = false;
@@ -841,9 +844,26 @@ export function applyStationDecay(layout: StationLayout, levels: readonly Level[
 /** task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): applyStationDecay as steps — the field in steps (buildDecayFieldSteps), then hooked and bound at once (one step). */
 export function* applyStationDecaySteps(layout: StationLayout, levels: readonly Level[], mats: WorldMaterials): BuildSteps<DecayField> {
   decayWorldMaterials(mats);
+  // (task studio-surface-tent-first-staging-20261120-225458-01) a field made for this layout before its build (the staged command tent:
+  // world/surface/tentShell.ts) is the one this build would make — taken once, not made twice (and not bound again when it is bound)
+  const primed = primedFields.get(layout);
+  if (primed) {
+    primedFields.delete(layout);
+    if (boundSource !== primed) setDecayField(primed);
+    return primed;
+  }
   const f = yield* buildDecayFieldSteps(layout, levels);
   setDecayField(f);
   return f;
+}
+
+const primedFields = new WeakMap<object, DecayField>();
+/**
+ * (task studio-surface-tent-first-staging-20261120-225458-01) Hand `layout`'s decay field (buildDecayFieldSteps of it: a pure function of its
+ * grids, areas, doors and seed — nothing a build changes before its decay step) to its next build's applyStationDecaySteps, once.
+ */
+export function primeDecayField(layout: object, field: DecayField): void {
+  primedFields.set(layout, field);
 }
 
 // ---------------------------------------------------------------------------------------------

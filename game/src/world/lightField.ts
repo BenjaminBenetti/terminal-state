@@ -1152,12 +1152,22 @@ export function sampleField(f: BakedField, x: number, y: number, z: number, leve
  * texel with the most bands; every slot slice (and every ambient-cube slice) is averaged.
  */
 export function downsampleField(f: BakedField, k: number): BakedField {
+  return drainSync(downsampleFieldSteps(f, k));
+}
+
+/**
+ * (task studio-surface-tent-first-staging-20261120-225458-01) downsampleField as steps (core/pacedBuild.ts): the identical loops, a step per
+ * slice — a Surface Run district's field (1105 x 1094 x 59 at k 2, measured 2.2 s in Node in one go) no longer freezes the frames drawn
+ * while it is made (the staged command tent's). The same field, byte for byte.
+ */
+export function* downsampleFieldSteps(f: BakedField, k: number): BuildSteps<BakedField> {
   if (k <= 1) return f;
   const W = Math.ceil(f.w / k), H = Math.ceil(f.h / k), D = f.depth, gs0 = fieldDepth(f.slots), gi0 = f.gi ?? D;
   const data = new Uint8Array(W * H * D * 4);
   const masks = new Uint16Array(W * H);
   const pickOf = new Int32Array(W * H).fill(-1);
   for (let s = 0; s < D; s++) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (x === 0 && y === 0 && s > 0) yield; // (a step per slice: its texels never half-written where a later one reads them — slice 0 first)
     const o = ((s * H + y) * W + x) * 4;
     if (s >= gs0 && s < gi0) { // extended-header group slices: the picked column's
       const p = pickOf[y * W + x];

@@ -191,7 +191,9 @@ describe('the manual save (Game.saveNow: the real game.ts methods on a minimal s
       ['dead', (_s, g) => { g.player.alive = false; }, 'dead', /dead/],
       ['riding', s => { (s.trainRide as {riding: boolean}).riding = true; }, 'moving', /train is moving/],
       ['a journey pending', (_s, g) => { g.run.campaign!.transit = {from: sid(0), to: sid(1), phase: 'departing', cheat: false}; }, 'moving', /train is moving/],
-      ['the transit gap', s => { s.transitGap = true; }, 'moving', /train is moving/],
+      // (task studio-surface-tent-first-staging-20261120-225458-01: the gap with no train riding is a Surface crossing — the lift, the
+      // passage, the staged command tent — said as such, not as a moving train)
+      ['the transit gap', s => { s.transitGap = true; }, 'busy', /still crossing/],
       ['busy (a load / travel in flight)', s => { s.lifecycle = {busy: true}; }, 'busy', /busy/],
       ['no train here', s => { s.trainPlacement = null; }, 'no-train', /not parked here/],
       ['no world', s => { s.world = null; }, 'no-train', /not parked here/],

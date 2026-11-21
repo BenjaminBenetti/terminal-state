@@ -183,9 +183,11 @@ describe('the journey builds the next station paced (lane BUILD)', async () => {
     // its compile wait is bounded from the active time at the wait's start — tests/surface-lift-seal.test.ts; lane READY of
     // studio-surface-host-ground-connectors-20261118-053602-01: the wait is for the exit's FIRST VIEW, Game.prepareCrossingView —
     // tests/crossing-first-view.test.ts — and the walk's far flap waits for the same)
-    expect(ride).toContain('await this.buildSectionPaced(to, layout, {kind: \'surface\'}, false, {sliceMs: LIFT_RIDE_WAIT.buildSliceMs});');
-    // (task studio-surface-map-tent-cab-20261119-025201-01: up into a district, that first view is the command tent's — its options)
-    expect(ride.slice(ride.indexOf('this.buildSectionPaced('))).toMatch(/await this\.prepareCrossingView\(exit, since[,)][\s\S]*await R\.markReady\(\)/);
+    // (task studio-surface-tent-first-staging-20261120-225458-01: + the build's stages reported to the staged command tent's progress line)
+    expect(ride).toContain('await this.buildSectionPaced(to, layout, {kind: \'surface\'}, false, {sliceMs: LIFT_RIDE_WAIT.buildSliceMs}, this.noteShellStage);');
+    // (task studio-surface-map-tent-cab-20261119-025201-01: up into a district, that first view is the command tent's — its options; task
+    // studio-surface-tent-first-staging-20261120-225458-01: the doors already opened into the staged tent are awaited instead)
+    expect(ride.slice(ride.indexOf('this.buildSectionPaced('))).toMatch(/await this\.prepareCrossingView\(exit, since[,)][\s\S]*await \(opened \?\? R\.markReady\(\)\)/);
     const walk = src.slice(src.indexOf('  private async walkSurfaceConnector('), src.indexOf('  private connectorStatusText('));
     expect(walk.slice(walk.indexOf('this.buildSectionPaced('))).toMatch(/await this\.prepareCrossingView\(exit, since[,)][\s\S]*C\.markReady\(\)/);
     expect(sliced).toBe(6); // (tests/loading-build-sliced.test.ts: what that drain does; + the Surface Run crossing and its recovery, lane ACCESS)

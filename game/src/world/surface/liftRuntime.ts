@@ -278,9 +278,9 @@ export class SurfaceLiftRuntime {
     return !!this.site && this.phase === 'idle' && !this.held;
   }
 
-  /** The player stands inside the current section's car. */
+  /** The player stands inside the car drawn now (the current section's; during a staged tent's build the held destination end). */
   inCar(): boolean {
-    const s = this.site, p = this.game.player;
+    const s = this.current(), p = this.game.player;
     if (!s) return false;
     const [lx, lz] = worldToCarXZ(s.frame, p.x, p.z);
     return Math.abs(lx) < s.frame.hx && Math.abs(lz) < s.frame.hz && Math.abs(p.y - s.lift.y) < 1.2;
@@ -380,6 +380,11 @@ export class SurfaceLiftRuntime {
   /** The end the ride draws now (held or adopted). */
   private current(): LiftEnd | null {
     return this.held ?? this.site;
+  }
+
+  /** (task studio-surface-tent-first-staging-20261120-225458-01) The root of the view drawn now (the staged tent draws it with its own; null: none). */
+  viewRoot(): THREE.Object3D | null {
+    return this.current()?.view.root ?? null;
   }
 
   private cuePoint(e: LiftEnd): {x: number; y: number; z: number} {

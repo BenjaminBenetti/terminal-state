@@ -823,6 +823,16 @@ export class SurfaceArch {
     }
   }
 
+  /**
+   * (task studio-surface-tent-first-staging-20261120-225458-01) The command tent's own build (buildTent below) into `group` on its own —
+   * the staged tent the player waits in while the district is built (world/surface/tentShell.ts): the same meshes, materials and flap
+   * pivot (returned; null: none) as the district's tent.
+   */
+  buildTentInto(group: THREE.Group): THREE.Object3D | null {
+    this.buildTent(group);
+    return this.flap;
+  }
+
   /** The command tent: canvas walls (when GEN did not carve them), the pitched roof, gables, guy lines and the door flap. */
   private buildTent(group: THREE.Group): void {
     const T = this.plan.tent;

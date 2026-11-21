@@ -16,6 +16,9 @@
 // draw the tent only (nothing built / created / first used in them), then the flap is released (nothing in the release frames either);
 // (d) the rest after the release. ((c), a stalled / failed job ending bounded and truthful: tests/crossing-first-view.test.ts and
 //      tests/surface-lift-ride.test.ts section 6.)
+// (task studio-surface-tent-first-staging-20261120-225458-01) The car opens into the STAGED tent (world/surface/tentShell.ts) before the
+// district is built: (b) covers those door-open frames too, and the SWAP — the district's real tent first drawn in the staged one's place
+// — takes the door-open frame's role for the district ('open' / 'opening'); the staged tent's other frames are counted ('shell').
 import {afterAll, describe, expect, it, vi} from 'vitest';
 import {installHeadless} from './helpers/headlessGame';
 import {generateNetwork} from '../src/campaign/network';
@@ -83,7 +86,7 @@ describe('crossing readiness on the real Game: the lift ride\'s first view (atmo
       const draw = be.draw.bind(be);
       be.draw = (...a: unknown[]) => {
         const ro = a[0] as {pipeline?: unknown; object?: {name?: string}; material?: {name?: string}};
-        if (ro.pipeline && !used.has(ro.pipeline)) { used.add(ro.pipeline); c(ro).firstUsed++; if (phase === 'open' || phase === 'opening' || phase === 'tent' || phase === 'release') firstAtOpen.push(`${phase}: ${ro.object?.name} / ${ro.material?.name} / ${(ro.object as {type?: string})?.type} / ${(ro as {context?: {renderTarget?: unknown}}).context?.renderTarget ? 'target' : 'canvas'}`); }
+        if (ro.pipeline && !used.has(ro.pipeline)) { used.add(ro.pipeline); c(ro).firstUsed++; if (phase === 'open' || phase === 'opening' || phase === 'tent' || phase === 'release' || phase === 'shell-open' || phase === 'shell-opening') firstAtOpen.push(`${phase}: ${ro.object?.name} / ${ro.material?.name} / ${(ro.object as {type?: string})?.type} / ${(ro as {context?: {renderTarget?: unknown}}).context?.renderTarget ? 'target' : 'canvas'}`); }
         return draw(...a);
       };
       await game.load(() => {});
@@ -97,25 +100,32 @@ describe('crossing readiness on the real Game: the lift ride\'s first view (atmo
       expect(qa.surface.go()).toBe(true);
       await h.waitFrames(2);
       // every drawn frame of the ride: its phase, the job's first-view state
-      const frames: {gap: boolean; built: boolean; ride: string; door: number; fv: string | null; views: number; ms: number}[] = [];
-      let opened = -1;
+      const frames: {gap: boolean; built: boolean; ride: string; door: number; fv: string | null; views: number; ms: number; shell: boolean}[] = [];
+      let opened = -1, shellOpened = -1;
       const render0 = G.render.bind(game);
       // (the frame's own render only: the job's steps after it — the rest, in play — and compile continuations count as 'job')
       // (task studio-surface-map-tent-cab-20261119-025201-01) after the doors opened into the command tent: 'tent' — frames sealed to the
       // tent while the street is prepared behind its held flap; 'release' — the first frames after the flap was released (the street drawn)
       const TS = (game as unknown as {surfaceTentStage: {phase: string; record: Record<string, unknown> | null}}).surfaceTentStage;
       let street = false, released = -1;
+      // (task studio-surface-tent-first-staging-20261120-225458-01) the doors open into the STAGED tent while the district is built
+      // ('shell-open' / 'shell-opening', then 'shell'); the district's real tent is first drawn at the SWAP — 'open' (the door-open frame's
+      // role: the first frame drawing the destination) and 'opening' its next 30 frames
       G.render = () => {
+        const shellNow = game.surfaceTentShellOpen;
         if (TS.phase === 'street') street = true;
         else if (street && released < 0 && TS.phase === 'idle') released = frames.length;
-        phase = R.sealed || G.transitGap ? 'ride' : R.phase === 'opening' ? (opened < 0 && frames.some(f => f.gap) ? 'open' : 'opening')
-          : released >= 0 ? (frames.length - released < 30 ? 'release' : 'after') : opened >= 0 ? (TS.phase === 'street' ? 'tent' : 'after') : 'ride';
+        phase = shellNow ? (R.phase === 'opening' ? (shellOpened < 0 ? 'shell-open' : 'shell-opening') : 'shell')
+          : R.sealed || G.transitGap ? 'ride' : opened < 0 && frames.some(f => f.shell) ? 'open'
+          : released >= 0 ? (frames.length - released < 30 ? 'release' : 'after')
+          : opened >= 0 ? (frames.length - opened < 30 ? 'opening' : TS.phase === 'street' ? 'tent' : 'after') : 'ride';
         framePhase = phase;
         const t0 = performance.now();
         try { return render0(); } finally {
           if (phase === 'open') opened = frames.length;
+          if (phase === 'shell-open') shellOpened = frames.length;
           const j = game.journeyCompileStats;
-          frames.push({gap: G.transitGap, built: G.liftBuilt, ride: R.phase, door: R.door, fv: j?.firstView ?? null, views: j?.viewDraws ?? 0, ms: performance.now() - t0});
+          frames.push({gap: G.transitGap, built: G.liftBuilt, ride: R.phase, door: R.door, fv: j?.firstView ?? null, views: j?.viewDraws ?? 0, ms: performance.now() - t0, shell: shellNow});
           phase = 'job';
         }
       };
@@ -143,11 +153,14 @@ describe('crossing readiness on the real Game: the lift ride\'s first view (atmo
       const shut = frames.findIndex(f => f.ride === 'travel');
       expect(shut, 'the doors shut and the car moved').toBeGreaterThan(0);
       // (while the doors open: the tent's job; once open, the street's job from the tent replaces it — (e))
+      // (the doors open into the staged tent with its own first view ready — its job's — then the district's tent's job is the one shown)
       for (const f of frames.slice(shut)) if (f.door > 0 && f.ride !== 'idle') expect(f.fv, 'the doors open only with the first view ready').toBe('ready');
-      expect(opened, 'the door-open frame seen').toBeGreaterThan(0);
-      // (b) the door-open frame and the frames while the doors open: nothing built, created or first used
-      for (const p of ['open', 'opening'] as const) expect(counts[p] ?? {builds: 0, pipelines: 0, firstUsed: 0}, `${p}: ${firstAtOpen.join(', ')}`).toEqual({builds: 0, pipelines: 0, firstUsed: 0});
-      expect(firstAtOpen.filter(x => x.startsWith('open')), 'first used at the door-open').toEqual([]);
+      expect(shellOpened, 'the doors opened into the staged tent').toBeGreaterThan(0);
+      expect(frames[shellOpened].built, 'the staged tent opened before the district was built').toBe(false);
+      expect(opened, 'the swap frame (the district\'s real tent first drawn) seen').toBeGreaterThan(shellOpened);
+      // (b) the staged tent's door-open frames, and the swap frame + its next frames: nothing built, created or first used
+      for (const p of ['shell-open', 'shell-opening', 'open', 'opening'] as const) expect(counts[p] ?? {builds: 0, pipelines: 0, firstUsed: 0}, `${p}: ${firstAtOpen.join(', ')}`).toEqual({builds: 0, pipelines: 0, firstUsed: 0});
+      expect(firstAtOpen.filter(x => x.startsWith('open')), 'first used at the swap').toEqual([]);
       // (e) the street from the tent: its first view from the flap drawn off-screen (with the culler sweep) while the frames draw the
       // tent only — and none of those frames builds, creates or first uses anything; then the flap is released and the release frames
       // (the street drawn, its hidden frame already from this camera) build, create and first use nothing either

@@ -314,6 +314,11 @@ function kindOf(area: Area | undefined): WallKind {
 export interface WallOptions {
   /** Height of the lower tile band (WorldMaterials.tileLowerHeight). */
   tileLowerHeight: number;
+  /**
+   * (task studio-surface-tent-first-staging-20261120-225458-01) Only the faces of the cells in this window (cells [x0, x1) x [y0, y1)):
+   * the same lines and runs, cut at its edges — the staged command tent's own walls (world/surface/tentShell.ts). Absent: the whole grid.
+   */
+  window?: {x0: number; y0: number; x1: number; y1: number};
 }
 
 interface OpenRun {
@@ -384,6 +389,9 @@ export function* extractWallFacesSteps(layout: Pick<StationLayout, 'grid' | 'are
     const d = DIRS[di];
     const alongX = d.dy !== 0;
     const lines = alongX ? H : W, len = alongX ? W : H;
+    const win = opts.window;
+    const k0w = win ? Math.max(0, alongX ? win.x0 : win.y0) : 0, k1w = win ? Math.min(len, alongX ? win.x1 : win.y1) : len;
+    const l0w = win ? Math.max(0, alongX ? win.y0 : win.x0) : 0, l1w = win ? Math.min(lines, alongX ? win.y1 : win.x1) : lines;
     const lineFaces = (l: number): void => { // (lane BUILD: one line per call)
       const plane = (alongX ? (d.dy < 0 ? l : l + 1) : (d.dx < 0 ? l : l + 1)) * CELL;
       const runs: (OpenRun | null)[] = new Array(levels.length).fill(null);
@@ -441,8 +449,8 @@ export function* extractWallFacesSteps(layout: Pick<StationLayout, 'grid' | 'are
         }
       };
       const closeOther = (o: OtherRun) => emitFace(o.level, o.area, o.kind, o.voidCell, o.stair, o.k0, o.kEnd, o.y0, o.y1, o.base, []);
-      for (let k = 0; k <= len; k++) {
-        if (k < len) {
+      for (let k = k0w; k <= k1w; k++) {
+        if (k < k1w) {
           const x = alongX ? k : l, y = alongX ? l : k;
           const i = y * W + x;
           const na = cols.count(i);
@@ -582,7 +590,7 @@ export function* extractWallFacesSteps(layout: Pick<StationLayout, 'grid' | 'are
       // Sloped runs of this line.
       for (const s of slopedRuns) emitFace(s.level, s.area, s.kind, s.voidCell, s.stair, s.ta / CELL, s.tb / CELL, 0, 0, 0, [], s);
     };
-    for (let l = 0; l < lines; l++) { lineFaces(l); if (l % 24 === 23) yield; }
+    for (let l = l0w; l < l1w; l++) { lineFaces(l); if (l % 24 === 23) yield; }
   }
   return clipSkyFaces(out, levels, W);
 }

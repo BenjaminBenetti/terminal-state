@@ -19,6 +19,8 @@ import {LIFT_RIDE_COMPILE, LIFT_RIDE_WAIT, liftOfLayout, type SurfaceLiftRuntime
 import {connectorOfLayout, type SurfaceConnectorRuntime} from './world/surface/connectorRuntime'; // (task studio-surface-host-ground-connectors-20261118-053602-01: the Office / Mall connector tube)
 import {TENT_STAGE_COMPILE, TENT_STREET_WAIT, scanTent, stageView, tentStageKey, type SurfaceTentStage, type TentScan} from './world/surface/tentStage'; // (task studio-surface-map-tent-cab-20261119-025201-01: the command tent is the preparation space)
 import {surfaceAirRuntime} from './world/surface/air';
+import {buildTentShellSteps, type TentShell, type TentShellStats} from './world/surface/tentShell'; // (task studio-surface-tent-first-staging-20261120-225458-01: the staged command tent, the up-crossing's loading space)
+import {surfaceMapOf} from './world/surface/mapRuntime';
 import {cloneLayoutDeep} from './gen/cloneLayout'; // (the Surface anticipation's pristine copies)
 import {installSurfaceRun} from './world/surface/install'; // task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN // Task track3-eaton-centre-20261031 (lane PACKAGE): level-scoped lazy assets
 import {adoptStationName} from './campaign/stationName';
@@ -340,6 +342,20 @@ export const relightLabel = (stage: string): string => stage.startsWith('gather'
  */
 export const BUILD_STAGES = ['world', 'holders', 'navigation', 'physics', 'stock', 'damage', 'lighting', 'arrival', 'enemies', 'pickups', 'hooks'] as const;
 
+/** (task studio-surface-tent-first-staging-20261120-225458-01) The staged tent's phrase for the district build's stage (BUILD_STAGES' 1-based index). */
+function shellStagePhrase(top: number): string {
+  switch (BUILD_STAGES[top - 1]) {
+    case 'world': return 'streets and buildings';
+    case 'holders': case 'stock': case 'damage': return 'supplies';
+    case 'navigation': case 'physics': return 'routes';
+    case 'lighting': return 'light';
+    case undefined: return 'starting';
+    default: return 'last details';
+  }
+}
+/** The staged tent's flap: aimed at within this reach (m) — the planning map's table reach. */
+const TENT_SHELL_REACH = 2.6;
+
 /** `steps` unchanged, with every labelled stage (core/pacedBuild.ts: a string yield) reported to `on` as it starts. */
 function* stageLabels<T>(steps: BuildSteps<T>, on: (stage: string) => void): BuildSteps<T> {
   let done = false;
@@ -368,7 +384,13 @@ export function warmupMode(search: string, software: boolean): WarmupMode {
  * (task studio-surface-map-tent-cab-20261119-025201-01) Game.prepareCrossingView's first view of a closed space and its job's pacing;
  * (task studio-surface-tent-loading-finish-20261119-071019-01) `wait`: its wait's bounds and stall / abort seams (default LIFT_RIDE_WAIT).
  */
-interface CrossingViewOptions { only?: ((o: THREE.Object3D) => boolean) | null; radius?: number; sweep?: boolean; frame?: boolean; frameWrap?: ((draw: () => void) => void) | null; pacing?: JourneyPacing; wait?: FirstViewWait }
+interface CrossingViewOptions { only?: ((o: THREE.Object3D) => boolean) | null; radius?: number; sweep?: boolean; frame?: boolean; frameWrap?: ((draw: () => void) => void) | null; pacing?: JourneyPacing; wait?: FirstViewWait;
+  /**
+   * (task studio-surface-tent-first-staging-20261120-225458-01) The staged command tent's first view (world/surface/tentShell.ts): the
+   * district is not built yet — no play-only variants or loot display to add, the left world's queued GPU releases kept for the district's
+   * own first view, and its job ended with its first view (nothing else of it to prepare).
+   */
+  staging?: boolean }
 
 /**
  * A timed item use. Task studio-beta-mouse-axis-invert-20261105-005156-01 (user follow-up, consumable return): `held` = the selection
@@ -1598,6 +1620,7 @@ export class Game {
     // station's warm-up re-used those programs (prepareGraphics), instead of rebuilding them at the start of the level.
     this.flushRetired(); // anything still queued from an earlier station
     if (this.world) for (const h of this.sectionHooks) h.teardown?.(); // Iteration 16: lane section state (elevator, grounded bags, …)
+    this.dropTentShell('teardown'); // (task studio-surface-tent-first-staging-20261120-225458-01: a staged tent never outlives its build)
     if (this.world && save) this.saveSectionMemory();
     if (this.world) {
       const oldGroup = this.world.group;
@@ -1702,6 +1725,9 @@ export class Game {
       for (const k of keep) { const g = this.propModels.get(k); if (g) releaseModelTexturesAfterUpload(g); }
       for (const g of Object.values(this.assets.models)) releaseModelTexturesAfterUpload(g);
     }
+    // (task studio-surface-tent-first-staging-20261120-225458-01) an up-crossing into a district: its staged command tent first, from this
+    // layout as the build now has it — opened to the player; the rest of this build goes on behind it (stageTentShell)
+    if (this.buildStage) yield* this.buildStage(layout);
     yield 'world';
     this.world = yield* buildWorldSteps(this.layout, this.mats, {...this.assets.models, ...this.propModels.record()} as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>);
     requestArchitectureAnisotropy(this.world.group); // lane FIX (U08): every floor / wall / ceiling map asks for 16x before the first frame
@@ -1851,6 +1877,7 @@ export class Game {
     if (this.trainRide?.riding) { /* the car drives into this station; TrainRide.arrive() parks it at trainPlacement */ }
     else if (this.surfaceLiftRide?.holding) { /* (lane ACCESS follow-up) riding the cargo lift: the ride already placed the player in this end's car */ }
     else if (this.surfaceConnector?.holding) { /* (the connector tube: the walk already placed the player in this world's tube) */ }
+    else if (this.tentShellOpen) { /* (task studio-surface-tent-first-staging-20261120-225458-01: the player is in the staged tent — this district's tent, at its place) */ }
     else if (fresh) this.player.spawn(pose.x, pose.z, pose.yaw, y); else this.player.place(pose.x, pose.z, pose.yaw, y);
     this.ladderAim = null;
     this.recoilPitch = this.recoilYaw = this.bloom = this.shake = 0;
@@ -1911,7 +1938,7 @@ export class Game {
     this.wonAt = -1;
     this.wonShown = false;
     this.sectionCleared = mem.cleared;
-    this.hud.reset();
+    this.hud.reset(this.tentShellOpen); // (task studio-surface-tent-first-staging-20261120-225458-01: the staged tent's toasts stay)
     // Lane F: enemies block the flashlight beam — marked once per actor in spawnEnemy (iteration 07, Lane Q)
     this.genMs = performance.now() - t0;
     const codes = LEVEL_IDS.map(l => `${levelDisplayName(l, this.run.seeds[l])} ${seedToCode(this.run.seeds[l])}`).join(' · ');
@@ -2090,7 +2117,8 @@ export class Game {
     if (!c) return no('no-campaign', 'Not saved: this run is not a campaign run, so it has no save.');
     if (this.state !== 'playing') return no('not-playing', 'Not saved: saving works only during play.');
     if (!this.player.alive) return no('dead', 'Not saved: you are dead.');
-    if (this.trainRide?.riding || c.transit || this.transitGap) return no('moving', 'Not saved: the train is moving — save while it stands at a station.');
+    if (this.trainRide?.riding || c.transit) return no('moving', 'Not saved: the train is moving — save while it stands at a station.');
+    if (this.transitGap) return no('busy', 'Not saved: still crossing — save once you have arrived.'); // (task studio-surface-tent-first-staging-20261120-225458-01: the lift / passage / staged tent)
     if (this.lifecycle.busy) return no('busy', 'Not saved: busy — try again in a moment.');
     if (!this.world || !this.trainPlacement || !this.trainRuntime?.train) return no('no-train', 'Not saved: the train is not parked here.');
     if (!this.trainRuntime.playerInside()) return no('outside', 'Not saved: step inside the train to save.');
@@ -2361,6 +2389,20 @@ export class Game {
    * system runs, the player held in the car): its level culler runs again, so the frames drawn meanwhile cull as in play.
    */
   private liftBuilt = false;
+  /**
+   * (task studio-surface-tent-first-staging-20261120-225458-01) THE STAGED COMMAND TENT (world/surface/tentShell.ts): an up-crossing's loading
+   * space, built from the district's layout as the first steps of its build (stageTentShell), drawn alone, and — `tentShellOpen` — the car /
+   * tube opened into it while the district is built behind it; swapped for the district's real tent once that tent's first view is
+   * prepared (swapTentShell). Null: none (every other crossing, a district without a tent, a shell that could not be built).
+   */
+  private tentShell: TentShell | null = null;
+  private tentShellOpen = false;
+  /** The district build's progress while the staged tent is open (its progress line): the stage running, its top-level index, the phase. */
+  private readonly shellStage = {label: '', top: 0, phase: 'build' as 'build' | 'view'};
+  /** The last staged tent's record (QA / tests): its stats, when it opened / was swapped (ms from its build's start), why it ended. */
+  private tentShellRec: {stats: TentShellStats; t0: number; builtMs: number; openMs: number; swapMs: number; buildDoneMs: number; why: string; back: string} | null = null;
+  /** (a crossing's paced build) Run in buildSectionSteps before its world: the staged tent's build and opening (stageTentShell). */
+  private buildStage: ((layout: StationLayout) => BuildSteps<void>) | null = null;
 
   /** The transit gap's update: look, the riding car + the player in it, the camera. Nothing touches a station world. */
   private updateTransitGap(dt: number): void {
@@ -2368,23 +2410,159 @@ export class Game {
     applyMouseLook(p, inp.dx, inp.dy, this.settings); // task mouse-axis-invert: the one look step (sensitivity, X / Y inverts, pitch clamp)
     if (inp.hit('KeyF')) this.toggleFlashlight(); // task campaign-polish (lane TRAIN, item 15): the dark transit — the flashlight stays usable
     if (this.trainRide.riding) this.trainRide.stepPlayer(dt, inp, {aiming: false, speedMult: 1, canSprint: false});
+    // (task studio-surface-tent-first-staging-20261120-225458-01) the staged command tent, open: the player walks, looks and reads the map in it
+    const shell = this.tentShellOpen ? this.tentShell : null;
     // (lane ACCESS follow-up) the Surface Run's cargo lift: the car (doors, travel) and the player held in it
     if (this.surfaceLiftRide && this.surfaceLiftRide.phase !== 'idle') {
       this.surfaceLiftRide.tick(dt);
       if (this.surfaceLiftRide.holding) this.surfaceLiftRide.stepPlayer(dt, inp, {aiming: false, speedMult: 1, canSprint: false});
       this.hud.setPrompt(this.surfaceLiftRide.statusLine() ?? ''); // (no HUD update runs in the gap: the ride's status line alone)
     }
-    // (task studio-surface-host-ground-connectors-20261118-053602-01) the connector tube: its flaps and the player walking in it
+    // (task studio-surface-host-ground-connectors-20261118-053602-01) the connector tube: its flaps and the player walking in it (and, the
+    // staged tent open, its tent-side flap rolling up for the player walking out into the tent / back into the tube)
     const con = this.surfaceConnector;
-    if (con && con.phase !== 'idle') {
+    if (con && (con.phase !== 'idle' || (shell && con.viewRoot()))) {
       if (con.holding) con.stepPlayer(dt, inp, {aiming: false, speedMult: 1, canSprint: false});
       con.tick(dt);
       this.hud.setPrompt(con.statusLine() ?? '');
     }
+    if (shell) this.updateTentShell(dt, shell);
     this.updateCamera(dt);
     this.trainRide.tiltCamera(this.camera);
     this.sprayPaint.sync();
   }
+
+  /**
+   * (task studio-surface-tent-first-staging-20261120-225458-01) A frame in the open staged tent: the player (not held by the car / tube) on the
+   * district's own collision levels with the tent's props and the closed flap (Player.update, as in play: walk, sprint, crouch, jump), the
+   * planning map at its table ([E] opens it: the district's record), [E] at the flap / in the car or tube refused with the district's real
+   * progress, and that progress as the prompt.
+   */
+  private updateTentShell(dt: number, shell: TentShell): void {
+    const inp = this.input, p = this.player, lift = this.surfaceLiftRide, con = this.surfaceConnector;
+    const held = !!lift?.holding || !!con?.holding;
+    if (!held) {
+      if (p.update(Math.min(dt, 0.05), inp, shell.levels, shell.props, {aiming: false, speedMult: 1, canSprint: true})) this.sfx.footstep(p.sprinting, p.crouched);
+      if (p.justJumped) this.sfx.jump();
+      if (p.justLanded) this.sfx.land(Math.min(1, p.landSpeed / 6));
+    }
+    const map = surfaceMapOf(this);
+    map?.stagedFrame(dt);
+    const cp = Math.cos(p.pitch), eye = new THREE.Vector3(p.x, p.eye, p.z), dir = new THREE.Vector3(-Math.sin(p.yaw) * cp, Math.sin(p.pitch), -Math.cos(p.yaw) * cp);
+    const atFlap = shell.aimsAtFlap(eye, dir, TENT_SHELL_REACH);
+    const back = held || !!lift?.inCar();
+    const atCrate = !atFlap && !back && shell.aimsAtCrate(eye, dir, TENT_SHELL_REACH);
+    if (inp.hit('KeyE')) {
+      if (map?.stagedInteract()) { /* the planning map is open (the 'map' state) */ }
+      else if (atFlap) this.hud.toast(this.tentShellLine('flap'));
+      else if (back) this.hud.toast(this.tentShellLine('back'));
+      else if (atCrate) this.hud.toast(this.tentShellLine('crate'));
+    }
+    const line = map?.aimed && map.prompt ? map.prompt : this.tentShellLine(atFlap ? 'flap' : back ? 'back' : atCrate ? 'crate' : 'status');
+    if (!(lift?.holding && lift.statusLine()) && !(con?.holding && con.statusLine())) this.hud.setPrompt(line);
+  }
+
+  /** The staged tent's progress line (the district's real build stage; then its tent's first view): the prompt / a refusal's toast. */
+  private tentShellLine(kind: 'status' | 'flap' | 'back' | 'crate'): string {
+    const st = this.shellStage, n = BUILD_STAGES.length;
+    let what: string;
+    if (st.phase === 'view') {
+      const js = this.journeyCompileStats, pr = js && js.firstView !== 'none' ? firstViewProgress(js) : null;
+      what = `preparing the tent${pr ? ` ${Math.min(pr.done, pr.total)} / ${pr.total}` : ''}`;
+    } else what = `${shellStagePhrase(st.top)} (${st.top}/${n})`;
+    if (kind === 'flap') return `The tent flap stays shut — setting up the street: ${what}`;
+    if (kind === 'back') return `${this.tentShellRec?.back ?? 'The way back opens'} once the street is set up — ${what}`;
+    if (kind === 'crate') return `The supply crate opens once the street is set up — ${what}`;
+    return `Setting up the street outside — ${what}`;
+  }
+
+  /**
+   * (task studio-surface-tent-first-staging-20261120-225458-01) The staged command tent (world/surface/tentShell.ts) as the FIRST steps of the
+   * district's build (buildSectionSteps: before its world, the layout as the build has it): built in the sealed car / tube, its first view
+   * prepared while the build is parked, then opened (`open`: the car's doors, the tube's far flap) — the build goes on behind it. A shell
+   * that cannot be built (no tent, an error) leaves the crossing sealed, as before. `back`: how the player goes back (its refusal line).
+   */
+  private *stageTentShell(layout: StationLayout, key: SectionKey, exit: () => CrossingExit | null, open: () => void, back: string): BuildSteps<void> {
+    const t0 = performance.now();
+    let shell: TentShell | null = null;
+    try {
+      shell = yield* buildTentShellSteps(layout, {mats: this.mats, crates: this.containers?.openables ?? null, markShadows: (r, c) => this.atmosphere.markShadows(r, c)});
+    } catch (err) { console.warn('crossing: the staged command tent could not be built', err); shell = null; }
+    if (!shell) return;
+    this.tentShell = shell;
+    this.shellStage.label = '';
+    this.shellStage.top = 0;
+    this.shellStage.phase = 'build';
+    this.tentShellRec = {stats: shell.stats, t0, builtMs: performance.now() - t0, openMs: -1, swapMs: -1, buildDoneMs: -1, why: '', back};
+    this.scene.add(shell.root);
+    surfaceMapOf(this)?.stage(layout, key, shell.levels);
+    shell.begin(this.scene, this.trainRuntime.lights.interior);
+    yield {wait: this.openTentShell(shell, exit, open)};
+  }
+
+  /** The staged tent's first view (only its own renderables and the car / tube / map sheet; drawn sealed to it), then it opens. */
+  private async openTentShell(shell: TentShell, exit: () => CrossingExit | null, open: () => void): Promise<void> {
+    const at = exit() ?? {x: this.player.x, y: this.player.eye, z: this.player.z, yaw: this.player.yaw};
+    let c: CrossingViewResult = {end: 'cancelled', why: 'error'};
+    this.crossingView = null;
+    const since = this.frameBudget.activeMs;
+    const view = () => this.prepareCrossingView(at, since, {only: o => shell.admits(o, this.tentShellKeep()), sweep: false, radius: Infinity,
+      frameWrap: draw => shell.drawSealed(this.scene, this.tentShellKeep(), draw), staging: true});
+    try {
+      c = await view();
+      // (as the ride's: a job ended under it — replaced, not a lost device — is tried once more, its bound counted from the first try)
+      if (c.end === 'cancelled' && !this.gpu?.deviceLost && this.tentShell === shell) c = await view();
+    } catch (err) { console.warn('crossing: the staged tent\'s view failed', err); c = {end: 'cancelled', why: 'error'}; }
+    if (this.tentShell !== shell) return; // (dropped meanwhile: a teardown)
+    const cv = this.crossingView as Game['crossingView']; // (set by the tries: TS narrowed it to the null above)
+    shell.stats.view = {...stageView(c, cv), tries: cv?.tries ?? 0};
+    this.crossingView = null;
+    if (this.gpu?.deviceLost) return; // (nothing can draw: the crossing ends on the lost device after its build)
+    if (c.end !== 'ready') console.warn(`Terminal State: the staged command tent opens with its first view incomplete (${c.end}${c.why ? `: ${c.why}` : ''})`);
+    this.tentShellOpen = true;
+    if (this.tentShellRec) this.tentShellRec.openMs = performance.now() - this.tentShellRec.t0;
+    open();
+    this.hud.toast(`${this.layout?.surface?.name ?? 'The street'} — the command tent. The street outside is still being set up; the planning map is on the table.`);
+    if (c.end !== 'ready') this.hud.toast('Graphics are still being prepared — brief stutters are possible.', true);
+  }
+
+  /** What the staged tent's draws keep besides it: the camera, the effects, the car / tube drawn now, the map's table-top sheet. */
+  private tentShellKeep(): THREE.Object3D[] {
+    const k: THREE.Object3D[] = [this.camera, this.fx.group];
+    const lv = this.surfaceLiftRide?.viewRoot(), cv = this.surfaceConnector?.viewRoot(), sheet = surfaceMapOf(this)?.tableMesh;
+    if (lv) k.push(lv);
+    if (cv) k.push(cv);
+    if (sheet) k.push(sheet);
+    return k;
+  }
+
+  /** The district's build stage (buildSectionPaced's labels) while the staged tent is up. */
+  private noteShellStage = (stage: string): void => {
+    this.shellStage.label = stage;
+    const i = (BUILD_STAGES as readonly string[]).indexOf(stage);
+    if (i >= 0) this.shellStage.top = i + 1;
+  };
+
+  /** The district's real tent takes over from the staged one (its first view prepared): the shell goes, its lamps are given back. */
+  private swapTentShell(): void {
+    if (this.tentShellRec) this.tentShellRec.swapMs = performance.now() - this.tentShellRec.t0;
+    this.dropTentShell('swapped');
+  }
+
+  /** The staged tent out of the scene, its geometry released and its lent lamps given back (a swap, a failure, a teardown). */
+  private dropTentShell(why: string): void {
+    const shell = this.tentShell;
+    if (!shell) return;
+    this.tentShell = null;
+    this.tentShellOpen = false;
+    if (this.tentShellRec && !this.tentShellRec.why) this.tentShellRec.why = why;
+    try { shell.returnLights(!!this.trainRuntime.train); } finally { shell.dispose(); }
+  }
+
+  /** (QA / tests) The staged tent now (null: none) and the last one's record. */
+  get surfaceTentShell(): TentShell | null { return this.tentShell; }
+  get surfaceTentShellOpen(): boolean { return this.tentShellOpen; }
+  get surfaceTentShellRecord(): Game['tentShellRec'] { return this.tentShellRec; }
 
   /**
    * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD; user: less stutter): the journey's build of the next station,
@@ -2393,9 +2571,10 @@ export class Game {
    * the level culler alone); the identical steps as buildSection. A teardown meanwhile (stationGen moved: the journey's single flight never
    * lets one start) abandons it (PacedBuildCancelled). `genMs` = its main-thread work, not the ride's wall time.
    */
-  private async buildSectionPaced(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean, pacing: PacedBuildOptions = {}): Promise<void> {
+  private async buildSectionPaced(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean, pacing: PacedBuildOptions = {}, onStage?: (stage: string) => void): Promise<void> {
     const gen = this.stationGen, stats = (this.journeyBuild = newPacedStats());
-    await runPaced(this.buildSectionSteps(key, layout, arrival, fresh, true), {...pacing, ...this.buildPacing, stats, alive: () => gen === this.stationGen});
+    const steps = this.buildSectionSteps(key, layout, arrival, fresh, true);
+    await runPaced(onStage ? stageLabels(steps, onStage) : steps, {...pacing, ...this.buildPacing, stats, alive: () => gen === this.stationGen});
     this.genMs = stats.workMs;
   }
   /**
@@ -2628,7 +2807,8 @@ export class Game {
    * that ends without the view ends its job (the caller's next try is a fresh one).
    */
   async prepareCrossingView(exit: CrossingExit, since: number, o: CrossingViewOptions = {}): Promise<CrossingViewResult> {
-    if (!this.world || !this.renderer.initialized || this.gpu?.deviceLost) return {end: 'cancelled', why: this.gpu?.deviceLost ? 'device lost' : 'no world to prepare'};
+    // (staging: the staged command tent's first view is prepared before the district's world exists — its build parked meanwhile)
+    if ((!this.world && !o.staging) || !this.renderer.initialized || this.gpu?.deviceLost) return {end: 'cancelled', why: this.gpu?.deviceLost ? 'device lost' : 'no world to prepare'};
     const mode = warmupMode(location.search, this.softwareGl?.software === true);
     if (mode === 'off') return {end: 'partial', why: 'graphics warm-up off (?warmup=off)'};
     this.journeyCompile?.cancel();
@@ -2643,17 +2823,19 @@ export class Game {
       try { return fn(); } finally { const ms = performance.now() - s; prep.steps++; prep.ms += ms; prep.by[what] = (prep.by[what] ?? 0) + ms; if (ms > prep.maxMs) prep.maxMs = ms; }
     });
     try {
-      const at = new THREE.Vector3(exit.x, exit.y, exit.z), culler = world.culler;
+      const at = new THREE.Vector3(exit.x, exit.y, exit.z), culler = world?.culler;
       let target: unknown = null;
       const plan = await step('plan', () => {
         target = this.atmosphereBypass ? null : this.atmosphere.warmTarget(this.scene, this.camera);
-        this.refreshRuntimeVariants(mode); // (the destination's play-only variants join the job, as the journey's)
-        this.containers?.showFrom(at); // (the loot the exit's first frame shows — hidden until a play refresh — is in its first view)
+        if (!o.staging) {
+          this.refreshRuntimeVariants(mode); // (the destination's play-only variants join the job, as the journey's)
+          this.containers?.showFrom(at); // (the loot the exit's first frame shows — hidden until a play refresh — is in its first view)
+        }
         return planWarmup(this.scene, {mode, cameraMask: this.camera.layers.mask, pools: this.warmRegistry.poolRoots(), near: mode === 'view' ? {center: at, radius: FIRST_VIEW.radius} : undefined});
       });
       const shadows = !!target && this.flashlight.castShadow;
       const g = planFirstViewSteps(this.scene, {exit, cameraMask: this.camera.layers.mask, camera: this.camera, casters: shadows, radius: o.radius, only: o.only,
-        sweep: o.sweep === false ? null : {update: cam => culler.update(cam, true), restore: () => culler.update(this.camera, true)}});
+        sweep: o.sweep === false || !culler ? null : {update: cam => culler.update(cam, true), restore: () => culler.update(this.camera, true)}});
       let fv: FirstViewPlan | null = null, programs = {first: 0, more: 0, covered: 0};
       while (!fv) { const r = await step('view', () => g.next()); if (r.done) fv = r.value; }
       const v = fv;
@@ -2684,6 +2866,7 @@ export class Game {
         + `${st.viewDone}/${st.viewItems} drawn in ${st.viewDraws} off-screen draws (max ${st.viewMaxPerDraw}, ${st.viewDrawMaxMs.toFixed(1)} ms), casters ${Math.min(st.shadowDone, st.viewCasters)}/${st.viewCasters}, `
         + `real-view frame ${st.viewFrame ? `${st.viewFrameMs.toFixed(1)} ms` : 'no'} · planned in ${prep.steps} frame steps, ${prep.ms.toFixed(1)} ms (max ${prep.maxMs.toFixed(1)}; `
         + `${Object.entries(prep.by).map(([k, ms]) => `${k} ${ms.toFixed(1)}`).join(', ')}; sweep ${v.stats.poses} poses ${v.stats.sweepMs.toFixed(1)} ms) · ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+      if (o.staging) { job.cancel(); return w; } // (the staged tent: its view is all there is to prepare before the district exists; the releases wait for the district's)
       if (w.end === 'partial' && w.why === 'stalled') job.cancel(); // (no progress at all: continueCrossingPreparation starts a fresh play-paced job)
       else if (o.wait && w.end !== 'ready') job.cancel(); // (a wait of its own that ended without the view — its abort: the caller's next try is a fresh job)
       else if (job.running) job.pace(null); // (from here on the journey's play pacing: the exit is about to open)
@@ -3111,7 +3294,15 @@ export class Game {
       const dest = liftOfLayout(layout);
       if (!dest || !R.repose(dest)) throw new Error('the destination has no lift');
       await this.warmRun;
-      await this.buildSectionPaced(to, layout, {kind: 'surface'}, false, {sliceMs: LIFT_RIDE_WAIT.buildSliceMs}); // (only the sealed car is drawn)
+      // (task studio-surface-tent-first-staging-20261120-225458-01) up into the district: its STAGED COMMAND TENT first — the car opens into
+      // it and the district is built behind it while the player walks, looks and reads the map (stageTentShell); without one, sealed as before
+      let opened: Promise<boolean> | null = null;
+      this.buildStage = up ? l => this.stageTentShell(l, to, () => R.exitPoint(), () => { opened = R.markReady(); }, 'The lift goes back down') : null;
+      try {
+        await this.buildSectionPaced(to, layout, {kind: 'surface'}, false, {sliceMs: LIFT_RIDE_WAIT.buildSliceMs}, this.noteShellStage); // (the sealed car / the staged tent is drawn)
+      } finally { this.buildStage = null; }
+      const shellOpen = this.tentShellOpen;
+      if (this.tentShellRec && shellOpen) this.tentShellRec.buildDoneMs = performance.now() - this.tentShellRec.t0;
       this.liftBuilt = true;
       this.surfaceCrossing.phase = 'arrive';
       const failed = arriveCrossers(departed, to);
@@ -3129,17 +3320,19 @@ export class Game {
       // (task studio-surface-map-tent-cab-20261119-025201-01) up into the district: the car opens into the COMMAND TENT once the tent's
       // view is prepared; the street is prepared behind its held flap while the player is in it (world/surface/tentStage.ts)
       const staged = up && (await this.beginTentStage(layout, exit));
+      if (shellOpen) this.shellStage.phase = 'view';
       let c = await this.prepareCrossingView(exit, since, staged ? this.tentViewOptions() : undefined);
       if (c.end === 'cancelled' && !this.gpu?.deviceLost && this.world) c = await this.prepareCrossingView(exit, since, staged ? this.tentViewOptions() : undefined);
       this.liftCrossingView = this.crossingView;
-      if (this.gpu?.deviceLost) { this.surfaceTentStage?.cancel('device lost', () => surfaceAirRuntime()?.releaseTentFlap()); R.reset(); this.transitGap = this.liftBuilt = false; return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'}; }
+      if (this.gpu?.deviceLost) { this.surfaceTentStage?.cancel('device lost', () => surfaceAirRuntime()?.releaseTentFlap()); this.dropTentShell('device lost'); R.reset(); this.transitGap = this.liftBuilt = false; return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'}; }
       this.transitGap = this.liftBuilt = false;
       this.settleRtScene();
       if (c.end !== 'ready') console.warn(`Terminal State: the lift opens with its ${staged ? 'tent\'s ' : ''}first view incomplete (${c.end}${c.why ? `: ${c.why}` : ''}); the rest is prepared in play`);
       if (staged) this.surfaceTentStage!.tentDone(stageView(c, this.crossingView), true);
-      if (!(await R.markReady())) { this.surfaceTentStage?.cancel('ride interrupted', () => surfaceAirRuntime()?.releaseTentFlap()); return {ok: false, reason: 'cancelled', error: 'The ride was interrupted.'}; }
+      if (shellOpen) this.swapTentShell(); // (the district's real tent, its first view prepared, in place of the staged one: the player stands in it)
+      if (!(await (opened ?? R.markReady()))) { this.surfaceTentStage?.cancel('ride interrupted', () => surfaceAirRuntime()?.releaseTentFlap()); return {ok: false, reason: 'cancelled', error: 'The ride was interrupted.'}; }
       if (staged) {
-        this.tentArrival(layout.surface?.name ?? 'The street', c, 'ride the lift back down');
+        this.tentArrival(layout.surface?.name ?? 'The street', c, 'ride the lift back down', shellOpen);
       } else {
         const rest = this.continueCrossingPreparation(); // (the rest in play pacing; the left section's queued releases after its scene pass)
         this.hud.toast(up ? `${layout.surface?.name ?? 'The street'} — street level` : `${station} — back underground`);
@@ -3152,6 +3345,7 @@ export class Game {
     } catch (err) {
       this.transitGap = this.liftBuilt = false;
       this.surfaceTentStage?.cancel('failed', () => surfaceAirRuntime()?.releaseTentFlap());
+      this.dropTentShell(err instanceof PacedBuildCancelled ? 'cancelled' : 'failed');
       R.reset();
       if (err instanceof PacedBuildCancelled) return {ok: false, reason: 'cancelled', error: 'The crossing was interrupted.'};
       console.error('Surface Run: the lift ride failed', err);
@@ -3220,7 +3414,14 @@ export class Game {
       const dest = connectorOfLayout(layout);
       if (!dest || !C.repose(dest)) throw new Error('the destination has no connector');
       await this.warmRun;
-      await this.buildSectionPaced(to, layout, {kind: 'surface'}, false, {sliceMs: LIFT_RIDE_WAIT.buildSliceMs}); // (only the sealed tube is drawn)
+      // (task studio-surface-tent-first-staging-20261120-225458-01) out to the district: its STAGED COMMAND TENT first — the far flap rolls up
+      // into it and the district is built behind it (stageTentShell); without one, sealed as before
+      this.buildStage = up ? l => this.stageTentShell(l, to, () => C.exitPoint(), () => C.markReady(), 'The passage opens again') : null;
+      try {
+        await this.buildSectionPaced(to, layout, {kind: 'surface'}, false, {sliceMs: LIFT_RIDE_WAIT.buildSliceMs}, this.noteShellStage); // (the sealed tube / the staged tent is drawn)
+      } finally { this.buildStage = null; }
+      const shellOpen = this.tentShellOpen;
+      if (this.tentShellRec && shellOpen) this.tentShellRec.buildDoneMs = performance.now() - this.tentShellRec.t0;
       this.liftBuilt = true;
       this.surfaceCrossing.phase = 'arrive';
       const failed = arriveCrossers(departed, to);
@@ -3235,16 +3436,18 @@ export class Game {
       // (task studio-surface-map-tent-cab-20261119-025201-01) out to the street: the far flap rolls up into the COMMAND TENT once the
       // tent's view is prepared; the street is prepared behind the tent's held flap while the player is in it (world/surface/tentStage.ts)
       const staged = up && (await this.beginTentStage(layout, exit));
+      if (shellOpen) this.shellStage.phase = 'view';
       let c = await this.prepareCrossingView(exit, since, staged ? this.tentViewOptions() : undefined);
       if (c.end === 'cancelled' && !this.gpu?.deviceLost && this.world) c = await this.prepareCrossingView(exit, since, staged ? this.tentViewOptions() : undefined);
-      if (this.gpu?.deviceLost) { this.surfaceTentStage?.cancel('device lost', () => surfaceAirRuntime()?.releaseTentFlap()); C.reset(); this.transitGap = this.liftBuilt = false; return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'}; }
+      if (this.gpu?.deviceLost) { this.surfaceTentStage?.cancel('device lost', () => surfaceAirRuntime()?.releaseTentFlap()); this.dropTentShell('device lost'); C.reset(); this.transitGap = this.liftBuilt = false; return {ok: false, reason: 'cancelled', error: 'The graphics device was lost.'}; }
       this.transitGap = this.liftBuilt = false;
       this.settleRtScene();
       if (c.end !== 'ready') console.warn(`Terminal State: the passage opens with its ${staged ? 'tent\'s ' : ''}first view incomplete (${c.end}${c.why ? `: ${c.why}` : ''}); the rest is prepared in play`);
       if (staged) this.surfaceTentStage!.tentDone(stageView(c, this.crossingView), true);
-      C.markReady();
+      if (shellOpen) this.swapTentShell(); // (the district's real tent in place of the staged one)
+      else C.markReady();
       if (staged) {
-        this.tentArrival(layout.surface?.name ?? 'The street', c, 'walk back through the passage');
+        this.tentArrival(layout.surface?.name ?? 'The street', c, 'walk back through the passage', shellOpen);
       } else {
         const rest = this.continueCrossingPreparation(); // (the rest in play pacing; the left section's queued releases after its scene pass)
         this.hud.toast(up ? `${layout.surface?.name ?? 'The street'} — through the passage to the command tent` : `${station} — back inside`);
@@ -3257,6 +3460,7 @@ export class Game {
     } catch (err) {
       this.transitGap = this.liftBuilt = false;
       this.surfaceTentStage?.cancel('failed', () => surfaceAirRuntime()?.releaseTentFlap());
+      this.dropTentShell(err instanceof PacedBuildCancelled ? 'cancelled' : 'failed');
       C.reset();
       if (err instanceof PacedBuildCancelled) return {ok: false, reason: 'cancelled', error: 'The crossing was interrupted.'};
       console.error('Surface Run: the connector crossing failed', err);
@@ -3315,8 +3519,9 @@ export class Game {
    * The car / tube opened into the tent: the player is told, and the street's preparation behind the held flap runs on (not awaited).
    * `back`: how they go back the way they came (said if the street stalls / fails).
    */
-  private tentArrival(name: string, c: CrossingViewResult, back: string): void {
-    this.hud.toast(`${name} — the command tent. The street outside is being prepared; the planning map is on the table.`);
+  private tentArrival(name: string, c: CrossingViewResult, back: string, inTent = false): void {
+    // (task studio-surface-tent-first-staging-20261120-225458-01: from the staged tent the player is already in it — the district is built now)
+    this.hud.toast(inTent ? `${name} — the district is built; the street outside the flap is being prepared.` : `${name} — the command tent. The street outside is being prepared; the planning map is on the table.`);
     if (c.end !== 'ready') this.hud.toast('Graphics are still being prepared — brief stutters are possible.', true);
     if (this.surfaceTentStage) this.surfaceTentStage.back = back;
     void this.prepareTentStreet();
@@ -3395,6 +3600,7 @@ export class Game {
    * then — lane READY — its first view's real units done of all: render/firstView.ts firstViewStatus).
    */
   private connectorStatusText(where: string): string {
+    if (this.transitGap && !this.liftBuilt && this.buildStage && !this.tentShellOpen) return (this.tentShell && firstViewStatus('The passage — the command tent', this.journeyCompile?.stats ?? null)) || 'The passage — setting up the command tent…';
     if (this.transitGap && !this.liftBuilt) return `The passage — preparing ${where}…`;
     return this.transitGap ? firstViewStatus('The passage', this.journeyCompile?.stats ?? null) ?? '' : '';
   }
@@ -3406,6 +3612,7 @@ export class Game {
    */
   private liftStatusText(up: boolean, where: string): string {
     const go = up ? 'Going up' : 'Going down';
+    if (this.transitGap && !this.liftBuilt && this.buildStage && !this.tentShellOpen) return (this.tentShell && firstViewStatus(`${go} — the command tent`, this.journeyCompile?.stats ?? null)) || `${go} — setting up the command tent…`;
     if (this.transitGap && !this.liftBuilt) return `${go} — preparing ${where}…`;
     return this.transitGap ? firstViewStatus(go, this.journeyCompile?.stats ?? null) ?? '' : '';
   }
@@ -4028,7 +4235,7 @@ export class Game {
     const fb = this.frameBudget;
     // (task studio-surface-map-tent-cab-20261119-025201-01) the planning map open in the command tent while the street is prepared: the
     // stage's steps only (below), with active time — its bound — running as in play
-    const stageMap = this.state === 'map' && !!this.surfaceTentStage?.compiling;
+    const stageMap = this.state === 'map' && (!!this.surfaceTentStage?.compiling || this.tentShellOpen); // (+ the staged tent: task studio-surface-tent-first-staging-20261120-225458-01)
     fb.hold(this.warming ? 'warmup' : this.state === 'loading' ? 'loading' : this.state === 'playing' || stageMap ? null : 'paused');
     fb.beginFrame(time ?? now, now);
     // Iteration 14: the warm-up owns the renderer (render target / layers / hidden frames) until it resolves
@@ -4064,7 +4271,7 @@ export class Game {
         cpu.rendered = this.render();
         cpu.renderMs = performance.now() - r0;
       }
-      if (stageMap) { cpu.deferredMs = fb.run(tentStageKey); this.surfaceTentStage!.mapFrame(cpu.deferredMs, fb.lastFrame.chunks); }
+      if (stageMap) { cpu.deferredMs = fb.run(tentStageKey); if (this.surfaceTentStage?.compiling) this.surfaceTentStage.mapFrame(cpu.deferredMs, fb.lastFrame.chunks); }
     }
     this.input.endFrame();
     this.prof.frameEnd(); // lane MEASURE: stores the frame when the world updated in it
@@ -4082,6 +4289,9 @@ export class Game {
     const lift = this.surfaceLiftRide, con = this.surfaceConnector;
     if (lift?.sealed) lift.drawSealed(this.scene, [this.camera, this.fx.group], () => this.drawFrame());
     else if (con?.sealed) con.drawSealed(this.scene, [this.camera, this.fx.group], () => this.drawFrame()); // (the connector's sealed tube, likewise)
+    // (task studio-surface-tent-first-staging-20261120-225458-01) the staged command tent, open: it alone (the district being built around it,
+    // its real tent included, is never drawn) with its own frozen light set
+    else if (this.tentShell && this.tentShellOpen) this.tentShell.drawSealed(this.scene, this.tentShellKeep(), () => this.drawFrame());
     // (task studio-surface-map-tent-cab-20261119-025201-01) the command tent while the street behind its held flap is prepared: the tent's view only
     else if (this.surfaceTentStage?.sealing) this.surfaceTentStage.drawSealed(this.scene, [this.camera, this.fx.group], () => this.drawFrame());
     else this.drawFrame();
@@ -4361,6 +4571,9 @@ export class Game {
     // (task studio-surface-host-ground-connectors-20261118-053602-01) the connector tube is off the host's grid and a crossing may leave
     // either world under the walker: nothing is put down in the passage (as a carried body: corpses.ts CORPSE_TEXT.passage)
     if (this.surfaceConnector?.holding) { this.hud.toast('Not in the passage — step out first', true); this.sfx.denied(); return; }
+    // (task studio-surface-tent-first-staging-20261120-225458-01) between two worlds (the lift's ride, the staged tent while the district is
+    // built): no world takes it yet — nothing is put down
+    if (this.transitGap) { this.hud.toast(this.tentShellOpen ? 'Not yet — the tent is still being set up' : 'Not now — still crossing', true); this.sfx.denied(); return; }
     const st = this.inv.detach(ref, count);
     if (!st) return;
     if (this.use && !this.inv.find(this.use.uid)) this.cancelUse('dropped');
