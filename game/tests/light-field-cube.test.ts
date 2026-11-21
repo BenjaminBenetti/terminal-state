@@ -21,8 +21,8 @@ import {CELL} from '../src/gen/grid';
 import {generateStation} from '../src/gen/station';
 import {GI_TIERS} from '../src/world/enhancedLighting';
 import {
-  AUX_LAYERS, CUBE_FACES, FIELD_EMAX, GI_FACES, LAYERS, bakeLightField, cubeAmbient, downsampleField, fieldDepth, fieldSlot, giDepth, giSlotBase,
-  sampleField, slotLayers, withoutCube, type BakedField, type FieldSource,
+  AUX_LAYERS, CUBE_FACES, FIELD_EMAX, GI_FACES, LAYERS, bakeLightField, columnMask, cubeAmbient, downsampleField, downsampleFieldSteps, fieldDepth, fieldSlot, giDepth, giSlotBase,
+  headerBands, isExtendedHeader, sampleField, slotLayers, withoutCube, type BakedField, type FieldSource,
 } from '../src/world/lightField';
 import {IND_STRIDE} from '../src/world/lightFieldGather';
 import {stationBakeInput} from '../src/world/lights';
@@ -549,6 +549,57 @@ describe('downsampleField keeps the cube', () => {
       expect([bare.gi, bare.depth]).toEqual([undefined, f.gi]);
       expect(same(d.data.subarray(0, f.gi! * d.w * d.h * 4), bare.data)).toBe(true);
       expect(downsampleField(f, 1)).toBe(f);
+    }
+  });
+
+  it('(task studio-surface-tent-first-staging-20261120-225458-01) in paced steps, a step per slice: the field the one-call loop made, byte for byte', () => {
+    // the one-call loop verbatim as it stood before the stepped form
+    const reference = (f: BakedField, k: number): BakedField => {
+      const W = Math.ceil(f.w / k), H = Math.ceil(f.h / k), D = f.depth, gs0 = fieldDepth(f.slots), gi0 = f.gi ?? D;
+      const data = new Uint8Array(W * H * D * 4);
+      const masks = new Uint16Array(W * H);
+      const pickOf = new Int32Array(W * H).fill(-1);
+      for (let s = 0; s < D; s++) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const o = ((s * H + y) * W + x) * 4;
+        if (s >= gs0 && s < gi0) {
+          const p = pickOf[y * W + x];
+          if (p >= 0 && isExtendedHeader(f.data[p * 4 + 3])) for (let c = 0; c < 4; c++) data[o + c] = f.data[((s * f.h) * f.w + p) * 4 + c];
+          continue;
+        }
+        const acc = [0, 0, 0, 0];
+        let n = 0, mask = 0, pick = -1;
+        for (let dy = 0; dy < k; dy++) for (let dx = 0; dx < k; dx++) {
+          const sx = Math.min(f.w - 1, x * k + dx), sy = Math.min(f.h - 1, y * k + dy);
+          const o2 = ((s * f.h + sy) * f.w + sx) * 4;
+          if (s === 0) { mask |= columnMask(f, sy * f.w + sx); if (headerBands(f.data[o2 + 3]) > (pick >= 0 ? headerBands(f.data[pick * 4 + 3]) : -1)) pick = sy * f.w + sx; }
+          for (let c = 0; c < 4; c++) acc[c] += f.data[o2 + c];
+          n++;
+        }
+        if (s === 0) {
+          masks[y * W + x] = mask;
+          pickOf[y * W + x] = pick;
+          const pe = pick >= 0 && isExtendedHeader(f.data[pick * 4 + 3]);
+          data[o] = pe ? f.data[pick * 4] : mask & 255;
+          if (pick >= 0) { data[o + 1] = f.data[pick * 4 + 1]; data[o + 2] = f.data[pick * 4 + 2]; data[o + 3] = f.data[pick * 4 + 3]; }
+          continue;
+        }
+        for (let c = 0; c < 4; c++) data[o + c] = Math.round(acc[c] / n);
+      }
+      return {...f, w: W, h: H, data, masks, stats: {...f.stats, bytes: data.byteLength}, cellScale: k};
+    };
+    for (const [src, k] of [[threeLevels(), 2], [cubeRoom(), 3], [tower(), 2]] as const) {
+      const f = bakeRows(src, patternRows()).field;
+      const g = downsampleFieldSteps(f, k);
+      let steps = 0, r = g.next();
+      while (!r.done) { steps++; r = g.next(); }
+      expect(steps, 'a step per slice after the first').toBe(f.depth - 1);
+      const ref = reference(f, k), one = downsampleField(f, k);
+      for (const d of [r.value, one]) {
+        expect(same(d.data, ref.data), 'every slice as the one-call loop made it').toBe(true);
+        expect(Array.from(d.masks!)).toEqual(Array.from(ref.masks!));
+        expect({...d, data: 0, masks: 0}).toEqual({...ref, data: 0, masks: 0});
+      }
+      expect(downsampleFieldSteps(f, 1).next()).toEqual({done: true, value: f});
     }
   });
 

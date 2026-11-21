@@ -216,7 +216,9 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
   reserveCheckpoint(op, pc, host);
   const doorways: {cells: readonly number[]; side: Side}[] = rec.flatMap(r => r.entrances.filter(e => e.door !== 'boarded').map(e => ({cells: e.cells, side: e.side})));
   reserveFronts({kit, gm, plans, op}, doorways);
-  const cd = dressCheckpoint(op, kit, pc, host, compoundArea, rng.fork('checkpoint-supply'));
+  // (task studio-surface-map-tent-cab-20261119-025201-01, lane TENT: no 'checkpoint-supply' fork any more — the tent's free mask, its only
+  // draw, is gone; a fork never moved this stream, so every other draw is exactly as before)
+  const cd = dressCheckpoint(op, kit, pc, host, compoundArea);
   const streets = streetRecords(f, plans);
   const dress = dressOutdoors({kit, f, gm, plans, op, rng: rng.fork('outdoors'), safe: cd.safe, streetOfSegment: f.segments.map(q => q.id)});
   for (const [seg, rs] of dress.blocked) streets[seg].blocked = rs;
@@ -289,7 +291,7 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
   const g0 = kit.g;
   const layout: StationLayout = {
     seed, attempt: 0, name: dn.name, archetype: 'side-mezzanine', towards: ['', ''], grid: g0, areas: kit.areas, doors: kit.doors, props,
-    // (the checkpoint's guaranteed mask + spare filter first: their pickup indices never move with the interiors)
+    // (the checkpoint's spare filter first: its pickup index never moves with the interiors; lane TENT: index 0 was the tent's free mask)
     lights: [...inner.lights, ...cd.lights], signs: inner.signs, pickups: [...cd.pickups, ...inner.pickups], zombies: inner.zombies, storefronts: [], decor: [],
     playerSpawn: {x: pc.portal.pose.x, z: pc.portal.pose.z, yaw: pc.portal.pose.yaw},
     trench: {x0: 0, x1: 0, z0: 0, z1: 0, floorY: 0, platformX0: 0, platformX1: 0, tracks: [], third: [], columns: false, ceil: 0}, trenches: [],

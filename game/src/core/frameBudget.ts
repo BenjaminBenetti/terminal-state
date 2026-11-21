@@ -432,9 +432,11 @@ export class FrameBudget implements FrameScheduler {
 
   /**
    * Run background chunks in what is left of this frame's budget (after the critical update and the render submission).
-   * Returns the main-thread ms spent in chunks (also last-frame diagnostics).
+   * Returns the main-thread ms spent in chunks (also last-frame diagnostics). `only` (task studio-surface-map-tent-cab-20261119-025201-01):
+   * run only the jobs whose key it accepts this frame (the others keep their place and age as usual) — the Surface command tent's
+   * preparation of the street while the planning map is open (Game.frame).
    */
-  run(): number {
+  run(only?: (key: string) => boolean): number {
     if (this.heldBy !== null || this.queue.size === 0) return 0;
     const cfg = this.cfg, L = this.last, frame = this.frameNo, gen = this.gen;
     L.spentBeforeMs = this.now() - this.frameStart;
@@ -447,6 +449,7 @@ export class FrameBudget implements FrameScheduler {
         if (chunks >= cfg.maxChunksPerFrame || this.gen !== gen) break;
         const e = order[i];
         if (this.queue.get(e.key) !== e) continue; // finished / cancelled / replaced meanwhile
+        if (only && !only(e.key)) continue;
         const est = this.estimate(e.kind, e.initialMs);
         let forced = false;
         if (est > this.remaining()) {

@@ -72,7 +72,7 @@ export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?:
     const C = surfaceConnectorOf(game)!, P = game.player;
     const tubeViews = () => { let n = 0; game.scene.traverse(o => { if (o.name === 'surface-connector') n++; }); return n; };
     // every drawn frame: the walk's state, the player's world pose (continuity), the sealed draw's leaks
-    type Sample = {gap: boolean; phase: string; holding: boolean; flap: [number, number]; ready: boolean; sealed: boolean; x: number; z: number; y: number; yaw: number; state: string; s: number; gas: number; district: boolean};
+    type Sample = {gap: boolean; phase: string; holding: boolean; flap: [number, number]; ready: boolean; sealed: boolean; x: number; z: number; y: number; yaw: number; state: string; s: number; gas: number; district: boolean; shell: boolean; built: boolean};
     const samples: Sample[] = [];
     const look = {armed: false, yaw: 0};
     const render0 = G.render.bind(game);
@@ -80,7 +80,7 @@ export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?:
       if (look.armed) { look.armed = false; if (Math.abs(P.yaw - look.yaw) > 1e-6) report.looks.moved++; else report.looks.lost++; }
       const r = render0(), q = C.qa();
       samples.push({gap: G.transitGap, phase: q.phase, holding: q.holding, flap: q.flap, ready: q.ready, sealed: q.sealed, x: P.x, z: P.z, y: P.y, yaw: P.yaw, state: game.state, s: q.local.s,
-        gas: game.gas?.exposure?.c ?? 0, district: !!game.layout?.surface});
+        gas: game.gas?.exposure?.c ?? 0, district: !!game.layout?.surface, shell: game.surfaceTentShellOpen, built: (G as unknown as {liftBuilt: boolean}).liftBuilt});
       return r;
     };
     const endFrame0 = game.input.endFrame.bind(game.input);
@@ -140,7 +140,9 @@ export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?:
       expect(game.lifecycleCounts.loading - c0.loading).toBe(0);
       expect(game.lifecycleCounts.warmup - c0.warmup, `${label}: no hidden-canvas warm-up`).toBe(0);
       expect(rs.some(s => s.gap && s.sealed), `${label}: the worlds swapped with the tube sealed`).toBe(true);
-      for (const s of rs) if (s.gap) { expect(s.holding, `${label}: held in the tube through the gap`).toBe(true); expect(s.sealed || s.ready, `${label}: sealed until ready`).toBe(true); }
+      // (task studio-surface-tent-first-staging-20261120-225458-01: out to the district, the far flap rolls up into the STAGED tent while the
+      // district is built — the player walks out into it in the gap; otherwise held in the tube through the gap)
+      for (const s of rs) if (s.gap) { expect(s.holding || s.shell, `${label}: held in the tube or in the staged tent through the gap`).toBe(true); expect(s.sealed || s.ready, `${label}: sealed until ready`).toBe(true); }
       // the far flap stays down until ready
       const farFlap = r0.end === 'host' ? 1 : 0;
       for (const s of rs) if (!s.ready && s.phase === 'crossing') expect(s.flap[farFlap], `${label}: the far flap down until ready`).toBe(0);
@@ -148,7 +150,7 @@ export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?:
       let maxStep = 0, prev: Sample | null = null;
       for (const s of rs) {
         if (prev && prev.holding && s.holding) maxStep = Math.max(maxStep, Math.abs(s.s - prev.s));
-        else if (prev && !prev.gap && !s.gap) maxStep = Math.max(maxStep, Math.hypot(s.x - prev.x, s.z - prev.z));
+        else if (prev && !prev.holding && !s.holding && ((!prev.gap && !s.gap) || prev.shell || s.shell)) maxStep = Math.max(maxStep, Math.hypot(s.x - prev.x, s.z - prev.z)); // (+ the staged tent and its swap)
         prev = s;
       }
       report.maxStep = Math.max(report.maxStep, maxStep);
@@ -157,8 +159,26 @@ export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?:
       expect(inTube.length, `${label}: frames in the tube in play`).toBeGreaterThan(0);
       expect(Math.max(...inTube.map(s => s.gas)), `${label}: no gas at the eye in the tube`).toBe(0);
       expect(maxStep, `${label}: no jump in the walk`).toBeLessThan(0.35);
-      const cv = game.crossingView, j = cv?.job;
-      expect(cv?.end, `${label}: the far flap opened on a prepared first view (${cv?.why})`).toBe('ready');
+      // (task studio-surface-map-tent-cab-20261119-025201-01) out to the street: the far flap opened into the command tent on the TENT's
+      // first view (world/surface/tentStage.ts); the street's is prepared behind the tent's held flap after the crossing (crossingView: its)
+      const staged = fromHost ? game.surfaceTentStage?.record ?? null : null;
+      if (fromHost) {
+        // the far flap rolled up into the staged tent before the district was built; the district's tent took over after its build
+        const SR = game.surfaceTentShellRecord;
+        expect(SR, `${label}: the staged tent`).toBeTruthy();
+        expect(SR!.stats.view, `${label}: its own first view`).toMatchObject({end: 'ready'});
+        expect(rs.some(s => s.gap && s.shell && !s.holding && !s.built), `${label}: walked out into the staged tent while the district was built`).toBe(true);
+        expect(SR!.openMs, `${label}: opened before the build ended`).toBeLessThan(SR!.buildDoneMs);
+        expect(SR!.why).toBe('swapped');
+        expect(game.surfaceTentShell, `${label}: the staged tent gone`).toBeNull();
+        marks.push(`${label}: staged tent ${JSON.stringify(SR)}`);
+        expect(staged, `${label}: staged in the tent`).toBeTruthy();
+        expect(staged!.tent?.end, `${label}: the far flap opened on the tent's prepared first view (${staged!.tent?.why})`).toBe('ready');
+        expect(['street', 'done']).toContain(staged!.phase);
+      }
+      const cv = staged ? null : game.crossingView, j = cv?.job;
+      if (!staged) expect(cv?.end, `${label}: the far flap opened on a prepared first view (${cv?.why})`).toBe('ready');
+      if (staged) marks.push(`${label}: the tent's first view ${JSON.stringify(staged.tent)}; scan ${JSON.stringify(staged.scan)}`);
       marks.push(`${label}: ${rs.length} frames (${report.gapFrames[dir]} in the gap), generation ${game.surfaceConnectorGenMs.toFixed(0)} ms, sealed leaks ${seal.leaks}; `
         + `first view ${cv?.end}${cv?.why ? ` (${cv.why})` : ''} in ${((cv?.ms ?? 0) / 1000).toFixed(1)} s (active ${((cv?.activeMs ?? 0) / 1000).toFixed(1)} s), ${j?.viewRepsCompiled}/${j?.viewReps} representatives, `
         + `${j?.viewDone}/${j?.viewItems} drawn, tries ${cv?.tries}, left in play ${cv?.rest ? `${cv.rest.left}/${cv.rest.total}` : 'none'}`);
@@ -207,7 +227,31 @@ export async function connectorHostWalk(host: 'office' | 'mall', opts: {extras?:
     for (let i = 0; i < 20; i++) { await h.waitFrames(1); maxC = Math.max(maxC, game.gas.exposure.c); }
     expect(maxC, 'no gas at the eye in the tent').toBe(0);
     expect(game.surfaceAnticipationCounts.hits, 'the district came from the anticipation').toBeGreaterThanOrEqual(1);
+    // (task studio-surface-map-tent-cab-20261119-025201-01) the tent: the street prepared behind the held flap, the player free in the tent
+    const {surfaceAirRuntime} = await import('../../src/world/surface/air');
+    const {SURFACE_DOORS_LANE} = await import('../../src/world/surface/airDoors');
+    const TS = game.surfaceTentStage!, air = surfaceAirRuntime()!, tentFlap = air.air!.doors.find(d => d.plan.tent)!, stage = TS.record!;
+    const streetLive = TS.phase === 'street';
+    if (streetLive) {
+      expect(air.tentFlapHeld, 'the tent flap held shut while the street is prepared').toBe(true);
+      expect(air.open(tentFlap, 'qa'), 'the held flap does not open').toBe(false);
+    }
+    if (opts.extras) {
+      // the street's first view from the flap, then the flap released (shut before: stays shut, opens on [E] again)
+      expect(await until(() => TS.phase === 'idle', 12000), `the street prepared from the tent ${JSON.stringify(stage)} ${diag()}`).toBe(true);
+      expect(stage, 'released on the street\'s first view').toMatchObject({phase: 'done', street: {end: 'ready'}});
+      expect(stage.street!.items, 'the street\'s first view: more than the tent\'s').toBeGreaterThan(stage.tent!.items);
+      expect(game.surfaceTentStreetCompile).toMatchObject({end: 'ready'});
+      expect(air.tentFlapHeld).toBe(false);
+      expect(tentFlap.target).toBe(0);
+      marks.push(`tent stage: ${JSON.stringify(stage)}`);
+    } else marks.push(`tent stage at the walk back: ${TS.phase} ${JSON.stringify(stage)}`);
     await crossing('walk back', 'back');
+    if (!opts.extras && streetLive) {
+      // walked back while the street was still being prepared: the stage ended with the district; its flap saved as before the hold
+      expect(stage.phase, 'the stage ended with its world').toBe('cancelled');
+      expect((game.run.laneStore(SURFACE_DOORS_LANE, surfKey) as {doors: Record<string, unknown>}).doors.tent, 'the tent flap saved shut, as it was').toEqual({open: 0});
+    }
     mark('back');
     expect(game.run.current).toEqual(hostKey);
     const rec = game.layout.surfaceAccess!.connector as SurfaceConnector, [s] = worldToConnector(rec, P.x, P.z);

@@ -132,6 +132,11 @@ export class SurfaceConnectorRuntime {
     return this.held ?? this.site;
   }
 
+  /** (task studio-surface-tent-first-staging-20261120-225458-01) The root of the view drawn now (the staged tent draws it with its own; null: none). */
+  viewRoot(): THREE.Object3D | null {
+    return this.current()?.view.root ?? null;
+  }
+
   /** QA / Game: the record of the tube drawn now. */
   record(): SurfaceConnector | null {
     return this.current()?.rec ?? null;

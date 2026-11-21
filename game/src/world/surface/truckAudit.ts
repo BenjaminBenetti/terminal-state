@@ -4,7 +4,7 @@
 // rows live here, in the same row shapes, and are re-exported beside the prop audits (world/openablesSpec.ts VEHICLE_OPEN_AUDIT,
 // damage/physicsAudit.ts VEHICLE_PHYSICS_AUDIT). Registry-driven: one openables row per storage compartment (TRUCK_COMPARTMENTS) and one
 // physics row for the body plus one per compartment door (tests/surface-truck-lockers.test.ts fails for an unclassified one); (field
-// follow-up) a row of each kind per fixed non-storage part (TRUCK_FIXED_PARTS: the planning-map board). Pure data.
+// follow-up) a row of each kind per fixed non-storage part (TRUCK_FIXED_PARTS: (lane CAB) the planning map on the dash). Pure data.
 
 import type {AuditEntry} from '../openablesSpec';
 import type {PhysAuditRow} from '../../damage/physicsAudit';
@@ -15,11 +15,13 @@ export const truckAuditKind = (compartment?: string): string => (compartment ? `
 
 /**
  * Task studio-surface-run-field-followup-20261116-211729-01 (lane TRUCK): the truck's FIXED PARTS that are not storage (registry-driven:
- * each gets an openables row 'none' / equipment and a static built-in physics row; tests/surface-truck-board.test.ts).
+ * each gets an openables row 'none' / equipment and a static built-in physics row). Task studio-surface-map-tent-cab-20261119-025201-01
+ * (lane CAB): the planning map moved from the bed's side board into the cab, on the passenger-side dash (tests/surface-truck-dash-map.test.ts).
  */
 export const TRUCK_FIXED_PARTS = [
-  {id: 'mapBoard', open: 'the planning-map board bolted to the bed\'s right side: a printed map sheet read with [E] (it opens the planning map), ' +
-    'not storage — nothing to open, nothing inside', phys: 'the planning-map board: a panel on two rails bolted to the truck\'s bed side (never detaching); it moves with the truck'},
+  {id: 'dashMap', open: 'the planning map on the cab\'s passenger-side dashboard: a printed map sheet in a fixed holder, read with [E] from the ' +
+    'driver\'s seat (it opens the planning map), not storage — nothing to open, nothing inside',
+  phys: 'the dash map: a sheet in a holder fixed to the cab\'s dashboard (never detaching, nothing loose on it); it moves with the truck'},
 ] as const;
 
 /** Openables: each compartment opens (a hinged door swings out while its view is open); contents are the player's, it starts empty. */

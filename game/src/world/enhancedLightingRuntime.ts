@@ -535,8 +535,11 @@ export class EnhancedLightingRuntime {
     let use: LightingCacheUse = !baked1 ? 'hit' : giUse === 'stale' || rpUse === 'stale' ? 'stale' : 'miss';
     if (baked1) {
       const key = fetched?.key ?? null;
-      if (key) this.store(key, got, probes, rpDigest);
-      else this.storeLater(input, plan, shading, got, probes, rpDigest);
+      // (task studio-surface-tent-first-staging-20261120-225458-01: the rows' 16 bits in steps — a Surface district's 80 M values were one
+      // 2.5 s step of its build, the staged command tent's frames held for it; the same bytes)
+      const gi = yield* halvesSteps(got.rows);
+      if (key) this.store(key, got, gi, probes, rpDigest);
+      else this.storeLater(input, plan, shading, got, gi, probes, rpDigest);
       if (fetched && !persistent) use = 'unavailable';
     }
     timings.totalMs = now() - tStart;
@@ -576,10 +579,11 @@ export class EnhancedLightingRuntime {
     this.changed();
   }
 
-  private store(key: string, got: {digest: string; rows: Float32Array; stats: IndirectLight['stats']}, probes: BakedProbes | null, rpDigest: string): void {
+  /** `gi`: the gather's rows as their 16 bits (halvesSteps). */
+  private store(key: string, got: {digest: string; stats: IndirectLight['stats']}, gi: Uint16Array, probes: BakedProbes | null, rpDigest: string): void {
     const bundle: DerivedBundle = {
       meta: {v: DERIVED_LIGHTING_VERSIONS.entry, gi: {inputs: got.digest, stats: {...got.stats}}, rp: null},
-      arrays: {gi: halves(got.rows)},
+      arrays: {gi},
     };
     if (probes) {
       bundle.meta.rp = {
@@ -592,8 +596,8 @@ export class EnhancedLightingRuntime {
   }
 
   /** No prefetch ran for this station (a caller that builds without preparing): hash the address now, off the build, then store. */
-  private storeLater(input: StationBakeInput, plan: EnhancedLightingPlan, shading: FieldShading, got: {digest: string; rows: Float32Array; stats: IndirectLight['stats']}, probes: BakedProbes | null, rpDigest: string): void {
-    layoutAddress(input, this.now).then(k => this.store(this.entryKey(k, plan, shading), got, probes, rpDigest), err => { console.warn('enhanced lighting: the bake could not be cached', err); });
+  private storeLater(input: StationBakeInput, plan: EnhancedLightingPlan, shading: FieldShading, got: {digest: string; stats: IndirectLight['stats']}, gi: Uint16Array, probes: BakedProbes | null, rpDigest: string): void {
+    layoutAddress(input, this.now).then(k => this.store(this.entryKey(k, plan, shading), got, gi, probes, rpDigest), err => { console.warn('enhanced lighting: the bake could not be cached', err); });
   }
 }
 
@@ -662,11 +666,20 @@ function probesFromEntry(entry: DerivedBundle, r: Record<string, unknown>, tier:
   return {tier: tier.id, count, block, ramp: r.ramp, layout, atlas, meta, grid, gridW, gridH, gridDepth, slots, stats: r.stats as BakedProbes['stats']};
 }
 
-/** The gather's rows (world/lightFieldGather.ts: every value a rowValue) as their 16 bits: what the cache stores. */
-function halves(rows: Float32Array): Uint16Array {
+/** The gather's rows (world/lightFieldGather.ts: every value a rowValue) as their 16 bits: what the cache stores — HALVES_STEP values a step. */
+function* halvesSteps(rows: Float32Array): BuildSteps<Uint16Array> {
   const out = new Uint16Array(rows.length);
-  for (let q = 0; q < rows.length; q++) out[q] = rowBits(rows[q]);
+  for (let a = 0; a < rows.length; a += HALVES_STEP) {
+    const b = Math.min(rows.length, a + HALVES_STEP);
+    halvesInto(rows, out, a, b);
+    if (b < rows.length) yield;
+  }
   return out;
+}
+/** About 32 ms of halvesInto on the studio worker (measured: 80.6 M values in 2.5 s). */
+const HALVES_STEP = 1 << 20;
+function halvesInto(rows: Float32Array, out: Uint16Array, a: number, b: number): void {
+  for (let q = a; q < b; q++) out[q] = rowBits(rows[q]);
 }
 
 /**

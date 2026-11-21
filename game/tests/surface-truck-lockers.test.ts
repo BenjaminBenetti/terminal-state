@@ -91,7 +91,7 @@ describe('the truck compartments open like the openables', () => {
 
   it('classified with honest reasons: openable player storage, part of the vehicle, starting empty; static built-in parts of a too-heavy body', () => {
     // registry-driven: every compartment present now and later has its rows
-    // (re-pin, field follow-up: the fixed non-storage parts — the map board — follow the compartments; tests/surface-truck-board.test.ts)
+    // (re-pin, field follow-up: the fixed non-storage parts — (lane CAB) the dash map — follow the compartments; tests/surface-truck-dash-map.test.ts)
     const parts = TRUCK_FIXED_PARTS.map(p => truckAuditKind(p.id));
     expect(VEHICLE_OPEN_AUDIT.map(r => r.kind)).toEqual([...TRUCK_COMPARTMENTS.map(c => truckAuditKind(c.id)), ...parts]);
     for (const r of VEHICLE_OPEN_AUDIT.filter(e => !parts.includes(e.kind))) {

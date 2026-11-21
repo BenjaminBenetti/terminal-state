@@ -54,6 +54,10 @@
 // seat, collisions, run-over, prop shoves, glass, bullets, audio, persistence moments) is shared; the anchors, tuning, texts, record,
 // model and lamps come from the definition. `enclosed` (seated in a closed cab), the attachment points (cargo) and the body transform /
 // move listeners are generic seams; the car has no attachment points and is not enclosed.
+//
+// Task studio-surface-map-tent-cab-20261119-025201-01 (lane CAB): SEATED TARGETS (`seated`, generic; the truck's dash map registers one):
+// while driving, [E] with the crosshair on one is that target's (its prompt replaces the controls line) and never gets out; anywhere
+// else E gets out as above. The planning map it opens holds the game in the 'map' state, which keeps the driver seated (like a pause).
 
 import * as THREE from 'three';
 import type {Game} from '../game';
@@ -334,6 +338,13 @@ export class SkywaysCar {
    */
   readonly access: {aimed(): boolean; interact(): boolean; readonly prompt: string}[] = [];
   /**
+   * Task studio-surface-map-tent-cab-20261119-025201-01 (lane CAB): [E] targets INSIDE the cab while seated (the truck's dash map:
+   * world/surface/truckDashMap.ts), before getting out — the first aimed one's prompt shows instead of the controls line and [E] is ITS
+   * (consumed even when it refuses: an aimed press never gets out); not aimed, [E] gets out exactly as before. Each is inert on a vehicle
+   * it does not belong to.
+   */
+  readonly seated: {aimed(): boolean; interact(): boolean; readonly prompt: string}[] = [];
+  /**
    * (lane TRUCK) The vehicle's storage compartments' slots (StackJSON, uids kept), read from its record at the build; the live store
    * (storageSource) supplies them whenever the record is written. Empty for a vehicle without compartments (the car: its trunk above).
    */
@@ -559,18 +570,27 @@ export class SkywaysCar {
     if (s === 'playing') return;
     this.prompt = null;
     Object.assign(this.ctl, NO_CONTROLS);
-    if (this.driving && s !== 'paused' && s !== 'inventory') this.forceOut(s, true);
+    // (lane CAB) the planning map read from the seat ('map': the world holds like a pause) keeps the driver seated too
+    if (this.driving && s !== 'paused' && s !== 'inventory' && s !== 'map') this.forceOut(s, true);
     this.store(); // (a save may follow)
   }
 
   // ---------------------------------------------------------------------------------------------------------------------
   // Enter / exit
 
-  /** [E]: while driving, get out; else the trunk when aiming at its rear zone from behind (lane TRUNK); else get in when aiming at the car by a door. */
+  /**
+   * [E]: while driving, the aimed seated target ((lane CAB) the truck's dash map), else get out; else the trunk when aiming at its rear
+   * zone from behind (lane TRUNK); else get in when aiming at the car by a door.
+   */
   onInteract(): boolean {
     const h = this.host;
     if (!this.worldLive || !this.body || h.state !== 'playing') return false;
-    if (this.driving) { this.tryExit(); return true; }
+    if (this.driving) {
+      const a = this.aimedSeated();
+      if (a) { a.interact(); return true; } // (lane CAB: the press is the target's even when it refuses — never the exit)
+      this.tryExit();
+      return true;
+    }
     if (this.rear?.aimed() && this.rear.interact()) return true;
     for (const a of this.access) if (a.aimed() && a.interact()) return true; // (lane TRUCK: the truck's storage compartments)
     if (!this.canEnter() || !this.pickAim()) return false;
@@ -582,6 +602,12 @@ export class SkywaysCar {
   private aimedAccess(): {readonly prompt: string} | null {
     if (this.rear?.aimed()) return this.rear;
     for (const a of this.access) if (a.aimed()) return a;
+    return null;
+  }
+
+  /** (lane CAB) The aimed [E] target inside the cab while seated (the seated list, in install order), else null. */
+  private aimedSeated(): {aimed(): boolean; interact(): boolean; readonly prompt: string} | null {
+    for (const a of this.seated) if (a.aimed()) return a;
     return null;
   }
 
@@ -794,7 +820,7 @@ export class SkywaysCar {
     if (!this.driving && P.alive && Math.abs(P.y - b.y) < 1.2) this.separatePlayer();
     this.syncView(dt);
     if (this.driving) this.driveAudio();
-    if (this.driving) this.prompt = this.text.driving;
+    if (this.driving) { const a = this.aimedSeated(); this.prompt = a ? a.prompt : this.text.driving; } // ((lane CAB) the dash map's line when aimed)
     else if (h.state !== 'playing' || !this.canEnter()) this.prompt = null;
     else { const a = this.aimedAccess(); this.prompt = a ? a.prompt : this.pickAim() ? this.text.getIn : null; } // (the trunk; (lane TRUCK) the compartments)
   }

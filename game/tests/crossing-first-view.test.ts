@@ -294,6 +294,60 @@ describe('crossing readiness: the exit\'s first view (render/firstView.ts, the j
     expect(rd).toEqual({end: 'cancelled', why: 'generation'});
   });
 
+  // (task studio-surface-tent-loading-finish-20261119-071019-01) the street behind the command tent's held flap: no budget, a stall REPORTED
+  // and waited on (the job left running), progress again reported, the ready view still ends it; an abort's reason ends it at once
+  it('the stall / abort seams: a stall reported, not an end; progress again reported; ready ends it; an abort ends it with its reason', async () => {
+    vi.useFakeTimers();
+    type S = Parameters<typeof waitForFirstView>[0]['stats'];
+    const fake = () => {
+      let end!: () => void;
+      const stats: {-readonly [K in keyof S]: S[K]} = {phase: 'scene', firstView: 'drawing', viewRepsCompiled: 0, viewDone: 0, shadowDone: 0, viewCasters: 0, viewFrame: false, viewDrawn: true, cancelReason: null};
+      return {stats, viewReady: new Promise<void>(r => { end = r; }), end: () => end()};
+    };
+    let t = 0;
+    const tick = async (ms: number) => { for (let i = 0; i < ms / 100; i++) { t += 100; await vi.advanceTimersByTimeAsync(100); } };
+    const seen: boolean[] = [];
+    let stop: string | null = null;
+    const W = {budgetMs: Infinity, stallMs: 2_000, pollMs: 100, stalled: (on: boolean) => { seen.push(on); }, abort: () => stop};
+    const a = fake();
+    let ra: unknown = null;
+    void waitForFirstView(a, () => t, t, W).then(r => { ra = r; });
+    await tick(2500);
+    expect(seen, 'stalled: reported once').toEqual([true]);
+    await tick(60_000);
+    expect(ra, 'no budget, a stall is no end: still waiting a minute on').toBeNull();
+    expect(seen).toEqual([true]);
+    a.stats.viewDone++;
+    await tick(200);
+    expect(seen, 'progress again: reported').toEqual([true, false]);
+    await tick(2500);
+    expect(seen, 'stalled again').toEqual([true, false, true]);
+    a.stats.firstView = 'ready';
+    a.end();
+    await tick(100);
+    expect(ra, 'the real first view ends it').toEqual({end: 'ready', why: ''});
+    // the abort (the player's retry / the stage gone): its reason, at the next poll
+    const b = fake();
+    let rb: unknown = null;
+    void waitForFirstView(b, () => t, t, W).then(r => { rb = r; });
+    await tick(3000);
+    expect(rb).toBeNull();
+    stop = 'retry';
+    await tick(100);
+    expect(rb).toEqual({end: 'cancelled', why: 'retry'});
+    // a job that ends without its view still ends the wait (cancelled: its reason)
+    stop = null;
+    const c = fake();
+    let rc: unknown = null;
+    void waitForFirstView(c, () => t, t, W).then(r => { rc = r; });
+    await tick(2500);
+    c.stats.phase = 'cancelled';
+    c.stats.cancelReason = 'error';
+    c.end();
+    await tick(100);
+    expect(rc).toEqual({end: 'cancelled', why: 'error'});
+  });
+
   it('a stalled job (its compile never settles) ends the real wait bounded; the job reports where it got', async () => {
     const k = rig({reps: 4});
     const job = k.make().start();

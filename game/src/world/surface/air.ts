@@ -111,7 +111,7 @@ export class SurfaceAirRuntime {
    */
   tentFlap: ((open: number) => void) | null = null;
   readonly fog: SurfaceAirFog;
-  readonly counts = {builds: 0, teardowns: 0, opens: 0, closes: 0, pushOpens: 0, autoCloses: 0, refusals: 0, reopens: 0};
+  readonly counts = {builds: 0, teardowns: 0, opens: 0, closes: 0, pushOpens: 0, autoCloses: 0, refusals: 0, reopens: 0, heldRefusals: 0};
   private glassTex: THREE.Texture | null | undefined = undefined;
   private loading: Promise<void> | null = null;
   private readonly eye = new THREE.Vector3();
@@ -254,7 +254,8 @@ export class SurfaceAirRuntime {
     this.fog.restore();
     if (!a) return;
     const h = this.host;
-    if (a.doors.length) { try { h.run.setLaneStore(SURFACE_DOORS_LANE, saveDoors(a.doors, h.clock)); } catch (err) { console.warn('surface air: saving the doors failed', err); } }
+    if (a.doors.length) { try { h.run.setLaneStore(SURFACE_DOORS_LANE, saveDoors(this.savedDoors(a.doors), h.clock)); } catch (err) { console.warn('surface air: saving the doors failed', err); } }
+    this.flapHold = null;
     const mine = new Set(a.layoutBoxes);
     const props = a.layout.props;
     for (let i = props.length - 1; i >= 0; i--) if (mine.has(props[i])) props.splice(i, 1);
@@ -270,7 +271,65 @@ export class SurfaceAirRuntime {
   /** Saves the doors' state without tearing down (a mid-district save, should one ever be offered). */
   flush(): void {
     const a = this.air;
-    if (a?.doors.length) this.host.run.setLaneStore(SURFACE_DOORS_LANE, saveDoors(a.doors, this.host.clock));
+    if (a?.doors.length) this.host.run.setLaneStore(SURFACE_DOORS_LANE, saveDoors(this.savedDoors(a.doors), this.host.clock));
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // (task studio-surface-map-tent-cab-20261119-025201-01) The tent flap HELD shut while the command tent is the crossing's preparation
+  // space (world/surface/tentStage.ts): the street behind it is not ready to be drawn yet. Held, the flap is shut (at once: a flap saved
+  // open is shut too, its gas source stopped), [E] on it is refused with `why()` (the street's real progress), enemies pressing on it do
+  // not push it open and it never opens by itself. What is SAVED meanwhile is its state from before the hold (the same record as if
+  // there had been no hold); on release a flap that was open opens again (its gas from its saved age), a shut one stays shut.
+
+  private flapHold: {d: SurfaceDoorState; why: () => string; prompt: (() => string) | null; press: (() => string | null) | null; was: {open: boolean; auto: boolean; openedAt: number}} | null = null;
+
+  /**
+   * Holds the tent flap shut (false: this district has no tent flap; true also when already held — `why` / `o` replaced). (task
+   * studio-surface-tent-loading-finish-20261119-071019-01) `o.prompt`: its HUD prompt (default `why`); `o.press`: [E] on it — a line
+   * when it did something (the stage's retry of a stalled / failed street: toasted), null: refused as before.
+   */
+  holdTentFlap(why: () => string, o: {prompt?: (() => string) | null; press?: (() => string | null) | null} = {}): boolean {
+    const a = this.air, d = a?.doors.find(q => q.plan.tent && q.plan.leaves.length > 0);
+    if (!a || !d) return false;
+    if (this.flapHold?.d === d) { Object.assign(this.flapHold, {why, prompt: o.prompt ?? null, press: o.press ?? null}); return true; }
+    this.flapHold = {d, why, prompt: o.prompt ?? null, press: o.press ?? null, was: {open: d.target === 1 || d.t > 0.02, auto: d.auto, openedAt: d.openedAt}};
+    d.target = 0;
+    d.t = 0;
+    d.clear = d.push = 0;
+    this.stopDoorGas(d);
+    d.openedAt = NaN;
+    if (fitDoorBoxes(d)) this.host.physics?.propsChanged?.(d.plan.x, d.plan.z);
+    const i = a.viewIndex[a.doors.indexOf(d)] ?? -1;
+    if (a.doorView && i >= 0) poseDoor(a.doorView, d, i);
+    else if (this.tentFlap) { try { this.tentFlap(0); } catch (err) { console.warn('surface air: the tent flap failed', err); this.tentFlap = null; } }
+    return true;
+  }
+
+  /** Lets the held tent flap go: open again if it was open before the hold (its gas aged as saved), else it stays shut. */
+  releaseTentFlap(): void {
+    const hold = this.flapHold;
+    this.flapHold = null;
+    if (!hold || !this.air?.doors.includes(hold.d)) return;
+    const d = hold.d;
+    if (!hold.was.open) return;
+    d.target = 1;
+    d.auto = hold.was.auto;
+    d.clear = 0;
+    const h = this.host, age = Number.isFinite(hold.was.openedAt) ? Math.max(0, h.clock - hold.was.openedAt) : 0;
+    d.openedAt = Number.isFinite(hold.was.openedAt) ? hold.was.openedAt : h.clock;
+    this.startDoorGas(d, age);
+    this.cue(d, 'open');
+  }
+
+  /** The tent flap is held shut now (QA / the stage). */
+  get tentFlapHeld(): boolean { return !!this.flapHold; }
+
+  /** The doors as saveDoors should see them: the held tent flap as it was before the hold. */
+  private savedDoors(doors: readonly SurfaceDoorState[]): readonly SurfaceDoorState[] {
+    const hold = this.flapHold;
+    if (!hold || !doors.includes(hold.d)) return doors;
+    const w = hold.was;
+    return doors.map(d => (d === hold.d ? {...d, t: w.open ? 1 : 0, target: w.open ? 1 : 0, auto: w.auto, openedAt: w.openedAt} : d));
   }
 
   // -------------------------------------------------------------------------------------------
@@ -295,6 +354,7 @@ export class SurfaceAirRuntime {
   /** Opens door d (by: 'player' = [E], 'enemy' = pushed). A door opened in play shuts by itself once clear. */
   open(d: SurfaceDoorState, by: 'player' | 'enemy' | 'qa' = 'player'): boolean {
     if (!d.plan.leaves.length || d.target === 1) return false;
+    if (this.flapHold?.d === d) { if (by === 'player') this.counts.heldRefusals++; return false; } // (held shut: the street is being prepared)
     d.target = 1;
     d.auto = true;
     d.clear = 0;
@@ -370,8 +430,8 @@ export class SurfaceAirRuntime {
     d.blocked = d.t > 0 || d.target === 1 ? this.sweepBlocked(d) : false; // (lane FIXES: a shut door has no path to block)
     // a closing door never shuts on a body: it swings open again
     if (d.target === 0 && d.t > 0 && d.blocked) { d.target = 1; this.counts.reopens++; }
-    // enemies pressing on a shut leaf push it open
-    if (d.target === 0 && d.t < 0.05) {
+    // enemies pressing on a shut leaf push it open (never the held tent flap)
+    if (d.target === 0 && d.t < 0.05 && this.flapHold?.d !== d) {
       let pressing = false;
       for (const z of h.zombies) {
         const b = z.brain;
@@ -447,6 +507,12 @@ export class SurfaceAirRuntime {
   interact(): boolean {
     const d = this.target;
     if (!d || !this.air) return false;
+    if (this.flapHold?.d === d) { // (held: its press — a retry — or refused, why)
+      const said = this.flapHold.press?.() ?? null;
+      if (said === null) this.open(d, 'player');
+      this.host.hud?.toast(said ?? this.flapHold.why());
+      return true;
+    }
     if (d.target === 1) {
       if (!this.close(d)) this.host.hud?.toast('Something is in the doorway');
     } else this.open(d, 'player');
@@ -456,6 +522,7 @@ export class SurfaceAirRuntime {
   prompt(): string | null {
     const d = this.target;
     if (!d) return null;
+    if (this.flapHold?.d === d) return (this.flapHold.prompt ?? this.flapHold.why)();
     const what = d.plan.tent ? 'the tent flap' : 'the door';
     return d.target === 1 ? `<b>[E]</b> Close ${what}` : `<b>[E]</b> Open ${what}`;
   }
@@ -471,7 +538,7 @@ export class SurfaceAirRuntime {
       outdoorAtEye: surfaceOutdoorGasAt(a.map, p.x, p.eye, p.z), columnTop: columnTop(a.map, p.x, p.z), fog: this.fog.k,
       outdoorCells: a.map.outdoorCells, indoorCells: a.map.indoorCells, panes: a.plans.reduce((n, q) => n + q.panes.length, 0), prebreached: a.prebreached.length,
       doors: a.doors.map(d => ({id: d.plan.id, gen: d.plan.gen, t: Math.round(d.t * 100) / 100, target: d.target, gas: d.gas, blocked: d.blocked})),
-      field: a.field?.stats() ?? null, target: this.target?.plan.id ?? null, counts: {...this.counts},
+      field: a.field?.stats() ?? null, target: this.target?.plan.id ?? null, counts: {...this.counts}, tentFlapHeld: !!this.flapHold,
       cab: this.cab(), airAtEye: surfaceAirAt(a.map, this.cab(), p.x, p.eye, p.z), // (follow-up 1: the sealed cab, the air the eye breathes)
       pressureAtEye: surfaceAirPressureAt(a.map, this.cab(), p.x, p.eye, p.z), fogPressure: this.fog.p, // (lane FOG)
     };

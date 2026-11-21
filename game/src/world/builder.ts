@@ -87,7 +87,8 @@ import {buildRideGates, staticGateEnds, type RideGatesBuilt} from './ridePortalV
 import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): the stepped build
 import type {DrawnSurfaces} from './surfaceAlbedo'; // task studio-baked-lighting-reflections-20261114-050258-01: what the architecture pass drew (the enhanced bake's surface colours)
 
-class Accum {
+/** (exported for world/surface/tentShell.ts: the staged command tent's walls and floor, built as the builder builds them) */
+export class Accum {
   pos: number[] = [];
   nor: number[] = [];
   uv: number[] = [];
@@ -236,13 +237,13 @@ function floorMatFor(area: Area | undefined): MatKey {
   return area.publicSpace ? 'terrazzo' : 'concrete';
 }
 
-interface Sink { quad(p: number[][], n: readonly number[], uv: number[][]): void }
+export interface Sink { quad(p: number[][], n: readonly number[], uv: number[][]): void }
 
 /**
  * Vertical quad on a wall plane. `alongX`: the plane is z = plane (normal ±Z), else x = plane
  * (normal ±X). Bottom/top heights (and texture bases) may differ at the two ends (sloped walls).
  */
-function wallQuad(a: Sink, m: {u: number; v: number}, alongX: boolean, plane: number, nSign: number, a0: number, a1: number,
+export function wallQuad(a: Sink, m: {u: number; v: number}, alongX: boolean, plane: number, nSign: number, a0: number, a1: number,
   yb0: number, yb1: number, yt0: number, yt1: number, vb0: number, vb1: number): void {
   const v0 = (y: number) => (y - vb0) / m.v, v1 = (y: number) => (y - vb1) / m.v;
   if (alongX) {
@@ -257,7 +258,7 @@ function wallQuad(a: Sink, m: {u: number; v: number}, alongX: boolean, plane: nu
 }
 
 /** Split [a, b] at multiples of CHUNK_M. */
-function chunkSpans(a: number, b: number): [number, number][] {
+export function chunkSpans(a: number, b: number): [number, number][] {
   const out: [number, number][] = [];
   while (a < b - 1e-6) {
     const e = Math.min(b, (Math.floor(a / CHUNK_M + 1e-9) + 1) * CHUNK_M);

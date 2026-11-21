@@ -393,6 +393,9 @@ describe('game.ts: which drain runs where', () => {
     // (lane WORKERS: the last argument — the lighting bake may wait for its workers under a drain that can wait)
     // (task studio-surface-run-lift-reliability-and-cab-20261118-023909-01: `pacing` = the caller's slice length — the lift ride's
     // LIFT_RIDE_WAIT.buildSliceMs; the journey passes none — under the QA override, stats and the alive check)
-    expect(journey).toContain('await runPaced(this.buildSectionSteps(key, layout, arrival, fresh, true), {...pacing, ...this.buildPacing, stats, alive: () => gen === this.stationGen});');
+    // (task studio-surface-tent-first-staging-20261120-225458-01: `onStage` — the Surface crossings' stages for the staged command tent's
+    // progress line — the same steps, labels reported as they start)
+    expect(journey).toContain('const steps = this.buildSectionSteps(key, layout, arrival, fresh, true);');
+    expect(journey).toContain('await runPaced(onStage ? stageLabels(steps, onStage) : steps, {...pacing, ...this.buildPacing, stats, alive: () => gen === this.stationGen});');
   });
 });

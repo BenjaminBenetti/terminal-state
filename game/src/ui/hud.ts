@@ -668,12 +668,13 @@ export class Hud {
     setTimeout(() => t.remove(), 3300);
   }
 
-  reset(): void {
+  /** A section's build: the HUD's caches cleared (`keepToasts`: the toasts shown stay — the staged command tent's, said while it is built). */
+  reset(keepToasts = false): void {
     this.cache.clear();
     this.hotbarVersion = -1;
     this.setHoldRing(null); // Task office-overhaul-20261030 (INTERACT)
     this.survShown.food = this.survShown.water = -1;
-    $('#toasts').innerHTML = '';
+    if (!keepToasts) $('#toasts').innerHTML = '';
     $('#damage-dir').innerHTML = '';
   }
 }

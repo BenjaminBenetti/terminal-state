@@ -28,7 +28,7 @@ import {
 import type {Area, LightProfile, StationLayout} from '../gen/station';
 import type {Fixture} from './builder';
 import {
-  DEFAULT_FIELD, LightFieldVolume, bakeLightField, bakeLightFieldSteps, downsampleField, fixtureTint, groupLevel, sampleField, withoutCube,
+  DEFAULT_FIELD, LightFieldVolume, bakeLightField, bakeLightFieldSteps, downsampleField, downsampleFieldSteps, fixtureTint, groupLevel, sampleField, withoutCube,
   type BakedField, type FieldParams, type FieldSample, type FieldSource,
 } from './lightField';
 import type {BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
@@ -120,6 +120,12 @@ export interface StationLightingOptions {
    * (the identical bake of the same source and parameters, run in paced steps); absent = baked here.
    */
   baked?: BakedField;
+  /**
+   * (task studio-surface-tent-first-staging-20261120-225458-01) The field the constructor would downsample `baked` to (its plan's `k`), made
+   * ahead in paced steps by StationLighting.steps / replaceSteps (lightField.ts downsampleFieldSteps: the identical field); used only for
+   * that `baked` at that `k`, else made here.
+   */
+  downsampled?: {from: BakedField; k: number; field: BakedField};
   /**
    * Task studio-baked-lighting-reflections-20261114-050258-01: this station's baked reflection probes (world/reflectionProbes.ts; the
    * game's enhanced lighting makes or reads them: world/enhancedLightingRuntime.ts). Absent / null / none in it: no reflections.
@@ -385,21 +391,13 @@ export class StationLighting {
 
   constructor(private readonly scene: THREE.Scene, private readonly layout: StationLayout, private readonly fixtures: Fixture[],
     private readonly tubes: THREE.InstancedMesh | null, private readonly opts: StationLightingOptions = {}) {
-    let full = opts.baked ?? bakeLightField(stationFieldSource(layout), StationLighting.fieldParams(opts));
-    const max = this.max3D = opts.max3DTextureSize ?? max3DTextureSize(opts.renderer);
-    // Task studio-baked-gi-visual-uplift-20261115-004324-01: the ambient cube stays on the GPU only for full shading, and only when
-    // the 3D texture takes its slices (else the same field without it, shaded plain)
-    const wantFull = opts.shading === 'full' && full.gi !== undefined;
-    this.shadingSkipped = wantFull && full.depth > max ? `the field with its cube (${full.depth} slices) is deeper than this renderer's 3D textures (${max})` : null;
-    if (full.gi !== undefined && (!wantFull || this.shadingSkipped)) full = withoutCube(full);
+    const baked = opts.baked ?? bakeLightField(stationFieldSource(layout), StationLighting.fieldParams(opts));
+    const {full, k, max, shadingSkipped} = StationLighting.fieldPlan(baked, layout, opts);
+    this.max3D = max;
+    this.shadingSkipped = shadingSkipped;
     this.full = full.gi !== undefined;
-    const budget = opts.maxFieldBytes ?? 32e6;
-    // (the byte cap is the slots': the cube has its own bound, world/enhancedLighting.ts FIELD_CUBE_BYTES)
-    const slotBytes = (full.gi ?? full.depth) * full.w * full.h * 4;
-    // (+ lane LOOK follow-up 2: never finer than the field source's declared scale — a Surface Run district's 2, the scale the enhanced
-    // runtime bounded its field + cube at; 1 for every other layout)
-    const k = Math.max(1, Math.ceil(Math.max(full.w, full.h) / max), Math.ceil(Math.sqrt(slotBytes / budget)), full.cellScale ? 1 : surfaceFieldScale(layout));
-    this.field = k > 1 ? downsampleField(full, k) : full;
+    const pre = opts.downsampled; // (made ahead in steps for this bake at this k: the same field)
+    this.field = k > 1 ? (pre && pre.from === baked && pre.k === k && pre.field.depth === full.depth ? pre.field : downsampleField(full, k)) : full;
     this.groups = this.field.groups;
     this.volume = new LightFieldVolume(this.field);
     // Iteration 13: TSL lighting node on the persistent field light; this station's texture on the global nodes.
@@ -457,6 +455,37 @@ export class StationLighting {
     this.applyLevels(true);
   }
 
+  /**
+   * What the constructor makes of a full bake: the field without its ambient cube unless shaded in full (and the 3D texture takes its
+   * slices), and the downsampling factor `k` (the renderer's 3D texture size, the byte budget, a Surface Run district's declared scale).
+   */
+  static fieldPlan(baked: BakedField, layout: StationLayout, opts: StationLightingOptions): {full: BakedField; k: number; max: number; shadingSkipped: string | null} {
+    let full = baked;
+    const max = opts.max3DTextureSize ?? max3DTextureSize(opts.renderer);
+    // Task studio-baked-gi-visual-uplift-20261115-004324-01: the ambient cube stays on the GPU only for full shading, and only when
+    // the 3D texture takes its slices (else the same field without it, shaded plain)
+    const wantFull = opts.shading === 'full' && full.gi !== undefined;
+    const shadingSkipped = wantFull && full.depth > max ? `the field with its cube (${full.depth} slices) is deeper than this renderer's 3D textures (${max})` : null;
+    if (full.gi !== undefined && (!wantFull || shadingSkipped)) full = withoutCube(full);
+    const budget = opts.maxFieldBytes ?? 32e6;
+    // (the byte cap is the slots': the cube has its own bound, world/enhancedLighting.ts FIELD_CUBE_BYTES)
+    const slotBytes = (full.gi ?? full.depth) * full.w * full.h * 4;
+    // (+ lane LOOK follow-up 2: never finer than the field source's declared scale — a Surface Run district's 2, the scale the enhanced
+    // runtime bounded its field + cube at; 1 for every other layout)
+    const k = Math.max(1, Math.ceil(Math.max(full.w, full.h) / max), Math.ceil(Math.sqrt(slotBytes / budget)), full.cellScale ? 1 : surfaceFieldScale(layout));
+    return {full, k, max, shadingSkipped};
+  }
+
+  /**
+   * (task studio-surface-tent-first-staging-20261120-225458-01) The constructor's downsampled field of `baked`, made in paced steps ahead of
+   * it (opts.downsampled); none when it keeps the full field.
+   */
+  private static *downsampleSteps(baked: BakedField, layout: StationLayout, opts: StationLightingOptions): BuildSteps<StationLightingOptions['downsampled']> {
+    const {full, k} = StationLighting.fieldPlan(baked, layout, opts);
+    if (k <= 1) return undefined;
+    return {from: baked, k, field: yield* downsampleFieldSteps(full, k)};
+  }
+
   /** Field bake parameters: DEFAULT_FIELD with the MOOD gain / bounce, then `opts.params`. */
   static fieldParams(opts: StationLightingOptions): FieldParams {
     return {...DEFAULT_FIELD, gain: DEFAULT_FIELD.gain * MOOD.fixtureGain, bounce: MOOD.bounce, ...opts.params};
@@ -469,10 +498,12 @@ export class StationLighting {
    */
   static *steps(scene: THREE.Scene, layout: StationLayout, fixtures: Fixture[], tubes: THREE.InstancedMesh | null, opts: StationLightingOptions = {}): BuildSteps<StationLighting> {
     const baked = opts.baked ?? (yield* bakeLightFieldSteps(stationFieldSource(layout), StationLighting.fieldParams(opts)));
+    yield 'lighting.downsample';
+    const downsampled = yield* StationLighting.downsampleSteps(baked, layout, opts); // (task studio-surface-tent-first-staging-20261120-225458-01)
     yield 'lighting.install';
-    const o: StationLightingOptions = {...opts, baked};
+    const o: StationLightingOptions = {...opts, baked, downsampled};
     const lighting = new StationLighting(scene, layout, fixtures, tubes, o);
-    delete o.baked; // (the bake is the field now or was downsampled into it: never kept twice)
+    delete o.baked; delete o.downsampled; // (the bake is the field now or was downsampled into it: never kept twice)
     return lighting;
   }
 
@@ -488,10 +519,12 @@ export class StationLighting {
    */
   static *replaceSteps(prev: StationLighting, opts: StationLightingOptions = {}, retire?: (release: () => void) => void): BuildSteps<{lighting: StationLighting; error: unknown}> {
     const baked = opts.baked ?? (yield* bakeLightFieldSteps(stationFieldSource(prev.layout), StationLighting.fieldParams(opts)));
+    yield 'lighting.downsample';
+    const downsampled = yield* StationLighting.downsampleSteps(baked, prev.layout, opts); // (task studio-surface-tent-first-staging-20261120-225458-01)
     yield 'lighting.install';
     const {scene, layout, fixtures, tubes} = prev;
     let lighting: StationLighting, error: unknown = null;
-    const o: StationLightingOptions = {...opts, baked};
+    const o: StationLightingOptions = {...opts, baked, downsampled};
     try {
       lighting = new StationLighting(scene, layout, fixtures, tubes, o);
     } catch (err) {
@@ -506,7 +539,7 @@ export class StationLighting {
         throw error;
       }
     }
-    delete o.baked; // (the bake is the field now or was downsampled into it: never kept twice)
+    delete o.baked; delete o.downsampled; // (the bake is the field now or was downsampled into it: never kept twice)
     prev.dispose(scene, retire);
     if (lighting.fieldLight.parent !== scene) scene.add(lighting.fieldLight); // (the same session-wide light as `prev`'s: its dispose took it out)
     lighting.adopt(prev);

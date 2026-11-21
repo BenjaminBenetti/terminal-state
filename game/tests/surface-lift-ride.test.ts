@@ -3,11 +3,12 @@
 // on the validating no-op device (helpers/headlessGame.ts).
 //  1. A new campaign at a Surface Run Subway station (version 2): its access is the cargo lift; standing in the car the prompt rides up.
 //  2. [E] -> the doors close with the player held in the car -> the old world is left, the district generated (at the press, measured),
-//     built paced and its exit's FIRST VIEW prepared (task studio-surface-host-ground-connectors-20261118-053602-01, lane READY:
-//     Game.prepareCrossingView — here, the atmosphere off, compiled: the direct path cannot draw off-screen) — every frame meanwhile DRAWN
+//     and (task studio-surface-tent-first-staging-20261120-225458-01) its STAGED COMMAND TENT built and its first view prepared
+//     (Game.prepareCrossingView — here, the atmosphere off, compiled: the direct path cannot draw off-screen) — every frame meanwhile DRAWN
 //     (never a loading state, no warm-up behind a hidden canvas) — and the doors stay SHUT until that first view is ready; paused mid-ride
-//     they stay shut until play resumes. Arrival: standing in the tent's car, doors open, released; the eye's gas exposure 0 in the tent
-//     with its flap shut.
+//     they stay shut until play resumes. The doors then open into the staged tent BEFORE the district is built: the district is built
+//     behind it (frames drawn with the staged tent alone: nothing else of the scene), then its real tent's first view, then the swap.
+//     Arrival: standing in the tent's car, doors open, released; the eye's gas exposure 0 in the tent with its flap shut.
 //  3. The tent's doorway is a real opening: with the flap shut the player cannot walk out; opened, they walk out through it and back in
 //     on the real collision (Player.update in the game loop, held W).
 //  4. [E] in the tent's car rides down: back in the station's car, the station exactly as left, no district objects / resources / frame
@@ -108,12 +109,14 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       return n;
     };
     const oneField = {'decay-field': 1, 'light-field': 1};
+    let stageEnd = () => {};
     try {
       const {Game} = await import('../src/game');
       const {installQaHooks} = await import('../src/qa');
       const {surfaceLiftOf} = await import('../src/world/surface/liftRuntime');
       const {surfaceAirRuntime} = await import('../src/world/surface/air');
       const game = new Game(h.canvas, false);
+      stageEnd = () => { game.surfaceTentStage?.cancel('test end'); game.journeyCompileStats && (game as unknown as {journeyCompile: {cancel(): void} | null}).journeyCompile?.cancel(); };
       // (CI runtime) the ride's PACED build of the destination: Node's frame (update + submit on the validating device) costs ~45 ms
       // against the product's 6 ms build slice, so a district build took ~2600 frames (~140 s); Game.buildPacing (the build's own test /
       // QA knob) runs 40 ms slices instead. Frames are still drawn between slices; SURFACE_LIFT_FULL=1 keeps the product's pacing.
@@ -171,7 +174,7 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       expect(R, 'the lift runtime is installed').toBeTruthy();
       const liftViews = () => { let n = 0; game.scene.traverse(o => { if (o.name === 'cargo-lift-surface') n++; }); return n; };
       // every drawn frame: the ride's phase / doors, the transit gap, the compile, the state
-      const samples: {gap: boolean; phase: string; door: number; compile: string | null; fv: string | null; job: object | null; state: string; built: boolean}[] = [];
+      const samples: {gap: boolean; phase: string; door: number; compile: string | null; fv: string | null; job: object | null; state: string; built: boolean; shell: boolean}[] = [];
       // the held rider's look: a mouse turn armed after a frame's input reset (applied by the next frame's update), checked at its draw
       const look = {armed: false, yaw: 0, moved: 0, lost: 0, gap: 0};
       const status = new Set<string>();
@@ -179,7 +182,7 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       G.render = () => {
         if (look.armed) { look.armed = false; if (Math.abs(game.player.yaw - look.yaw) > 1e-6) look.moved++; else look.lost++; }
         const r = render0(); const j = game.journeyCompileStats;
-        samples.push({gap: G.transitGap, phase: R.phase, door: R.door, compile: j?.phase ?? null, fv: j?.firstView ?? null, job: j, state: game.state, built: G.liftBuilt});
+        samples.push({gap: G.transitGap, phase: R.phase, door: R.door, compile: j?.phase ?? null, fv: j?.firstView ?? null, job: j, state: game.state, built: G.liftBuilt, shell: game.surfaceTentShellOpen});
         const line = R.statusLine(); if (line) status.add(line.replace(/\d+ %/, 'N %'));
         return r;
       };
@@ -191,7 +194,46 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       // sealed draws: what of the world is still on the camera's layers (renderables outside the car's view / the camera / the fx group)
       const seal = {draws: 0, builtDraws: 0, leaks: 0, worst: ''};
       const drawFrame0 = G.drawFrame.bind(game);
+      // (task studio-surface-map-tent-cab-20261119-025201-01) frames sealed to the tent: what is drawn is the tent's (its scan, a small one
+      // inside its box, what every frame draws) — nothing of the street; the planning map's table among it
+      const tentSeal = {draws: 0, leaks: 0, worst: '', table: 0};
+      // (task studio-surface-tent-first-staging-20261120-225458-01) frames drawn in the open STAGED tent: the shell, the car, the map's sheet
+      // only — nothing of the district being built around it (its real tent included)
+      const shellSeal = {draws: 0, buildDraws: 0, leaks: 0, worst: '', table: 0};
+      const center = new (await import('three')).Vector3();
       G.drawFrame = () => {
+        const SH = game.surfaceTentShell;
+        if (SH && game.surfaceTentShellOpen && !R.sealed && shellSeal.draws++ % 10 === 0) {
+          if (!G.liftBuilt) shellSeal.buildDraws++;
+          const stack: import('three').Object3D[] = [...game.scene.children];
+          while (stack.length) {
+            const o = stack.pop()!;
+            if (o === game.camera || o === G.fx.group || o === SH.root || o.name === 'cargo-lift-surface') continue;
+            const r = o as import('three').Mesh & {isPoints?: boolean; isLine?: boolean; isSprite?: boolean};
+            if ((r.isMesh || r.isPoints || r.isLine || r.isSprite) && o.layers.test(game.camera.layers)) {
+              if (o.name === 'surface-planning-map-table') shellSeal.table++;
+              else { shellSeal.leaks++; if (!shellSeal.worst) shellSeal.worst = o.name || o.type; }
+            }
+            stack.push(...o.children);
+          }
+        }
+        const TSd = game.surfaceTentStage;
+        if (TSd?.sealing && TSd.box && !R.sealed && !game.surfaceTentShellOpen && tentSeal.draws++ % 10 === 0) { // (the staged tent's frames: shellSeal)
+          const stack: import('three').Object3D[] = [...game.scene.children];
+          while (stack.length) {
+            const o = stack.pop()!;
+            if (o === game.camera || o === G.fx.group) continue;
+            const r = o as import('three').Mesh & {isPoints?: boolean; isLine?: boolean; isSprite?: boolean};
+            if ((r.isMesh || r.isPoints || r.isLine || r.isSprite) && o.layers.test(game.camera.layers) && o.frustumCulled !== false) {
+              if (o.name === 'surface-planning-map-table') tentSeal.table++;
+              const g = r.geometry as import('three').BufferGeometry | undefined;
+              if (g && !g.boundingSphere) g.computeBoundingSphere();
+              const inBox = !!g?.boundingSphere && TSd.box.containsPoint(center.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld));
+              if (!inBox && !(TSd as unknown as {set: Set<unknown>}).set.has(o)) { tentSeal.leaks++; if (!tentSeal.worst) tentSeal.worst = o.name; }
+            }
+            stack.push(...o.children);
+          }
+        }
         if (R.sealed && seal.draws++ % 10 === 0) {
           const stack: import('three').Object3D[] = [...game.scene.children];
           let leaks = 0;
@@ -270,14 +312,32 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       marks.push(`ride up: look ${JSON.stringify(look)}; sealed ${JSON.stringify(seal)}; status ${[...status].join(' / ')}; compile ${JSON.stringify(game.surfaceLiftCompile)}`);
       expect(look.gap, 'mouse turns tried in the transit gap').toBeGreaterThan(5);
       expect(look.lost, 'every mouse turn in the transit gap turned the rider').toBe(0);
-      expect(seal.builtDraws, 'sealed draws checked with the destination built').toBeGreaterThan(0);
+      expect(seal.draws, 'sealed draws checked').toBeGreaterThan(0);
       expect(seal.leaks, `nothing of the world drawn in a sealed car (${seal.worst})`).toBe(0);
       expect([...status].some(x => x.includes('preparing the street')), 'status: the street being prepared').toBe(true);
-      expect([...status].some(x => /^Going up — preparing the view \d+ \/ \d+$/.test(x)), 'status: the first view\'s real units done / of all').toBe(true);
+      expect([...status].some(x => x === 'Going up — setting up the command tent…'), 'status: the staged tent being built').toBe(true);
+      expect([...status].some(x => /^Going up — the command tent — preparing the view \d+ \/ \d+$/.test(x)), 'status: its first view\'s real units done / of all').toBe(true);
+      // (task studio-surface-tent-first-staging-20261120-225458-01) the doors opened into the STAGED tent before the district was built
+      const SR = game.surfaceTentShellRecord!;
+      marks.push(`staged tent: ${JSON.stringify(SR)}; drawn ${JSON.stringify(shellSeal)}`);
+      expect(SR, 'the ride up staged its tent').toBeTruthy();
+      expect(SR.stats.view, 'the staged tent\'s own first view, the first try').toMatchObject({end: 'ready', tries: 1});
+      expect(SR.stats.faces > 0 && SR.stats.floors > 0 && SR.stats.kit > 0, 'built from the district\'s own tent').toBe(true);
+      const opened1 = ride.slice(ride.findIndex(s => s.phase === 'travel')).find(s => s.door > 0)!; // (the first opening after the doors shut)
+      expect(opened1.shell, 'the doors opened into the staged tent').toBe(true);
+      expect(opened1.built, 'before the district was built').toBe(false);
+      expect(opened1.gap, 'in the transit gap (the district still being built)').toBe(true);
+      expect(SR.openMs, 'opened well before the district\'s build ended').toBeLessThan(SR.buildDoneMs / 2);
+      expect(SR.swapMs, 'the district\'s tent took over after its build').toBeGreaterThan(SR.buildDoneMs);
+      expect(SR.why).toBe('swapped');
+      expect(game.surfaceTentShell, 'the staged tent is gone').toBeNull();
+      expect(shellSeal.buildDraws, 'frames drawn in the staged tent while the district was built').toBeGreaterThan(5);
+      expect(shellSeal.leaks, `nothing but the staged tent, the car and the map sheet drawn (${shellSeal.worst})`).toBe(0);
+      expect(shellSeal.table, 'the planning map\'s sheet drawn in the staged tent').toBeGreaterThan(0);
       expect(game.surfaceLiftCompile, 'the first view ready (compiled: no off-screen scene pass with the atmosphere off), the first try').toMatchObject({end: 'ready', why: 'compiled, not drawn (no off-screen scene pass)', tries: 1});
       const shut = ride.findIndex(s => s.phase === 'travel');
       expect(shut).toBeGreaterThan(0);
-      for (const s of ride.slice(shut)) if (s.door > 0) expect(s.fv, `doors opening only after the first view is ready: ${JSON.stringify({...s, job: null})}`).toBe('ready');
+      for (const s of ride.slice(shut)) if (s.door > 0) expect(s.shell || !s.gap, `doors open only into the prepared staged tent (or, swapped, the district's): ${JSON.stringify({...s, job: null})}`).toBe(true);
       expect(ride.slice(shut).some(s => s.door === 0 && s.compile === 'scene'), 'the compile ran while the doors were shut').toBe(true);
       expect(game.surfaceLiftGenMs).toBeGreaterThan(0);
       expect(game.run.current).toEqual(surfKey);
@@ -299,7 +359,42 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       expect(maxC, 'no gas at the eye in the tent (flap shut)').toBe(0);
       expect(await teardown(), 'the district: its own fields only (the station\'s released, none re-created); nothing released still reachable').toEqual(clean);
 
-      // ---- 3. the tent's doorway: shut = a wall; open = walk out and back in --------------------------------------------------------
+      // ---- 3. (task studio-surface-map-tent-cab-20261119-025201-01) THE COMMAND TENT is the preparation space: the car opened into it on
+      // the tent's OWN first view; the street is prepared behind the HELD flap while the player walks, looks and reads the planning map (its
+      // steps run with the map open; the frames draw the tent only); then the flap is released. The doorway: shut = a wall; open = out and in.
+      const TS = game.surfaceTentStage!, rec = TS.record!;
+      expect(rec, 'the ride up was staged in the tent').toBeTruthy();
+      expect(rec.flapHeld).toBe(true);
+      expect(rec.tent, 'the car opened on the tent\'s first view (compiled: the atmosphere off)').toMatchObject({end: 'ready'});
+      expect(rec.scan!.inTent, 'the tent\'s renderables').toBeGreaterThan(5);
+      expect(rec.scan!.inTent, 'the tent: a fraction of the district').toBeLessThan(rec.scan!.renderables / 4);
+      expect(TS.phase, `the street still being prepared on arrival ${JSON.stringify(rec)}`).toBe('street');
+      expect(air.tentFlapHeld, 'the flap held shut').toBe(true);
+      expect(air.open(flap, 'qa'), 'the held flap does not open').toBe(false);
+      expect(TS.flapLine()).toMatch(/^The tent flap stays shut — preparing the street( \d+ \/ \d+|…)$/);
+      // the planning map at its table: [E] from GEN's read pose opens it; with it open the street's preparation goes on
+      const {surfaceMapOf} = await import('../src/world/surface/mapRuntime');
+      const MR = surfaceMapOf(game)!, rd = S.checkpoint.mapTable.read;
+      Object.assign(P, {x: rd.x, z: rd.z, yaw: rd.yaw, pitch: -0.5});
+      await h.waitFrames(4);
+      expect(MR.prompt ?? '', 'the table\'s prompt in the tent').toMatch(/planning map/);
+      // (the street's job planned — in frame steps of its own — before the map opens: its own scheduled steps then go on with it open)
+      expect(await until(() => !!game.journeyCompileStats && game.journeyCompileStats.firstView !== 'ready', 600), 'the street\'s job exists').toBe(true);
+      const job0 = game.journeyCompileStats!, steps0 = job0.steps, ms0 = rec.mapSteps, mf0 = rec.mapFrames;
+      await press();
+      expect(game.state, 'the map is open').toBe('map');
+      await until(() => job0.steps > steps0 + 3 || TS.phase !== 'street', 600);
+      expect(game.state).toBe('map');
+      expect(game.journeyCompileStats, 'the same street job').toBe(job0);
+      expect(job0.steps, `the street's preparation stepped with the map open ${JSON.stringify(job0)}`).toBeGreaterThan(steps0 + 3);
+      expect(rec.mapFrames - mf0, 'frames of the open map').toBeGreaterThan(0);
+      expect(rec.mapSteps - ms0, 'the stage\'s steps ran in the map\'s frames').toBeGreaterThan(3);
+      MR.view!.handleKey({code: 'Escape', key: 'Escape', repeat: false, ctrlKey: false, altKey: false, metaKey: false, target: null, preventDefault() {}, stopImmediatePropagation() {}});
+      expect(MR.view!.isOpen, 'the map closed').toBe(false);
+      await until(() => game.state !== 'map', 600);
+      if (game.state === 'paused') game.setState('playing'); // (Resume; enterPlay's pointer-lock request never settles headless)
+      expect(game.state, 'closed: back in play').toBe('playing');
+      marks.push(`tent stage: ${JSON.stringify({...rec, scan: rec.scan})}; sealed to the tent ${JSON.stringify(tentSeal)}`);
       const t = S.checkpoint.tent, side = t.door.side, n = side === 'N' ? [0, -1] : side === 'S' ? [0, 1] : side === 'W' ? [-1, 0] : [1, 0];
       const outward = () => (side === 'N' ? t.rect.z0 - P.z : side === 'S' ? P.z - t.rect.z1 : side === 'W' ? t.rect.x0 - P.x : P.x - t.rect.x1);
       const face = (dx: number, dz: number) => { P.yaw = Math.atan2(-dx, -dz); };
@@ -311,6 +406,16 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       };
       await walk(400, toDoor, () => outward() > 0.6);
       expect(outward(), 'the shut flap stops the player').toBeLessThan(0);
+      expect(await ridden(() => TS.phase === 'idle', 'the street from the tent'), diag()).toBe(true);
+      expect(rec, 'the flap released on the street\'s first view').toMatchObject({phase: 'done', street: {end: 'ready'}});
+      expect(rec.street!.items, 'the street\'s first view: more than the tent\'s').toBeGreaterThan(rec.tent!.items);
+      expect(game.surfaceTentStreetCompile, 'the street\'s first view, from the flap').toMatchObject({end: 'ready', tries: 1});
+      expect(air.tentFlapHeld, 'released').toBe(false);
+      expect(flap.target, 'a flap shut before the hold stays shut').toBe(0);
+      expect(tentSeal.draws, 'frames drawn sealed to the tent').toBeGreaterThan(0);
+      expect(tentSeal.leaks, `nothing outside the tent drawn while the street was prepared (${tentSeal.worst})`).toBe(0);
+      expect(tentSeal.table, 'the planning map\'s table drawn in the tent').toBeGreaterThan(0);
+      mark('tent stage');
       expect(air.open(flap, 'qa')).toBe(true);
       await h.waitFrames(60);
       await walk(400, toDoor, () => outward() > 1.0);
@@ -382,7 +487,9 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       const sl2 = game.layout.surfaceAccess!.lift!;
       expect(P.x > sl2.cab.x0 && P.x < sl2.cab.x1 && P.z > sl2.cab.z0 && P.z < sl2.cab.z1, 'back in the car').toBe(true);
 
-      // ---- 6. a compile that cannot finish: bounded — the doors open on the BUILT district, the rest compiles in play -----------------
+      // ---- 6. a compile that cannot finish: bounded — (task studio-surface-tent-first-staging-20261120-225458-01) the staged tent's own
+      // first view: its job cancelled under it (retried once), the retry never progresses -> the stall bound: the doors open into the
+      // staged tent with that said; the district is then built behind it, its real tent's first view prepared as every ride's ------------
       {
         const {JourneyCompile} = await import('../src/render/journeyCompile');
         const {LIFT_RIDE_WAIT} = await import('../src/world/surface/liftRuntime');
@@ -402,13 +509,18 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
           expect(qa.surface.go()).toBe(true);
           await h.waitFrames(2);
           await press();
+          // (the short stall bound for the staged tent's view only: the district's real tent view after its build is bounded as every ride's)
+          expect(await ridden(() => game.surfaceTentShellOpen || game.surfaceCrossCounts.done > done2, 'bounded ride: the staged tent'), diag()).toBe(true);
+          W.stallMs = stallMs0;
           expect(await ridden(() => game.surfaceCrossCounts.done === done2 + 1 && R.phase === 'idle', 'bounded ride'), diag()).toBe(true);
           mark('bounded ride');
           const ride6 = samples.slice(n2), shut6 = ride6.findIndex(s => s.phase === 'travel'), open6 = ride6.findIndex((s, i) => i > shut6 && s.door > 0);
           marks.push(`bounded ride: ${ride6.length} frames, opened at ${open6}; compile ${JSON.stringify(game.surfaceLiftCompile)}; jobs ${jobs.length}`);
-          expect(game.surfaceLiftCompile, 'retried once, then the stall bound').toMatchObject({end: 'partial', why: 'stalled', tries: 2});
+          expect(game.surfaceTentShellRecord!.stats.view, 'the staged tent\'s view: retried once, then the stall bound').toMatchObject({end: 'partial', why: 'stalled', tries: 2});
+          expect(game.surfaceLiftCompile, 'the district\'s tent: its own first view, ready').toMatchObject({end: 'ready', tries: 1});
           expect(open6).toBeGreaterThan(shut6);
-          for (const s of ride6.slice(shut6)) if (s.door > 0) expect(s.gap || s.built, `doors open only on the built district in play: ${JSON.stringify({...s, job: null})}`).toBe(false);
+          expect(ride6[open6].shell, 'the doors opened into the staged tent (bounded)').toBe(true);
+          for (const s of ride6.slice(shut6)) if (s.door > 0) expect(s.shell || !s.gap, `doors open only into the staged tent or in play: ${JSON.stringify({...s, job: null})}`).toBe(true);
           expect(states.slice(s2).filter(s => s !== 'paused' && s !== 'playing'), 'never a loading screen').toEqual([]);
           expect(game.lifecycleCounts.loading - c2.loading).toBe(0);
           expect(game.lifecycleCounts.warmup - c2.warmup).toBe(0);
@@ -416,9 +528,11 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
           const tl6 = game.layout.surface!.portal.lift!;
           expect(P.x > tl6.cab.x0 && P.x < tl6.cab.x1 && P.z > tl6.cab.z0 && P.z < tl6.cab.z1, 'released in the tent\'s car').toBe(true);
           expect(R.holding).toBe(false);
-          expect(jobs.length, 'the rest: a new job in play').toBeGreaterThanOrEqual(3);
-          expect(game.journeyCompileStats, 'the play-paced job').toBe(jobs[2].stats);
-          expect(['scene', 'shadow', 'done']).toContain(jobs[2].stats.phase);
+          // (job 3: the district's tent; then the street's job from it — planned in frame steps first — is the new job in play)
+          await until(() => jobs.length >= 4, 600);
+          expect(jobs.length, 'the rest: a new job in play').toBeGreaterThanOrEqual(4);
+          expect(game.journeyCompileStats, 'the play-paced job').toBe(jobs[jobs.length - 1].stats);
+          expect(['scene', 'shadow', 'done']).toContain(jobs[jobs.length - 1].stats.phase);
         } finally {
           startSpy.mockRestore();
           W.stallMs = stallMs0;
@@ -428,6 +542,8 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       expect(frameErrors).toEqual([]);
       marks.push(`hits absorbed ${hits}`);
     } finally {
+      // (the last ride up's street, still being prepared from the tent: ended with the test, before the page globals go)
+      stageEnd();
       // (Input.lock's 1.5 s fallback timer of the last Resume reads `document`: let it fire while the page globals still exist)
       await new Promise(res => setTimeout(res, 1600));
       h.stop();

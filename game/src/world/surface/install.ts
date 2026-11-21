@@ -17,6 +17,7 @@ import {installSurfaceAir} from './air';
 import {installSurfaceLife} from './life';
 import {installSurfaceCargo} from './cargo';
 import {installSurfaceFog} from './fogRuntime';
+import {installSurfaceTentStage} from './tentStage';
 
 export function installSurfaceRun(game: Game): void {
   installSurfaceAccess(game);
@@ -24,6 +25,7 @@ export function installSurfaceRun(game: Game): void {
   installSurfaceConnector(game); // (task studio-surface-host-ground-connectors-20261118-053602-01, version 2: the Office / Mall on-foot connector tube)
   installSurfaceLook(game);
   installSurfaceAir(game);
+  installSurfaceTentStage(game); // (task studio-surface-map-tent-cab-20261119-025201-01) the command tent is an up-crossing's preparation space
   installSurfaceFog(game); // (task studio-surface-run-field-followup-20261116-211729-01, lane FOG) a v2 district's pressure sound + QA (inert elsewhere)
   installSurfaceLife(game);
   // (lane CARGO) the depot recoverables, the truck's attachment points, the upgrade kit, the crossing participant 'cargo' — BEFORE the
