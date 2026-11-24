@@ -116,8 +116,8 @@ and textures behind that level's loading screen and releases another level's own
 
 A public reference site, a landing page plus a **loot explorer** and an **Enemy spawns** section, is generated from the game
 source and published with GitHub Pages at **https://benjaminbenetti.github.io/terminal-state/**. The project path is expected;
-every link on the site is relative. The source repository stays private: the site publishes only generated reference pages
-and data, never the game or its source.
+every link on the site is relative. This repository contains the public game source. The Pages site publishes only
+generated reference pages and data, not the playable game or source files.
 
 - **Generated, not hand-written.** `tools/pages/` builds one `LootReference` object from the real exported game values
   (`buildLootReference`, see [docs/loot-reference.md](docs/loot-reference.md)). It then renders static HTML/CSS/JS from that
